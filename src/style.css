@@ -1,0 +1,34 @@
+*
+{
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body
+{
+    overflow: hidden;
+}
+
+.webgl
+{
+    position: fixed;
+    top: 0;
+    left: 0;
+    outline: none;
+}
+
+#upload-button {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 10; /* Certifique-se de que este valor seja maior do que o z-index do canvas */
+  }
+  
+  canvas {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
+  }
+  

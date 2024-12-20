@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisuGraph - Modo 2D</title>
+    <link rel="stylesheet" href="./styles-2d.css">
+</head>
+<body>
+    <div class="interface">
+        <!-- Menu lateral -->
+        <div class="menu">
+            <h2>Ensino de OpenGL 2D</h2>
+            <button id="btn-shaders">Shaders</button>
+            <button id="btn-buffers">Buffers</button>
+            <button id="btn-transformacoes">Transformações</button>
+            <button id="btn-iluminacao">Iluminação</button>
+            <button id="btn-texturas">Texturas</button>
+        </div>
+
+        <!-- Tela de exibição -->
+        <div class="display">
+            <canvas id="opengl-canvas"></canvas>
+        </div>
+    </div>
+    <button id="back-to-menu-2d">Voltar ao Menu</button>
+
+    <script type="module" src="./script-2d.js"></script>
+</body>
+</html>

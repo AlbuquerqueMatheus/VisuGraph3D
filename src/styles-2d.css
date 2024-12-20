@@ -1,0 +1,89 @@
+/* Estilo geral */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #282c34;
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+}
+
+/* Interface principal */
+.interface {
+    display: flex;
+    height: 100%;
+    width: 100%;
+}
+
+/* Menu lateral */
+.menu {
+    width: 20%;
+    background-color: #23272a;
+    padding: 20px;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.menu h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #61dafb;
+}
+
+.menu button {
+    padding: 10px;
+    background-color: #61dafb;
+    color: #23272a;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+.menu button:hover {
+    background-color: #21a1f1;
+    color: white;
+}
+
+/* Tela de exibição */
+.display {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #1c1e22;
+    position: relative;
+}
+
+canvas {
+    border: 1px solid #61dafb;
+    width: 80%;
+    height: 80%;
+}
+
+/* Botão de voltar */
+#back-to-menu-2d {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    background-color: #ff5722;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+#back-to-menu-2d:hover {
+    background-color: #e64a19;
+}

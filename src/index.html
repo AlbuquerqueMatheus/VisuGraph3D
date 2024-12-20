@@ -1,15 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VisuGraph 3D</title>
+    <title>VisuGraph</title>
     <link rel="stylesheet" href="./style.css">
+
+    <!-- Importação do CSS do CodeMirror -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+
+    <!-- Tema opcional -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
+
+    <!-- Importação do JavaScript do CodeMirror -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+
+    <!-- Módulo para linguagem JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/javascript/javascript.min.js"></script>
 </head>
+
 <body>
-    <canvas class="webgl"></canvas>
-    <input type="file" id="file-input" accept=".obj, .glb" style="display: none;" />
-    <button id="upload-button">Upload Geometry</button>
-    <script type="module" src="./script.js"></script>
+    <div id="menu-screen" class="screen">
+        <h1>Bem-vindo ao VisuGraph</h1>
+        <p>Escolha o modo de visualização:</p>
+        <div class="menu">
+            <button id="btn-3d">Modo 3D</button>
+            <a href="./index-2d.html">
+                <button id="btn-2d">Modo 2D</button>
+            </a>
+        </div>
+    </div>
+
+    <!-- Tela 3D -->
+    <div id="screen-3d" class="screen hidden">
+        <canvas class="webgl"></canvas>
+        <div id="code-editor"></div>
+        <button id="back-to-menu-3d">Voltar ao Menu</button>
+    </div>
+
+    <!-- Botão para gerar código -->
+    <button id="generateCodeBtn" class="hidden">Gerar Código</button>
+    <div id="codeEditor" class="hidden"></div>
+
+    <!-- Tela 2D (placeholder para integração futura) -->
+    <div id="screen-2d" class="screen hidden"></div>
+
+    <!-- Navegação -->
+    <script type="module" src="./navigation.js"></script>
+    <script type="module" src="./script-3d.js"></script>
+
 </body>
+
 </html>

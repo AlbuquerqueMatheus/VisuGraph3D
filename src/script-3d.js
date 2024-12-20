@@ -4,9 +4,87 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import gsap from 'gsap';
 import GUI from 'lil-gui';
-
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+
+// Inicializa o CodeMirror
+const editorContainer = document.getElementById('code-editor');
+const codeEditor = CodeMirror(editorContainer, {
+    mode: 'javascript', // Define a sintaxe como JavaScript
+    theme: 'dracula',   // Tema Dracula
+    lineNumbers: true,  // Exibe números das linhas
+    // value: '// Código gerado aparecerá aqui\n',
+});
+
+// Função para gerar código da cena
+function generateSceneCode(scene, camera, renderer) {
+    let code = `// Configuração básica da cena
+   const scene = new THREE.Scene();
+   const camera = new THREE.PerspectiveCamera(${camera.fov}, ${camera.aspect}, ${camera.near}, ${camera.far});
+   camera.position.set(${camera.position.x}, ${camera.position.y}, ${camera.position.z});
+   
+   const renderer = new THREE.WebGLRenderer();
+   renderer.setSize(window.innerWidth, window.innerHeight);
+   document.body.appendChild(renderer.domElement);
+   
+   // Adicionar objetos à cena
+   `;
+
+    // Iterar pelos objetos da cena
+    scene.children.forEach((object) => {
+        if (object.isMesh) {
+            // Código para geometria e material
+            code += `
+   const geometry = new THREE.${object.geometry.type}(${Object.values(object.geometry.parameters).join(", ")});
+   const material = new THREE.MeshStandardMaterial({
+       color: ${object.material.color.getHex()},
+       metalness: ${object.material.metalness || 0},
+       roughness: ${object.material.roughness || 0}
+   });
+   const mesh = new THREE.Mesh(geometry, material);
+   mesh.position.set(${object.position.x}, ${object.position.y}, ${object.position.z});
+   scene.add(mesh);
+   `;
+        } else if (object.isLight) {
+            // Código para luzes
+            code += `
+   const light = new THREE.${object.type}(${object.color.getHex()}, ${object.intensity});
+   light.position.set(${object.position.x}, ${object.position.y}, ${object.position.z});
+   scene.add(light);
+   `;
+        }
+    });
+
+    // Loop de animação
+    code += `
+   // Loop de animação
+   function animate() {
+       requestAnimationFrame(animate);
+       renderer.render(scene, camera);
+   }
+   animate();
+   `;
+
+    return code;
+}
+
+// Evento para o botão de geração de código
+document.getElementById("generateCodeBtn").addEventListener("click", () => {
+    const code = generateSceneCode(scene, camera, renderer);
+    codeEditor.setValue(code); // Exibe o código gerado no editor CodeMirror
+});
+
+
+function start3D() {
+    const canvas = document.querySelector('.webgl');
+    init3D(canvas);
+}
+
+// Escute o botão ou quando o 3D for mostrado
+document.addEventListener('DOMContentLoaded', () => {
+    start3D();
+});
 
 // Função utilitária para carregar texturas de forma assíncrona// Função utilitária para carregar texturas de forma assíncrona
 const loadTextureAsync = (url) => {
@@ -143,7 +221,7 @@ const applyTextures = () => {
         material.metalness = 0.5;
         material.roughness = 0.15;
         material.normalScale.set(2, 2);
-        
+
         material.displacementScale = 0;  // Escala 0 quando não houver textura
     } else {
         // Se "none" for selecionado, remover texturas
@@ -215,7 +293,7 @@ const initTextures = async () => {
                 textures.pedra.normal = normal;
                 textures.pedra.roughness = roughness;
                 textures.pedra.ambientOcclusion = ambientOcclusion;
-               
+
             } else if (type === 'moss') {
                 const [color, displacement, normal, ambientOcclusion, roughness] = await Promise.all([
                     loadTextureAsync('./texturas/moss/moss_Color.png'),
@@ -316,6 +394,12 @@ cubeAppearanceFolder.add(debugObject, 'renderStyle', ['normal', 'wireframe', 'fl
 cubeAppearanceFolder.addColor(debugObject, 'color').name('Color').onChange(() => {
     material.color.set(debugObject.color);
     material.needsUpdate = true;
+    // Gera código equivalente no editor
+    const generatedCode = `
+    // Atualizando a cor do cubo
+    cube.material.color.set('${color}');
+    `;
+    updateCode(generatedCode);
 });
 
 cubeAppearanceFolder.add(debugObject, 'opacity').min(0).max(1).step(0.01).name('Opacity').onChange(() => {
@@ -500,7 +584,7 @@ fileInput.addEventListener('change', (event) => {
     const fileType = file.name.split('.').pop().toLowerCase();
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         const contents = e.target.result;
 
         if (fileType === 'obj') {
@@ -509,7 +593,7 @@ fileInput.addEventListener('change', (event) => {
             addToScene(object);
         } else if (fileType === 'glb') {
             const gltfLoader = new GLTFLoader();
-            gltfLoader.parse(contents, '', function(gltf) {
+            gltfLoader.parse(contents, '', function (gltf) {
                 const object = gltf.scene;
                 addToScene(object);
             });

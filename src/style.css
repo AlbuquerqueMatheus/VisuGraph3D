@@ -77,22 +77,6 @@ canvas {
     z-index: 1;
 }
 
-#back-to-menu-3d {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 10; /* Acima do canvas */
-    padding: 10px 15px;
-    background-color: #ff5722;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-#back-to-menu-3d:hover {
-    background-color: #e64a19;
-}
 #code-editor {
     position: absolute;
     text-align: left; 
@@ -111,3 +95,25 @@ canvas {
     left: 20px;
     z-index: 1000;
 } 
+
+#buttonContainer {
+    position: absolute;
+    top: 20px;     /* Posiciona os botões a partir do topo */
+    left: 20px;    /* Posiciona os botões a partir da esquerda */
+    display: flex; /* Usa flexbox para alinhar os botões lado a lado */
+    gap: 10px;     /* Espaçamento entre os botões */
+    z-index: 10;   /* Garante que os botões fiquem acima do canvas */
+}
+
+#back-to-menu-3d, #toggleEditorBtn {
+    padding: 10px 15px;
+    background-color: #ff5722; /* Mesma cor de fundo */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#back-to-menu-3d:hover, #toggleEditorBtn:hover {
+    background-color: #e64a19; /* Cor de hover */
+}

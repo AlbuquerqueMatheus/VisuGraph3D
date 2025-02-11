@@ -76,6 +76,30 @@ document.getElementById("generateCodeBtn").addEventListener("click", () => {
 });
 
 
+// Seleciona os elementos necessários
+const toggleEditorBtn = document.getElementById("toggleEditorBtn");
+const generateCodeBtn = document.getElementById("generateCodeBtn");
+const codeEditorContainer = document.getElementById("code-editor"); // Atualizado para o ID correto
+
+// Alterna a visibilidade do editor e do botão de geração de código
+toggleEditorBtn.addEventListener("click", () => {
+    const isHidden = codeEditorContainer.classList.contains("hidden");
+
+    if (isHidden) {
+        // Mostra o editor e o botão
+        codeEditorContainer.classList.remove("hidden");
+        generateCodeBtn.classList.remove("hidden");
+        toggleEditorBtn.textContent = "Esconder Editor";
+    } else {
+        // Esconde o editor e o botão
+        codeEditorContainer.classList.add("hidden");
+        generateCodeBtn.classList.add("hidden");
+        toggleEditorBtn.textContent = "Mostrar Editor";
+    }
+});
+
+
+
 function start3D() {
     const canvas = document.querySelector('.webgl');
     init3D(canvas);

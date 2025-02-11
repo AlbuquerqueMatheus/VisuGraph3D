@@ -36,12 +36,19 @@
     <div id="screen-3d" class="screen hidden">
         <canvas class="webgl"></canvas>
         <div id="code-editor"></div>
-        <button id="back-to-menu-3d">Voltar ao Menu</button>
+
+        <!-- Container dos botões -->
+        <div id="buttonContainer">
+            <button id="back-to-menu-3d">Voltar ao Menu</button>
+            <button id="toggleEditorBtn">Mostrar Editor</button>
+        </div>
     </div>
 
     <!-- Botão para gerar código -->
     <button id="generateCodeBtn" class="hidden">Gerar Código</button>
-    <div id="codeEditor" class="hidden"></div>
+
+    <!-- Container para o editor de código -->
+    <div id="code-editor" class="hidden"></div>
 
     <!-- Tela 2D (placeholder para integração futura) -->
     <div id="screen-2d" class="screen hidden"></div>

@@ -1,86 +1,119 @@
-/* Estilos gerais */
-body, html {
+/* ==========================================================================
+   1. Variáveis e Reset
+   ========================================================================== */
+   :root {
+    --bg-color: #1d1f27;
+    --text-color: #fff;
+    --sidebar-bg: #252932;
+    --accent-color: #41c5ff;
+    --accent-hover: #33a0d6;
+    --input-bg: #333;
+    --input-border: #41c5ff;
+    --hover-border: #007acc;
+    --modal-bg: #333;
+    --modal-text: #ddd;
+    --modal-header: #00bcd4;
+    --close-btn-bg: #ff4444;
+    --close-btn-hover: #cc0000;
+  }
+  
+  * {
     margin: 0;
-    font-family: Arial, sans-serif;
-    background-color: #1d1f27;
-    color: #fff;
-    display: flex;
-    flex-direction: column; /* Para telas muito pequenas */
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  .hidden {
+    display: none !important;
+  }
+  
+  body, html {
     width: 100%;
     height: 100%;
+    font-family: Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
     overflow: hidden;
-}
-
-div {
-    width: fit-content; /* Faz o tamanho da largura se ajustar ao conteúdo */
-    padding: 0; /* Remove espaçamento extra */
-    margin: 0; /* Remove margens extras */
-}
-
-.container {
     display: flex;
-    flex-direction: row; /* Layout horizontal padrão */
+    flex-direction: column; /* Para telas muito pequenas */
+  }
+  
+  /* ==========================================================================
+     2. Layout Geral
+     ========================================================================== */
+  .container {
+    display: flex;
+    flex-direction: row;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-}
-
-.sidebar {
-    width: 20%; /* Adapta-se a diferentes resoluções */
+  }
+  
+  /* ==========================================================================
+     3. Sidebar
+     ========================================================================== */
+  .sidebar {
+    width: 20%;
     height: 100vh;
-    background-color: #252932;
+    background-color: var(--sidebar-bg);
     display: flex;
     flex-direction: column;
     align-items: center;
     padding: 10px;
     box-sizing: border-box;
-}
-
-.sidebar h1 {
-    color: #41c5ff;
-}
-
-.sidebar button {
-    background-color: #41c5ff;
-    color: #fff;
+  }
+  
+  .sidebar h1 {
+    color: var(--accent-color);
+    margin-bottom: 20px;
+  }
+  
+  .sidebar button {
+    background-color: var(--accent-color);
+    color: var(--text-color);
     border: none;
     padding: 15px;
-    width: 80%; /* Ajustável */
+    width: 80%;
     margin: 10px 0;
     cursor: pointer;
     border-radius: 5px;
     font-size: 16px;
     transition: background-color 0.3s ease;
-}
-
-.sidebar button:hover {
-    background-color: #33a0d6;
-}
-
-/* Canvas */
-/* Canvas e Imagem */
-#image-container img,
-#image-canvas {
+  }
+  
+  .sidebar button:hover {
+    background-color: var(--accent-hover);
+  }
+  
+  /* ==========================================================================
+     4. Elementos de Conteúdo (Canvas, Imagens e Controles)
+     ========================================================================== */
+  /* Imagem e Canvas */
+  #image-container img,
+  #image-canvas {
     max-width: 100%;
     height: auto;
     border: 1px solid #ddd;
     border-radius: 10px;
-}
-
-#canvas-container {
+  }
+  
+  /* Área de desenho / canvas */
+  #canvas-container {
     flex: 1;
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 20px;
-    border-left: 1px solid #41c5ff;
-    overflow: auto; /* Evita cortes em telas menores */
-}
-
-/* Botões Gerais */
-button {
-    background-color: #41c5ff;
-    color: #fff;
+    border-left: 1px solid var(--accent-color);
+    overflow: auto;
+  }
+  
+  /* ==========================================================================
+     5. Botões Gerais
+     ========================================================================== */
+  button {
+    background-color: var(--accent-color);
+    color: var(--text-color);
     border: none;
     padding: 10px 20px;
     margin: 10px;
@@ -88,179 +121,333 @@ button {
     border-radius: 5px;
     font-size: 14px;
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-button:hover {
-    background-color: #33a0d6;
+  }
+  
+  button:hover {
+    background-color: var(--accent-hover);
     box-shadow: 0px 5px 10px rgba(0, 0, 0, 0.2);
-}
-
-/* Inputs */
-
-input[type="number"], select {
-    background-color: #333;
-    color: #fff;
-    border: 1px solid #41c5ff;
+  }
+  
+  /* ==========================================================================
+     6. Inputs, Selects e Range
+     ========================================================================== */
+  input[type="number"],
+  select {
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border: 1px solid var(--input-border);
     padding: 8px;
     border-radius: 5px;
     font-size: 14px;
     text-align: center;
     transition: border-color 0.3s ease;
-}
-
-input[type="number"]:hover, select:hover {
-    border-color: #007acc;
+  }
+  
+  input[type="number"]:hover,
+  select:hover {
+    border-color: var(--hover-border);
     transform: scale(1.05);
     transition: transform 0.2s ease-in-out;
-}
-
-input[type="number"]:focus, select:focus {
+  }
+  
+  input[type="number"]:focus,
+  select:focus {
     outline: none;
-    border-color: #33a0d6;
-}
-
-/* Select e Range */
-select {
-    background-color: #333;
-    color: #fff;
-    border: 1px solid #41c5ff;
-    padding: 8px;
-    border-radius: 5px;
-    font-size: 14px;
+    border-color: var(--accent-hover);
+  }
+  
+  select {
     width: 100%;
-}
-
-input[type="range"] {
+  }
+  
+  input[type="range"] {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
     height: 8px;
-    background: #41c5ff;
+    background: var(--accent-color);
     border-radius: 5px;
     outline: none;
     cursor: pointer;
-}
-
-input[type="range"]::-webkit-slider-thumb {
+  }
+  
+  input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 15px;
     height: 15px;
     border-radius: 50%;
     background: #fff;
-    border: 2px solid #41c5ff;
+    border: 2px solid var(--accent-color);
     cursor: pointer;
-}
-
-/* Headings */
-h3 {
+  }
+  
+  input[type="range"]::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--accent-color);
+    cursor: pointer;
+  }
+  
+  /* ==========================================================================
+     7. Tipografia e Controle de Espaçamentos
+     ========================================================================== */
+  h3 {
     font-size: 18px;
-    color: #41c5ff;
+    color: var(--accent-color);
     margin-bottom: 10px;
     white-space: nowrap;
-}
-
-/* Controle dos Inputs */
-#num-inputs {
+  }
+  
+  #num-inputs {
     max-height: 150px;
     overflow-y: auto;
-}
-
-#num-inputs input {
-    margin: 5px 5px;
-}
-
-/* Painel de Controle */
-#controls {
+  }
+  
+  #num-inputs input {
+    margin: 5px;
+  }
+  
+  #controls {
     margin-right: 10%;
-    background-color: #252932;
+    background-color: var(--sidebar-bg);
     padding: 20px;
     border-radius: 10px;
-    border: 1px solid #41c5ff;
+    border: 1px solid var(--accent-color);
     box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.5);
-}
-
-.slider-label {
-    white-space: nowrap; /* Impede quebra de linha */
-    font-size: 18px; /* Se necessário, ajuste o tamanho da fonte */
-}
-
-
-#main-container {
-    flex: 1; /* Ocupa o restante do espaço */
+  }
+  
+  .slider-label {
+    white-space: nowrap;
+    font-size: 18px;
+  }
+  
+  #main-container {
+    flex: 1;
     display: flex;
     justify-content: center;
     align-items: center;
     width: 100%;
     gap: 20px;
     padding: 20px;
-    /* overflow: auto; */
     box-sizing: border-box;
-}
-
-#help-button-container {
+  }
+  
+  #help-button-container {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     flex-basis: 30%;
     justify-content: flex-start;
-}
-
-#btn-cores {
+  }
+  
+  #btn-cores {
     position: relative;
     margin-top: 20px;
     align-self: flex-start;
-    /* Alinha o botão ao topo da div */
-}
-
-/* Modal */
-.modal {
-    display: none;
+  }
+  
+  /* ==========================================================================
+     8. Grupos e Componentes Específicos
+     ========================================================================== */
+  .input-group {
+    margin-bottom: 20px;
+  }
+  
+  .input-group select,
+  .input-group label {
+    display: block;
+    margin-bottom: 10px;
+  }
+  
+  .button-group,
+  .slider-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  
+  .slide-group {
+    display: inline-block;
+    margin-right: 20px;
+  }
+  
+  .slide-group label {
+    display: inline-block;
+    margin-bottom: 5px;
+  }
+  
+  .slider-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .preview {
+    margin-left: 50px;
+  }
+  
+  .color-preview {
+    width: 100px;
+    height: 100px;
+    border: 1px solid #000;
+    background-color: rgb(255, 255, 255);
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+  
+  #colors {
+    display: flex;
+    gap: 10px;
+    justify-content: space-around;
+  }
+  
+  .color-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .color-box {
+    width: 100px;
+    height: 100px;
+    border: 1px solid #000;
+    background-color: #ffffff;
+  }
+  
+  input[type="number"] {
+    width: 50px;
+    margin: 0 10px;
+  }
+  
+  .color-info {
+    margin-top: 20px;
+  }
+  
+  .color-info p {
+    font-size: 16px;
+    margin: 5px 0;
+  }
+  
+  .help-colors {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+  }
+  
+  /* ==========================================================================
+     9. Seções Específicas (Modelo Phong e Diagrama)
+     ========================================================================== */
+  #phong-canvas {
+    width: 50%;
+    height: 100%;
+  }
+  
+  #indicators {
+    margin-top: 20px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+  }
+  
+  .indicator-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  
+  .indicator-label {
+    color: #333;
+  }
+  
+  .indicator-value {
+    font-weight: bold;
+    color: #555;
+  }
+  
+  #diagram-container {
+    margin-top: 30px;
+    padding: 15px;
+    background-color: #f0f8ff;
+    border: 1px solid #d0e6f8;
+    border-radius: 8px;
+  }
+  
+  .diagram-header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 10px;
+  }
+  
+  .diagram-formula {
+    font-size: 18px;
+    font-family: 'Courier New', Courier, monospace;
+    color: #2980b9;
+    margin-bottom: 10px;
+  }
+  
+  .diagram-description {
+    font-size: 14px;
+    color: #555;
+  }
+  
+  /* ==========================================================================
+     10. Modal
+     ========================================================================== */
+  .modal {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
-}
-
-.modal-content {
-    background-color: #333;
-    color: #ddd;
+  }
+  
+  .modal-content {
+    background-color: var(--modal-bg);
+    color: var(--modal-text);
     padding: 20px;
     border-radius: 10px;
     width: 50%;
     box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
     text-align: center;
-}
-
-h2 {
-    margin: 0;
-}
-
-.modal-content h2 {
-    color: #00bcd4;
+  }
+  
+  .modal-content h2 {
+    color: var(--modal-header);
     margin-bottom: 15px;
-}
-
-.modal-content strong {
+  }
+  
+  .modal-content strong {
     color: #ff5722;
     display: block;
     margin-top: 10px;
-}
-
-.modal-content p {
+  }
+  
+  .modal-content p {
     text-align: justify;
     line-height: 1.5;
     margin: 10px 0;
-}
-
-.close-btn {
-    background-color: #ff4444;
-    color: white;
+  }
+  
+  .close-btn {
+    background-color: var(--close-btn-bg);
+    color: #fff;
     border: none;
     padding: 10px 20px;
     border-radius: 5px;
@@ -268,240 +455,61 @@ h2 {
     font-size: 14px;
     margin-top: 20px;
     transition: background-color 0.3s ease;
-}
-
-.close-btn:hover {
-    background-color: #cc0000;
-}
-
-/* Layout para Inputs e Botões */
-.input-group {
-    margin-bottom: 20px;
-}
-
-.input-group select,
-.input-group label {
-    display: block;
-    margin-bottom: 10px;
-}
-
-.button-group {
-    display: flex;
-    gap: 10px;
-}
-
-.system {
-    width: 50%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
-    flex: 1 1 calc(30% - 40px); /* Flexível, ocupando até 50% do espaço com espaçamento */
-}
-
-/* Coloca a telinha de cor ao lado dos sliders */
-.color-display {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.color-box {
-    width: 100px;
-    height: 100px;
-    border: 1px solid #000;
-    background-color: #ffffff;
-}
-
-#colors {
-    display: flex;
-    gap: 10px;
-    justify-content: space-around; /* Espaça os elementos uniformemente */
-}
-
-
-.slider-container {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    justify-content: space-between;
-}
-
-/* Div que ocupará o restante do espaço */
-#color-system-container {
-    flex-grow: 1; 
-    width: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 20px;
-    gap: 20px;
-}
-
-#phong-container{
-    flex-grow: 1; 
-    width: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 20px;
-    gap: 20px;
-}
-
-.color-preview {
-    width: 100px;
-    height: 100px;
-    border: 1px solid #000;
-    background-color: rgb(255, 255, 255);
-    border-radius: 10px;
-    margin-bottom: 10px;
-}
-
-input[type="number"] {
-    width: 50px;
-    margin-left: 10px;
-    margin-right: 10px;
-}
-
-.slide-group {
-    display: inline-block;
-    margin-right: 20px;
-}
-
-.slide-group label {
-    display: inline-block;
-    margin-bottom: 5px;
-}
-
-.color-info {
-    margin-top: 20px;
-}
-
-.color-info p {
-    font-size: 16px;
-    margin: 5px 0;
-}
-
-.help-colors {
-    position: absolute;
-    top: 10px;
-    right: 20px;
-}
-
-/* phong */
-
-/* Canvas para Renderização */
-#phong-canvas {
-    width: 50%;
-    height: 100%;
-}
-
-/* Indicadores */
-#indicators {
-    margin-top: 20px;
-    padding: 10px;
-    background-color: #f9f9f9;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-}
-
-.indicator-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 8px;
-}
-
-.indicator-label {
-    color: #333;
-}
-
-.indicator-value {
-    font-weight: bold;
-    color: #555;
-}
-
-/* Diagrama do Modelo Phong */
-#diagram-container {
-    margin-top: 30px;
-    padding: 15px;
-    background-color: #f0f8ff;
-    border: 1px solid #d0e6f8;
-    border-radius: 8px;
-}
-
-.diagram-header {
-    font-size: 16px;
-    font-weight: bold;
-    color: #2c3e50;
-    margin-bottom: 10px;
-}
-
-.diagram-formula {
-    font-size: 18px;
-    font-family: 'Courier New', Courier, monospace;
-    color: #2980b9;
-    margin-bottom: 10px;
-}
-
-.diagram-description {
-    font-size: 14px;
-    color: #555;
-}
-
-/* Responsividade */
-@media (max-width: 1024px) {
+  }
+  
+  .close-btn:hover {
+    background-color: var(--close-btn-hover);
+  }
+  
+  /* ==========================================================================
+     11. Responsividade
+     ========================================================================== */
+  @media (max-width: 1024px) {
     .container {
-        flex-direction: column;
+      flex-direction: column;
     }
-
     .sidebar {
-        width: 100%;
-        height: auto;
-        padding: 15px;
+      width: 100%;
+      height: auto;
+      padding: 15px;
     }
-
     #main-container {
-        flex-direction: column;
-        padding: 10px;
+      flex-direction: column;
+      padding: 10px;
     }
-
     #canvas-container {
-        width: 100%;
-        padding: 10px;
+      width: 100%;
+      padding: 10px;
     }
-}
-
-@media (max-width: 768px) {
+  }
+  
+  @media (max-width: 768px) {
     .sidebar button {
-        width: 90%;
+      width: 90%;
     }
-
     #main-container {
-        flex-direction: column;
-        gap: 10px;
+      flex-direction: column;
+      gap: 10px;
     }
-
     #canvas-container {
-        width: 100%;
+      width: 100%;
     }
-}
-
-@media (max-aspect-ratio: 4/3) {
+  }
+  
+  @media (max-aspect-ratio: 4/3) {
     .container {
-        flex-direction: column;
+      flex-direction: column;
     }
-
     .sidebar {
-        width: 100%; 
-        height: auto;
+      width: 100%;
+      height: auto;
     }
-
     #main-container {
-        flex-direction: column;
-        padding: 15px;
+      flex-direction: column;
+      padding: 15px;
     }
-
     #canvas-container {
-        width: 100%;
+      width: 100%;
     }
-}
+  }
+  

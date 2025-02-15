@@ -1,202 +1,203 @@
-(() => {
-    const canvasElement = document.getElementById('curveCanvas');
-    const ctx = canvasElement.getContext('2d');
+class CurvasApp {
+  constructor() {
+    // Seleciona os elementos do DOM
+    this.canvasElement = document.getElementById('curveCanvas');
+    this.ctx = this.canvasElement.getContext('2d');
+    this.formulaDescription = document.getElementById('formula-description');
+    this.mathEquation = document.getElementById('math-equation');
 
-    const formulaDescription = document.getElementById('formula-description');
-    const mathEquation = document.getElementById('math-equation');
+    // Estado da aplicação
+    this.points = [];         // Lista de pontos de controle
+    this.mode = null;         // "Bezier" ou "Chaikin"
+    this.selectedPoint = null; // Ponto atualmente sendo arrastado
 
-    let points = []; // Lista de pontos
-    let mode = null; // Modo atual: "Bezier" ou "Chaikin"
-    let selectedPoint = null; // Ponto selecionado para arrastar
+    // Elementos da interface
+    this.bezierDegreeSelect = document.getElementById('bezier-degree');
+    this.chaikinIterationsSlider = document.getElementById('chaikin-iterations');
 
-    // Elementos do DOM
-    const bezierDegreeSelect = document.getElementById('bezier-degree');
-    const chaikinIterationsSlider = document.getElementById('chaikin-iterations');
+    // Configura os eventos do canvas
+    this.canvasElement.addEventListener('click', (e) => this.onCanvasClick(e));
+    this.canvasElement.addEventListener('mousedown', (e) => this.onCanvasMouseDown(e));
+    this.canvasElement.addEventListener('mousemove', (e) => this.onCanvasMouseMove(e));
+    this.canvasElement.addEventListener('mouseup', () => this.onCanvasMouseUp());
 
-    // Alternar para a aba de curvas
-    document.getElementById('btn-curvas').addEventListener('click', function () {
-        document.getElementById('color-system-container').style.display = 'none';
-        document.getElementById('phong-container').style.display = 'none';
-        document.getElementById('canvas-container').style.display = 'none';
-        document.getElementById('curvas-container').style.display = 'flex';
-        clearCanvas();
+    // Configura os eventos dos controles da interface
+    document.getElementById('btn-curvas').addEventListener('click', () => {
+      document.getElementById('color-system-container').classList.add('hidden');
+      document.getElementById('phong-container').classList.add('hidden');
+      document.getElementById('canvas-container').classList.add('hidden');
+      document.getElementById('curvas-container').classList.remove('hidden');
+      this.clearCanvas();
     });
 
-    // Adicionar pontos ao clicar no canvas
-    canvasElement.addEventListener('click', (e) => {
-        if (selectedPoint) return; // Se estiver movendo um ponto, não adicionar novo
-        const rect = canvasElement.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        points.push({ x, y });
-        drawPoints();
-        updateCurve();
+    this.bezierDegreeSelect.addEventListener('change', () => {
+      this.clearCanvas();
+      this.updateCurve();
     });
 
-    // Permitir mover pontos arrastando
-    canvasElement.addEventListener('mousedown', (e) => {
-        const rect = canvasElement.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        selectedPoint = points.find(p => Math.hypot(p.x - x, p.y - y) < 7);
+    this.chaikinIterationsSlider.addEventListener('input', () => {
+      this.clearCanvas(false);
+      this.drawChaikin();
     });
+  }
 
-    canvasElement.addEventListener('mousemove', (e) => {
-        if (!selectedPoint) return;
+  // Limpa o canvas e, opcionalmente, os pontos
+  clearCanvas(clearPoints = true) {
+    this.ctx.fillStyle = 'black';
+    this.ctx.fillRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+    if (clearPoints) this.points = [];
+  }
 
-        const rect = canvasElement.getBoundingClientRect();
-        selectedPoint.x = e.clientX - rect.left;
-        selectedPoint.y = e.clientY - rect.top;
-
-        drawPoints();
-        updateCurve();
+  // Desenha os pontos de controle no canvas
+  drawPoints() {
+    this.clearCanvas(false);
+    this.points.forEach((point) => {
+      this.ctx.fillStyle = 'yellow';
+      this.ctx.beginPath();
+      this.ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+      this.ctx.fill();
     });
+  }
 
-    canvasElement.addEventListener('mouseup', () => {
-        selectedPoint = null;
+  // Atualiza a curva com base no modo selecionado
+  updateCurve() {
+    if (this.mode === 'Bezier') {
+      this.drawBezier();
+      this.updateBezierFormula();
+    } else if (this.mode === 'Chaikin') {
+      this.drawChaikin();
+      this.updateChaikinFormula();
+    }
+  }
+
+  // Desenha a curva Bézier utilizando o algoritmo de De Casteljau
+  drawBezier() {
+    if (this.points.length < 2) return;
+    this.ctx.strokeStyle = 'blue';
+    this.ctx.lineWidth = 2;
+    const steps = 100;
+    this.ctx.beginPath();
+    for (let t = 0; t <= 1; t += 1 / steps) {
+      const p = this.deCasteljau(this.points, t);
+      this.ctx.lineTo(p.x, p.y);
+    }
+    this.ctx.stroke();
+
+    // Desenha linhas guias com traço pontilhado
+    this.ctx.strokeStyle = 'gray';
+    this.ctx.setLineDash([5, 5]);
+    this.ctx.beginPath();
+    this.points.forEach((p, i) => {
+      if (i === 0) this.ctx.moveTo(p.x, p.y);
+      else this.ctx.lineTo(p.x, p.y);
     });
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+  }
 
-    // Redesenha os pontos de controle
-    function drawPoints() {
-        clearCanvas(false);
-        points.forEach((point) => {
-            ctx.fillStyle = 'yellow';
-            ctx.beginPath();
-            ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
-            ctx.fill();
-        });
+  // Algoritmo de De Casteljau para o cálculo da curva Bézier
+  deCasteljau(points, t) {
+    let temp = [...points];
+    while (temp.length > 1) {
+      const nextTemp = [];
+      for (let i = 0; i < temp.length - 1; i++) {
+        const x = (1 - t) * temp[i].x + t * temp[i + 1].x;
+        const y = (1 - t) * temp[i].y + t * temp[i + 1].y;
+        nextTemp.push({ x, y });
+      }
+      temp = nextTemp;
     }
+    return temp[0];
+  }
 
-    // Limpar canvas
-    function clearCanvas(clearPoints = true) {
-        ctx.fillStyle = 'black';
-        ctx.fillRect(0, 0, canvasElement.width, canvasElement.height);
-        if (clearPoints) points = [];
+  // Desenha a curva suavizada pelo algoritmo de Chaikin
+  drawChaikin() {
+    if (this.points.length < 2) return;
+    const iterations = parseInt(this.chaikinIterationsSlider.value);
+    let currentPoints = [...this.points];
+    for (let i = 0; i < iterations; i++) {
+      const nextPoints = [];
+      for (let j = 0; j < currentPoints.length - 1; j++) {
+        const p1 = currentPoints[j];
+        const p2 = currentPoints[j + 1];
+        const q = { x: 0.75 * p1.x + 0.25 * p2.x, y: 0.75 * p1.y + 0.25 * p2.y };
+        const r = { x: 0.25 * p1.x + 0.75 * p2.x, y: 0.25 * p1.y + 0.75 * p2.y };
+        nextPoints.push(q, r);
+      }
+      currentPoints = nextPoints;
     }
-
-    // Atualizar curva com base no modo atual
-    function updateCurve() {
-        if (mode === 'Bezier') {
-            drawBezier();
-            updateBezierFormula(); // Atualiza a explicação matemática da Bézier
-        }
-        if (mode === 'Chaikin') {
-            drawChaikin();
-            updateChaikinFormula(); // Atualiza a explicação matemática do Chaikin
-        }
-    }
-
-
-    // Curvas Bézier com controle de grau
-    function drawBezier() {
-        if (points.length < 2) return;
-
-        ctx.strokeStyle = 'blue';
-        ctx.lineWidth = 2;
-        const steps = 100; // Resolução
-
-        ctx.beginPath();
-        for (let t = 0; t <= 1; t += 1 / steps) {
-            const p = deCasteljau(points, t);
-            ctx.lineTo(p.x, p.y);
-        }
-        ctx.stroke();
-
-        // Linhas guias
-        ctx.strokeStyle = 'gray';
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        points.forEach((p, i) => {
-            if (i === 0) ctx.moveTo(p.x, p.y);
-            else ctx.lineTo(p.x, p.y);
-        });
-        ctx.stroke();
-        ctx.setLineDash([]);
-    }
-
-    // Algoritmo de De Casteljau (Bézier)
-    function deCasteljau(points, t) {
-        let temp = [...points];
-        while (temp.length > 1) {
-            const nextTemp = [];
-            for (let i = 0; i < temp.length - 1; i++) {
-                const x = (1 - t) * temp[i].x + t * temp[i + 1].x;
-                const y = (1 - t) * temp[i].y + t * temp[i + 1].y;
-                nextTemp.push({ x, y });
-            }
-            temp = nextTemp;
-        }
-        return temp[0];
-    }
-
-    // Algoritmo de Chaikin com controle de iterações
-    function drawChaikin() {
-        if (points.length < 2) return;
-
-        const iterations = parseInt(chaikinIterationsSlider.value);
-        let currentPoints = [...points];
-
-        for (let i = 0; i < iterations; i++) {
-            const nextPoints = [];
-            for (let j = 0; j < currentPoints.length - 1; j++) {
-                const p1 = currentPoints[j];
-                const p2 = currentPoints[j + 1];
-                const q = { x: 0.75 * p1.x + 0.25 * p2.x, y: 0.75 * p1.y + 0.25 * p2.y };
-                const r = { x: 0.25 * p1.x + 0.75 * p2.x, y: 0.25 * p1.y + 0.75 * p2.y };
-                nextPoints.push(q, r);
-            }
-            currentPoints = nextPoints;
-        }
-
-        ctx.strokeStyle = 'green';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        currentPoints.forEach((p, i) => {
-            if (i === 0) ctx.moveTo(p.x, p.y);
-            else ctx.lineTo(p.x, p.y);
-        });
-        ctx.stroke();
-    }
-
-    // Ativar modo Bézier
-    function startBezier() {
-        mode = 'Bezier';
-        clearCanvas();
-        alert('Modo Bézier Ativado. Clique no canvas para adicionar pontos.');
-    }
-
-    // Ativar modo Chaikin
-    function startChaikin() {
-        mode = 'Chaikin';
-        clearCanvas();
-        alert('Modo Chaikin Ativado. Clique no canvas para adicionar pontos.');
-    }
-
-    // Eventos de UI
-    bezierDegreeSelect.addEventListener('change', () => {
-        clearCanvas();
-        updateCurve();
+    this.ctx.strokeStyle = 'green';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    currentPoints.forEach((p, i) => {
+      if (i === 0) this.ctx.moveTo(p.x, p.y);
+      else this.ctx.lineTo(p.x, p.y);
     });
+    this.ctx.stroke();
+  }
 
-    chaikinIterationsSlider.addEventListener('input', () => {
-        clearCanvas(false);
-        drawChaikin();
-    });
+  // Atualiza a descrição e a equação matemática para a curva Bézier
+  updateBezierFormula() {
+    this.formulaDescription.innerText = "Curva Bézier gerada pelo algoritmo de De Casteljau:";
+    this.mathEquation.innerText = "B(t) = Σ (Pᵢ * Bₙ,ᵢ(t)), onde Bₙ,ᵢ(t) são polinômios de Bernstein.";
+  }
 
-    function updateBezierFormula() {
-        formulaDescription.innerText = "Curva Bézier gerada pelo algoritmo de De Casteljau:";
-        mathEquation.innerText = "B(t) = Σ (Pᵢ * Bₙ,ᵢ(t)), onde Bₙ,ᵢ(t) são polinômios de Bernstein.";
-    }
+  // Atualiza a descrição e a equação matemática para a curva Chaikin
+  updateChaikinFormula() {
+    this.formulaDescription.innerText = "Curva suavizada pelo Algoritmo de Chaikin:";
+    this.mathEquation.innerText = "Pontos novos: Q = 3/4 Pᵢ + 1/4 Pᵢ₊₁, R = 1/4 Pᵢ + 3/4 Pᵢ₊₁.";
+  }
 
-    function updateChaikinFormula() {
-        formulaDescription.innerText = "Curva suavizada pelo Algoritmo de Chaikin:";
-        mathEquation.innerText = "Pontos novos: Q = 3/4 Pᵢ + 1/4 Pᵢ₊₁, R = 1/4 Pᵢ + 3/4 Pᵢ₊₁.";
-    }
+  // Eventos do canvas
+  onCanvasClick(e) {
+    // Se estiver arrastando um ponto, não adiciona novo
+    if (this.selectedPoint) return;
+    const rect = this.canvasElement.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    this.points.push({ x, y });
+    this.drawPoints();
+    this.updateCurve();
+  }
 
+  onCanvasMouseDown(e) {
+    const rect = this.canvasElement.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    this.selectedPoint = this.points.find(p => Math.hypot(p.x - x, p.y - y) < 7);
+  }
 
-    // Exponha as funções no escopo global
-    window.startBezier = startBezier;
-    window.startChaikin = startChaikin;
-    window.clearCanvas = clearCanvas;
-})();
+  onCanvasMouseMove(e) {
+    if (!this.selectedPoint) return;
+    const rect = this.canvasElement.getBoundingClientRect();
+    this.selectedPoint.x = e.clientX - rect.left;
+    this.selectedPoint.y = e.clientY - rect.top;
+    this.drawPoints();
+    this.updateCurve();
+  }
+
+  onCanvasMouseUp() {
+    this.selectedPoint = null;
+  }
+
+  // Métodos para ativar os modos
+  startBezier() {
+    this.mode = 'Bezier';
+    this.clearCanvas();
+    alert('Modo Bézier Ativado. Clique no canvas para adicionar pontos.');
+  }
+
+  startChaikin() {
+    this.mode = 'Chaikin';
+    this.clearCanvas();
+    alert('Modo Chaikin Ativado. Clique no canvas para adicionar pontos.');
+  }
+}
+
+// Instancia a aplicação de curvas
+const curvasApp = new CurvasApp();
+
+// Expondo os métodos para acesso global (para os botões de ativação)
+window.startBezier = () => curvasApp.startBezier();
+window.startChaikin = () => curvasApp.startChaikin();
+window.clearCanvas = () => curvasApp.clearCanvas();

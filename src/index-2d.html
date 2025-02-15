@@ -1,343 +1,324 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VisuGraph - Modo 2D</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
-    <link rel="stylesheet" href="./styles-2d.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description"
+    content="VisuGraph - Interface 2D com sistemas de coordenadas, cores, modelo Phong e curvas.">
+  <title>VisuGraph - Modo 2D</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <link rel="stylesheet" href="./styles-2d.css">
 </head>
 
 <body>
-    <div class="container">
-        <!-- Barra Lateral com os botões -->
-        <nav class="sidebar">
-            <h1>Sistema 2D</h1>
-            <button id="btn-coordenadas" aria-label="Exibir sistema de coordenadas">Coordenadas</button>
-            <button id="color-system-btn" aria-label="Exibir sistema de cores">Sistemas de Cores</button>
-            <button id="btn-phong" aria-label="Exibir modelo Phong">Modelo Phong</button>
-            <button id="btn-curvas" aria-label="Exibir curvas">Curvas</button>
-            <button id="back-to-menu-2d">Voltar ao Menu</button>
-        </nav>
-        <!-- Interface para Coordenadas -->
-        <div id="canvas-container" style="display: none;">
-            <div id="controls">
-                <div class="button-group">
-                    <button id="add-point">Adicionar Ponto</button>
-                    <button id="unir-pontos">Unir Pontos</button>
-                </div>
-                <h3>Modificar Coordenadas</h3>
-                <div id="num-inputs"></div>
-                <h3>Adicionar Primitivas</h3>
-                <div class="input-group">
-                    <select id="object-type">
-                        <option value="point">Ponto</option>
-                        <option value="triangle">Triângulo</option>
-                        <option value="rectangle">Retângulo</option>
-                    </select>
-                    <label>
-                        <input type="checkbox" id="toggle-coordinates">Mostrar Coordenadas Locais
-                    </label>
-                </div>
-                <div class="button-group">
-                    <button id="btn-ajuda">Ajuda</button>
-                    <button id="reset-canvas">Reset</button>
-                </div>
-            </div>
+  <div class="container">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <h1>Sistema 2D</h1>
+      <button id="btn-coordenadas" aria-label="Exibir sistema de coordenadas">Coordenadas</button>
+      <button id="color-system-btn" aria-label="Exibir sistema de cores">Sistemas de Cores</button>
+      <button id="btn-phong" aria-label="Exibir modelo Phong">Modelo Phong</button>
+      <button id="btn-curvas" aria-label="Exibir curvas">Curvas</button>
+      <button id="back-to-menu-2d">Voltar ao Menu</button>
+    </nav>
+
+    <!-- Interface para Coordenadas -->
+    <section id="canvas-container" class="hidden">
+      <div id="controls">
+        <div class="button-group">
+          <button id="add-point">Adicionar Ponto</button>
+          <button id="unir-pontos">Unir Pontos</button>
         </div>
-        <!-- Interface para o Sistema de Cores -->
-        <div id="color-system-container" style="display: none;">
-            <div>
-                <h2>Explore diferentes representações de cores e veja como elas interagem entre si.</h2>
-            </div>
-            <div id="main-container">
-                <div class="system">
-                    <h3>Sistema RGB</h3>
-                    <div class="slider-container">
-                        <div style="display: flex; flex-direction: column;">
-                            <div class="slide-group">
-                                <label for="r-value">R:</label>
-                                <input id="r-value" type="number" min="0" max="255" value="255">
-                                <input id="r-slider" type="range" min="0" max="255" value="255"
-                                    style="background: linear-gradient(to right, black, red);">
-                            </div>
-                            <div class="slide-group">
-                                <label for="g-value">G:</label>
-                                <input id="g-value" type="number" min="0" max="255" value="255">
-                                <input id="g-slider" type="range" min="0" max="255" value="255"
-                                    style="background: linear-gradient(to right, black, green);">
-                            </div>
-                            <div class="slide-group">
-                                <label for="b-value">B:</label>
-                                <input id="b-value" type="number" min="0" max="255" value="255">
-                                <input id="b-slider" type="range" min="0" max="255" value="255"
-                                    style="background: linear-gradient(to right, black, blue);">
-                            </div>
-                        </div>
-                        <div style=" margin-left: 50px;">
-                            <div id="rgb-preview" class="color-preview"></div>
-                            <div class="color-hex">
-                                <h3>Valor HEX</h3>
-                                <p id="hex-value-rgb">#FFFFFF</p>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Sistema HSL -->
-                    <h3>Sistema HSL</h3>
-                    <div class="slider-container">
-                        <div style="display: flex; flex-direction: column;">
-                            <div class="slide-group">
-                                <label for="h-value-hsl">H:</label>
-                                <input id="h-value-hsl" type="number" min="0" max="360" value="0">
-                                <input id="h-slider-hsl" type="range" min="0" max="360" value="0"
-                                    style="background: linear-gradient(to right, red, yellow, green, cyan, blue, magenta, red);">
-                            </div>
-                            <div class="slide-group">
-                                <label for="s-value-hsl">S:</label>
-                                <input id="s-value-hsl" type="number" min="0" max="100" value="100">
-                                <input id="s-slider-hsl" type="range" min="0" max="100" value="100"
-                                    style="background: linear-gradient(to right, gray, color);">
-                            </div>
-                            <div class="slide-group">
-                                <label for="l-value-hsl">L:</label>
-                                <input id="l-value-hsl" type="number" min="0" max="100" value="100">
-                                <input id="l-slider-hsl" type="range" min="0" max="100" value="100"
-                                    style="background: linear-gradient(to right, black, white);">
-                            </div>
-                        </div>
-                        <div style=" margin-left: 50px;">
-                            <div id="hsl-preview" class="color-preview"></div>
-                            <div class="color-hex">
-                                <h3>Valor HEX</h3>
-                                <p id="hex-value-hsl">#FFFFFF</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Sistema HSV -->
-                    <h3>Sistema HSV</h3>
-                    <div class="slider-container">
-                        <div style="display: flex; flex-direction: column;">
-                            <div class="slide-group">
-                                <label for="h-value-hsv">H:</label>
-                                <input id="h-value-hsv" type="number" min="0" max="360" value="0">
-                                <input id="h-slider-hsv" type="range" min="0" max="360" value="0"
-                                    style="background: linear-gradient(to right, red, yellow, green, cyan, blue, magenta, red);">
-                            </div>
-                            <div class="slide-group">
-                                <label for="s-value-hsv">S:</label>
-                                <input id="s-value-hsv" type="number" min="0" max="100" value="0">
-                                <input id="s-slider-hsv" type="range" min="0" max="100" value="0"
-                                    style="background: linear-gradient(to right, gray, color);">
-                            </div>
-                            <div class="slide-group">
-                                <label for="v-value-hsv">V:</label>
-                                <input id="v-value-hsv" type="number" min="0" max="100" value="100">
-                                <input id="v-slider-hsv" type="range" min="0" max="100" value="100"
-                                    style="background: linear-gradient(to right, black, white);">
-                            </div>
-                        </div>
-                        <div style="margin-left: 50px; width: fit-content; padding: 0;">
-                            <div id="hsv-preview" class="color-preview"></div>
-                            <div class="color-hex">
-                                <h3>Valor HEX</h3>
-                                <p id="hex-value-hsv">#FFFFFF</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Controles -->
-                <div id="controls">
-                    <div>
-                        <div style="margin-top: 60px;">
-                            <label for="image-upload">Carregue uma imagem:</label>
-                            <input type="file" id="image-upload" accept="image/*">
-                        </div>
-
-                        <div id="image-container" style="margin-top: 20px;">
-                            <canvas id="image-canvas" style="display: none;"></canvas>
-                            <img id="uploaded-image" style="max-width: 100%; height: auto;" />
-                        </div>
-                    </div>
-                    <div id="color-palette" style=" margin-top: 20px;">
-                        <h3>Paleta de Cores Predominante</h3>
-                        <div id="colors"></div>
-                    </div>
-                    <!-- Botão de ajuda -->
-                    <div id="help-button-container">
-                        <button id="btn-cores">Ajuda sobre Sistemas de Cores</button>
-                    </div>
-                </div>
-
-            </div>
+        <h3>Modificar Coordenadas</h3>
+        <div id="num-inputs"></div>
+        <h3>Adicionar Primitivas</h3>
+        <div class="input-group">
+          <select id="object-type">
+            <option value="point">Ponto</option>
+            <option value="triangle">Triângulo</option>
+            <option value="rectangle">Retângulo</option>
+          </select>
+          <label>
+            <input type="checkbox" id="toggle-coordinates"> Mostrar Coordenadas Locais
+          </label>
         </div>
-        <!-- Interface para o Modelo Phong -->
-        <div id="phong-container" style="display: none;">
-            <div>
-                <h2>Explorando o Modelo Phong</h2>
-                <p>Ajuste os parâmetros abaixo para explorar os efeitos do modelo Phong em uma superfície 3D.</p>
-            </div>
-            <div id="main-container">
-                <div class="system">
-                    <!-- Controles -->
-                    <div id="controls">
-                        <!-- Seleção de Geometria -->
-                        <div class="slide-group">
-                            <select id="geometry-selector">
-                                <option value="sphere">Esfera</option>
-                                <option value="torus">Toroide</option>
-                            </select>
-                        </div>
-                        <!-- Controle de Intensidade da Luz -->
-                        <h3>Intensidade da Luz</h3>
-                        <div class="slide-group">
-                            <span class="slider-label">Luz Ambiente (La):</span>
-                            <input type="range" id="ambient-light" class="slider-input" min="0" max="1" step="0.1"
-                                value="0.5">
-                            <span id="ambient-intensity-value">0.5</span>
-                        </div>
-                        <div class="slide-group">
-                            <span class="slider-label">Luz Difusa (Ld):</span>
-                            <input type="range" id="diffuse-light" class="slider-input" min="0" max="1" step="0.1"
-                                value="0.5">
-                            <span id="diffuse-intensity-value">0.5</span>
-                        </div>
-                        <div class="slide-group">
-                            <span class="slider-label">Luz Especular (Ls):</span>
-                            <input type="range" id="specular-light" class="slider-input" min="0" max="1" step="0.1"
-                                value="0.5">
-                            <span id="specular-intensity-value">0.5</span>
-                        </div>
-
-                        <!-- Controle de Propriedades do Material -->
-                        <h3>Propriedades do Material</h3>
-                        <div class="slide-group">
-                            <span class="slider-label">Refletância Ambiente (Ka):</span>
-                            <input type="range" id="ambient-material" class="slider-input" min="0" max="1" step="0.1"
-                                value="0.5">
-                            <span id="ka-value">0.5</span>
-                        </div>
-                        <div class="slide-group">
-                            <span class="slider-label">Refletância Difusa (Kd):</span>
-                            <input type="range" id="diffuse-material" class="slider-input" min="0" max="1" step="0.1"
-                                value="0.5">
-                            <span id="kd-value">0.5</span>
-                        </div>
-                        <div class="slide-group">
-                            <span class="slider-label">Refletância Especular (Ks):</span>
-                            <input type="range" id="specular-material" class="slider-input" min="0" max="1" step="0.1"
-                                value="0.5">
-                            <span id="ks-value">0.5</span>
-                        </div>
-
-                        <!-- Controle de Shininess -->
-                        <h3>Shininess</h3>
-                        <div class="slide-group">
-                            <span class="slider-label">Expoente de Brilho (n):</span>
-                            <input type="range" id="shininess" class="slider-input" min="1" max="100" step="1"
-                                value="10">
-                            <span id="shininess-value">10</span>
-                        </div>
-                    </div>
-                </div>
-                <!-- Canvas para Renderização -->
-                <div id="phong-canvas" style="width: 100%; height: 400px;"></div>
-                <canvas id="phong-formula-canvas" width="400" height="150"></canvas>
-            </div>
+        <div class="button-group">
+          <button id="btn-ajuda">Ajuda</button>
+          <button id="reset-canvas">Reset</button>
         </div>
-        <!-- Interface para Curvas -->
-        <div id="curvas-container" style="display: none;">
-            <h2>Sistema de Curvas</h2>
+      </div>
+    </section>
 
-            <!-- Botões para alternar entre os modos -->
-            <div class="curvas">
-                <button onclick="startBezier()">Curva Bézier</button>
-                <button onclick="startChaikin()">Algoritmo de Chaikin</button>
-                <button onclick="clearCanvas()">Limpar Tela</button>
+    <!-- Interface para o Sistema de Cores -->
+    <section id="color-system-container" class="hidden">
+      <div>
+        <h2>Explore diferentes representações de cores e veja como elas interagem entre si.</h2>
+      </div>
+      <div id="main-container">
+        <div class="system">
+          <!-- Sistema RGB -->
+          <h3>Sistema RGB</h3>
+          <div class="slider-container">
+            <div class="sliders">
+              <div class="slide-group">
+                <label for="r-value">R:</label>
+                <input id="r-value" type="number" min="0" max="255" value="255">
+                <input id="r-slider" type="range" min="0" max="255" value="255"
+                  style="background: linear-gradient(to right, black, red);">
+              </div>
+              <div class="slide-group">
+                <label for="g-value">G:</label>
+                <input id="g-value" type="number" min="0" max="255" value="255">
+                <input id="g-slider" type="range" min="0" max="255" value="255"
+                  style="background: linear-gradient(to right, black, green);">
+              </div>
+              <div class="slide-group">
+                <label for="b-value">B:</label>
+                <input id="b-value" type="number" min="0" max="255" value="255">
+                <input id="b-slider" type="range" min="0" max="255" value="255"
+                  style="background: linear-gradient(to right, black, blue);">
+              </div>
             </div>
-
-            <!-- Controles para as Curvas -->
-            <div class="controls">
-                <!-- Controle para Bézier -->
-                <div class="control-group">
-                    <label for="bezier-degree">Grau da Curva Bézier:</label>
-                    <select id="bezier-degree">
-                        <option value="2">Quadrática</option>
-                        <option value="3">Cúbica</option>
-                        <option value="4">Quártica</option>
-                    </select>
-                </div>
-
-                <!-- Controle para Chaikin -->
-                <div class="control-group">
-                    <label for="chaikin-iterations">Iterações de Chaikin:</label>
-                    <input type="range" id="chaikin-iterations" min="1" max="5" value="3">
-                    <span id="chaikin-iterations-value">3</span>
-                </div>
+            <div class="preview">
+              <div id="rgb-preview" class="color-preview"></div>
+              <div class="color-hex">
+                <h3>Valor HEX</h3>
+                <p id="hex-value-rgb">#FFFFFF</p>
+              </div>
             </div>
-
-            <!-- Canvas onde as curvas são desenhadas -->
-            <div class="canvas-container">
-                <canvas id="curveCanvas" width="800" height="600"></canvas>
+          </div>
+          <!-- Sistema HSL -->
+          <h3>Sistema HSL</h3>
+          <div class="slider-container">
+            <div class="sliders">
+              <div class="slide-group">
+                <label for="h-value-hsl">H:</label>
+                <input id="h-value-hsl" type="number" min="0" max="360" value="0">
+                <input id="h-slider-hsl" type="range" min="0" max="360" value="0"
+                  style="background: linear-gradient(to right, red, yellow, green, cyan, blue, magenta, red);">
+              </div>
+              <div class="slide-group">
+                <label for="s-value-hsl">S:</label>
+                <input id="s-value-hsl" type="number" min="0" max="100" value="100">
+                <input id="s-slider-hsl" type="range" min="0" max="100" value="100"
+                  style="background: linear-gradient(to right, gray, color);">
+              </div>
+              <div class="slide-group">
+                <label for="l-value-hsl">L:</label>
+                <input id="l-value-hsl" type="number" min="0" max="100" value="100">
+                <input id="l-slider-hsl" type="range" min="0" max="100" value="100"
+                  style="background: linear-gradient(to right, black, white);">
+              </div>
             </div>
-
-            <!-- Mostrador das fórmulas -->
-            <div id="formula-container">
-                <h3>Fórmulas Matemáticas</h3>
-                <p id="formula-description">Selecione uma curva para ver as fórmulas!</p>
-                <p id="math-equation"></p>
+            <div class="preview">
+              <div id="hsl-preview" class="color-preview"></div>
+              <div class="color-hex">
+                <h3>Valor HEX</h3>
+                <p id="hex-value-hsl">#FFFFFF</p>
+              </div>
             </div>
+          </div>
+          <!-- Sistema HSV -->
+          <h3>Sistema HSV</h3>
+          <div class="slider-container">
+            <div class="sliders">
+              <div class="slide-group">
+                <label for="h-value-hsv">H:</label>
+                <input id="h-value-hsv" type="number" min="0" max="360" value="0">
+                <input id="h-slider-hsv" type="range" min="0" max="360" value="0"
+                  style="background: linear-gradient(to right, red, yellow, green, cyan, blue, magenta, red);">
+              </div>
+              <div class="slide-group">
+                <label for="s-value-hsv">S:</label>
+                <input id="s-value-hsv" type="number" min="0" max="100" value="0">
+                <input id="s-slider-hsv" type="range" min="0" max="100" value="0"
+                  style="background: linear-gradient(to right, gray, color);">
+              </div>
+              <div class="slide-group">
+                <label for="v-value-hsv">V:</label>
+                <input id="v-value-hsv" type="number" min="0" max="100" value="100">
+                <input id="v-slider-hsv" type="range" min="0" max="100" value="100"
+                  style="background: linear-gradient(to right, black, white);">
+              </div>
+            </div>
+            <div class="preview">
+              <div id="hsv-preview" class="color-preview"></div>
+              <div class="color-hex">
+                <h3>Valor HEX</h3>
+                <p id="hex-value-hsv">#FFFFFF</p>
+              </div>
+            </div>
+          </div>
         </div>
+        <!-- Controles adicionais -->
+        <div id="controls">
+          <div class="image-upload">
+            <label for="image-upload">Carregue uma imagem:</label>
+            <input type="file" id="image-upload" accept="image/*">
+          </div>
+          <div id="image-container">
+            <canvas id="image-canvas" class="hidden"></canvas>
+            <img id="uploaded-image" alt="Imagem carregada" />
+          </div>
+          <div id="color-palette">
+            <h3>Paleta de Cores Predominante</h3>
+            <div id="colors"></div>
+          </div>
+          <div id="help-button-container">
+            <button id="btn-cores">Ajuda sobre Sistemas de Cores</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interface para o Modelo Phong -->
+    <section id="phong-container" class="hidden">
+      <div>
+        <h2>Explorando o Modelo Phong</h2>
+        <p>Ajuste os parâmetros abaixo para explorar os efeitos do modelo Phong em uma superfície 3D.</p>
+      </div>
+      <div id="main-container">
+        <div class="system">
+          <div id="controls">
+            <div class="slide-group">
+              <select id="geometry-selector">
+                <option value="sphere">Esfera</option>
+                <option value="torus">Toroide</option>
+              </select>
+            </div>
+            <h3>Intensidade da Luz</h3>
+            <div class="slide-group">
+              <span class="slider-label">Luz Ambiente (La):</span>
+              <input type="range" id="ambient-light" class="slider-input" min="0" max="1" step="0.1" value="0.5">
+              <span id="ambient-intensity-value">0.5</span>
+            </div>
+            <div class="slide-group">
+              <span class="slider-label">Luz Difusa (Ld):</span>
+              <input type="range" id="diffuse-light" class="slider-input" min="0" max="1" step="0.1" value="0.5">
+              <span id="diffuse-intensity-value">0.5</span>
+            </div>
+            <div class="slide-group">
+              <span class="slider-label">Luz Especular (Ls):</span>
+              <input type="range" id="specular-light" class="slider-input" min="0" max="1" step="0.1" value="0.5">
+              <span id="specular-intensity-value">0.5</span>
+            </div>
+            <h3>Propriedades do Material</h3>
+            <div class="slide-group">
+              <span class="slider-label">Refletância Ambiente (Ka):</span>
+              <input type="range" id="ambient-material" class="slider-input" min="0" max="1" step="0.1" value="0.5">
+              <span id="ka-value">0.5</span>
+            </div>
+            <div class="slide-group">
+              <span class="slider-label">Refletância Difusa (Kd):</span>
+              <input type="range" id="diffuse-material" class="slider-input" min="0" max="1" step="0.1" value="0.5">
+              <span id="kd-value">0.5</span>
+            </div>
+            <div class="slide-group">
+              <span class="slider-label">Refletância Especular (Ks):</span>
+              <input type="range" id="specular-material" class="slider-input" min="0" max="1" step="0.1" value="0.5">
+              <span id="ks-value">0.5</span>
+            </div>
+            <h3>Shininess</h3>
+            <div class="slide-group">
+              <span class="slider-label">Expoente de Brilho (n):</span>
+              <input type="range" id="shininess" class="slider-input" min="1" max="100" step="1" value="10">
+              <span id="shininess-value">10</span>
+            </div>
+          </div>
+        </div>
+        <div id="phong-canvas"></div>
+        <canvas id="phong-formula-canvas" width="400" height="150"></canvas>
+      </div>
+    </section>
+
+    <!-- Interface para Curvas -->
+    <section id="curvas-container" class="hidden">
+      <h2>Sistema de Curvas</h2>
+      <div class="curvas">
+        <button onclick="startBezier()">Curva Bézier</button>
+        <button onclick="startChaikin()">Algoritmo de Chaikin</button>
+        <button onclick="clearCanvas()">Limpar Tela</button>
+      </div>
+      <div class="controls">
+        <div class="control-group">
+          <label for="bezier-degree">Grau da Curva Bézier:</label>
+          <select id="bezier-degree">
+            <option value="2">Quadrática</option>
+            <option value="3">Cúbica</option>
+            <option value="4">Quártica</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="chaikin-iterations">Iterações de Chaikin:</label>
+          <input type="range" id="chaikin-iterations" min="1" max="5" value="3">
+          <span id="chaikin-iterations-value">3</span>
+        </div>
+      </div>
+      <div class="canvas-container">
+        <canvas id="curveCanvas" width="800" height="600"></canvas>
+      </div>
+      <div id="formula-container">
+        <h3>Fórmulas Matemáticas</h3>
+        <p id="formula-description">Selecione uma curva para ver as fórmulas!</p>
+        <p id="math-equation"></p>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal Sistema de Cores -->
+  <div id="modal-cores" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-cores-title">
+    <div class="modal-content">
+      <h2 id="modal-cores-title">Sistemas de Cores</h2>
+      <p>
+        <strong>RGB (Red, Green, Blue):</strong>
+        O sistema RGB é baseado nas cores primárias de luz. Valores variam de 0 a 255 para cada canal (vermelho,
+        verde, azul). A combinação desses valores resulta em uma vasta gama de cores.
+      </p>
+      <p>
+        <strong>HSL (Hue, Saturation, Lightness):</strong>
+        HSL é um sistema de cores que representa cores em termos de tonalidade (Hue), saturação (Saturation) e
+        luminosidade (Lightness). A tonalidade é medida em graus (0 a 360), enquanto a saturação e a
+        luminosidade variam de 0% a 100%.
+      </p>
+      <p>
+        <strong>HSV (Hue, Saturation, Value):</strong>
+        O sistema HSV é similar ao HSL, mas ao invés de "Lightness", usa o "Value", que se refere à intensidade
+        da cor. Também usa tonalidade de 0 a 360 graus e saturação de 0% a 100%.
+      </p>
+      <button class="close-btn" aria-label="Fechar">Fechar</button>
     </div>
-    <!-- Modal Sistema de Cores -->
-    <div id="modal-cores" class="modal" style="display: none;">
-        <div class="modal-content">
-            <h2>Sistemas de Cores</h2>
-            <p>
-                <strong>RGB (Red, Green, Blue):</strong>
-                O sistema RGB é baseado nas cores primárias de luz. Valores variam de 0 a 255 para cada canal (vermelho,
-                verde, azul). A combinação desses valores resulta em uma vasta gama de cores.
-            </p>
-            <p>
-                <strong>HSL (Hue, Saturation, Lightness):</strong>
-                HSL é um sistema de cores que representa cores em termos de tonalidade (Hue), saturação (Saturation) e
-                luminosidade (Lightness). A tonalidade é medida em graus (0 a 360), enquanto a saturação e a
-                luminosidade variam de 0% a 100%.
-            </p>
-            <p>
-                <strong>HSV (Hue, Saturation, Value):</strong>
-                O sistema HSV é similar ao HSL, mas ao invés de "Lightness", usa o "Value", que se refere à intensidade
-                da cor. Também usa tonalidade de 0 a 360 graus e saturação de 0% a 100%.
-            </p>
-            <button class="close-btn">Fechar</button>
-        </div>
-    </div>
-    <!-- Modal Sistema de Coordenadas -->
-    <div id="modal-ajuda" class="modal" style="display: none;">
-        <div class="modal-content">
-            <h2>Ajuda e Informações</h2>
-            <p>
-                <strong>Coordenadas Globais:</strong>
-                Origem no canto superior esquerdo (0, 0), usadas para posições absolutas no canvas.
-            </p>
-            <p>
-                <strong>Coordenadas Locais:</strong>
-                Origem no centro do canvas (0, 0), usadas para posições relativas ao centro.
-            </p>
-            <p>
-                <strong>Como Usar:</strong>
-                Use os botões para adicionar pontos, unir pontos ou redefinir o canvas.
-            </p>
-            <button class="close-btn">Fechar</button>
-        </div>
-    </div>
+  </div>
 
-    <script src="coordenadas.js"></script>
-    <script src="cores.js"></script>
-    <script type="module" src="phong.js"></script>
-    <script src="curvas.js"></script>
-
+  <!-- Modal Sistema de Coordenadas -->
+  <div id="modal-ajuda" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-ajuda-title">
+    <div class="modal-content">
+      <h2 id="modal-ajuda-title">Ajuda e Informações</h2>
+      <p>
+        <strong>Coordenadas Globais:</strong>
+        Origem no canto superior esquerdo (0, 0), usadas para posições absolutas no canvas.
+      </p>
+      <p>
+        <strong>Coordenadas Locais:</strong>
+        Origem no centro do canvas (0, 0), usadas para posições relativas ao centro.
+      </p>
+      <p>
+        <strong>Como Usar:</strong>
+        Use os botões para adicionar pontos, unir pontos ou redefinir o canvas.
+      </p>
+      <button class="close-btn" aria-label="Fechar">Fechar</button>
+    </div>
+  </div>
+  <script>
+    const backToMenu2D = document.getElementById('back-to-menu-2d');
+    backToMenu2D.addEventListener('click', () => {
+      window.location.href = './index.html';
+    });
+  </script>
+  <script src="coordenadas.js"></script>
+  <script src="cores.js"></script>
+  <script type="module" src="phong.js"></script>
+  <script src="curvas.js"></script>
 </body>
 
 </html>

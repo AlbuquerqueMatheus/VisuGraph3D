@@ -6,163 +6,137 @@ class CoordenadasApp {
     this.alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     this.canvas = null;
 
-    // Configurar os event listeners dos botões e modais
-    document.getElementById('reset-canvas').addEventListener('click', () => this.resetCanvas());
-    document.getElementById('toggle-coordinates').addEventListener('change', (e) => {
-      this.updateInputs(e.target.checked);
-    });
-    document.getElementById('add-point').addEventListener('click', () => {
-      if (this.points.length < this.alphabet.length) {
-        this.addPoint();
-      } else {
-        alert('Limite de pontos alcançado.');
-      }
-    });
-    document.getElementById('unir-pontos').addEventListener('click', () => this.unirPontos());
-    document.getElementById('object-type').addEventListener('change', (e) => {
-      const type = e.target.value;
-      if (type === 'triangle') this.addTriangle();
-      else if (type === 'rectangle') this.addRectangle();
-      else this.addPoint();
-    });
-    // Botão que exibe a interface de coordenadas (oculta as demais)
-    document.getElementById('btn-coordenadas').addEventListener('click', () => {
-      document.getElementById('color-system-container').classList.add('hidden');
-      document.getElementById('phong-container').classList.add('hidden');
-      document.getElementById('curvas-container').classList.add('hidden');
-      document.getElementById('canvas-container').classList.remove('hidden');
-    });
-    // Configurar o modal de ajuda
-    this.modal = document.getElementById('modal-ajuda');
-    const btnAjuda = document.getElementById('btn-ajuda');
-    const closeBtn = this.modal.querySelector('.close-btn');
+    // Botões de manipulação
+    document.getElementById('reset-canvas')
+      .addEventListener('click', () => this.resetCanvas());
+    document.getElementById('toggle-coordinates')
+      .addEventListener('change', e => this.updateInputs(e.target.checked));
+    document.getElementById('add-point')
+      .addEventListener('click', () => {
+        if (this.points.length < this.alphabet.length) this.addPoint();
+        else alert('Limite de pontos alcançado.');
+      });
+    document.getElementById('unir-pontos')
+      .addEventListener('click', () => this.unirPontos());
+    document.getElementById('object-type')
+      .addEventListener('change', e => {
+        const type = e.target.value;
+        if      (type === 'triangle') this.addTriangle();
+        else if (type === 'rectangle') this.addRectangle();
+        else this.addPoint();
+      });
+
+    // Navegação: exibir seção de Coordenadas
+    document.getElementById('btn-coordenadas')
+      .addEventListener('click', () => {
+        document.getElementById('color-system-section').classList.add('hidden');
+        document.getElementById('phong-section').classList.add('hidden');
+        document.getElementById('curves-section').classList.add('hidden');
+        document.getElementById('coords-section').classList.remove('hidden');
+      });
+
+    // Modal de ajuda
+    this.modal = document.getElementById('modal-help');
+    const btnAjuda  = document.getElementById('btn-ajuda');
+    const closeBtn  = this.modal.querySelector('.close-btn');
     btnAjuda.addEventListener('click', () => this.modal.classList.remove('hidden'));
     closeBtn.addEventListener('click', () => this.modal.classList.add('hidden'));
-    window.addEventListener('click', (event) => {
-      if (event.target === this.modal) {
-        this.modal.classList.add('hidden');
-      }
+    window.addEventListener('click', e => {
+      if (e.target === this.modal) this.modal.classList.add('hidden');
     });
   }
 
   resetCanvas() {
     this.points = [];
-    this.shape = [];
+    this.shape  = [];
     this.updateInputs();
-    background(255); // p5.js: limpa o fundo do canvas
+    background(255);
     this.drawGrid();
   }
 
   drawLegend() {
-    const globalOriginX = 0;
-    const globalOriginY = 0;
-    const localOriginX = width / 2;
-    const localOriginY = height / 2;
+    const globalOriginX = 0, globalOriginY = 0;
+    const localOriginX  = width/2, localOriginY = height/2;
 
     textSize(14);
-    fill(0);
-    textAlign(LEFT);
     // Origem Global
-    fill(255, 110, 110);
-    text("Origem Global (0, 0)", globalOriginX + 10, globalOriginY + 20);
-    // Origem Local
-    fill(140, 140, 140);
-    text("Origem Local (0, 0)", localOriginX + 10, localOriginY - 10);
-    // Marcação das origens
-    fill(255, 110, 110);
+    fill(255,110,110);
+    text("Origem Global (0,0)", globalOriginX + 10, globalOriginY + 20);
     ellipse(globalOriginX, globalOriginY, 8, 8);
-    fill(140, 140, 140);
+    // Origem Local
+    fill(140);
+    text("Origem Local (0,0)", localOriginX + 10, localOriginY - 10);
     ellipse(localOriginX, localOriginY, 8, 8);
   }
 
   addTriangle() {
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const size = 50;
-    this.points.push({ x: centerX, y: centerY - size });
-    this.points.push({ x: centerX - size, y: centerY + size });
-    this.points.push({ x: centerX + size, y: centerY + size });
+    const cx = width/2, cy = height/2, s = 50;
+    this.points.push({x:cx,      y:cy-s});
+    this.points.push({x:cx - s,  y:cy + s});
+    this.points.push({x:cx + s,  y:cy + s});
     this.updateInputs();
   }
 
   addRectangle() {
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const size = 50;
-    this.points.push({ x: centerX - size, y: centerY - size });
-    this.points.push({ x: centerX + size, y: centerY - size });
-    this.points.push({ x: centerX + size, y: centerY + size });
-    this.points.push({ x: centerX - size, y: centerY + size });
+    const cx = width/2, cy = height/2, s = 50;
+    this.points.push({x:cx - s,  y:cy - s});
+    this.points.push({x:cx + s,  y:cy - s});
+    this.points.push({x:cx + s,  y:cy + s});
+    this.points.push({x:cx - s,  y:cy + s});
     this.updateInputs();
   }
 
   updateInputs(useLocal = false) {
-    const inputsDiv = document.getElementById('num-inputs');
-    inputsDiv.innerHTML = '';
-    this.points.forEach((p, index) => {
-      const localX = p.x - width / 2;
-      const localY = p.y - height / 2;
-      const xValue = useLocal ? localX : p.x;
-      const yValue = useLocal ? localY : p.y;
-      let inputX = document.createElement('input');
-      let inputY = document.createElement('input');
-      inputX.type = 'number';
-      inputX.value = xValue.toFixed(2);
-      inputY.type = 'number';
-      inputY.value = yValue.toFixed(2);
-      inputX.addEventListener('input', () => {
-        if (useLocal) {
-          p.x = parseFloat(inputX.value) + width / 2;
-        } else {
-          p.x = parseFloat(inputX.value);
-        }
-      });
-      inputY.addEventListener('input', () => {
-        if (useLocal) {
-          p.y = parseFloat(inputY.value) + width / 2;
-        } else {
-          p.y = parseFloat(inputY.value);
-        }
-      });
-      inputsDiv.appendChild(document.createTextNode(`${this.alphabet[index]}: `));
-      inputsDiv.appendChild(inputX);
-      inputsDiv.appendChild(inputY);
-      inputsDiv.appendChild(document.createElement('br'));
-    });
-  }
+    const container = document.getElementById('coords-modifier');
+    container.innerHTML = '';
+    this.points.forEach((p,i) => {
+      const lx = p.x - width/2;
+      const ly = p.y - height/2;
+      const xVal = useLocal ? lx : p.x;
+      const yVal = useLocal ? ly : p.y;
 
-  applyTransformation(matrix, point) {
-    if (!point || point.x === undefined || point.y === undefined) {
-      console.error('Ponto inválido', point);
-      return null;
-    }
-    const [a, b, c, d, e, f] = matrix;
-    const x = point.x;
-    const y = point.y;
-    return {
-      x: a * x + b * y + e,
-      y: c * x + d * y + f,
-    };
+      const inputX = document.createElement('input');
+      inputX.type  = 'number';
+      inputX.value = xVal.toFixed(2);
+      inputX.addEventListener('input', () => {
+        p.x = useLocal
+          ? parseFloat(inputX.value) + width/2
+          : parseFloat(inputX.value);
+      });
+
+      const inputY = document.createElement('input');
+      inputY.type  = 'number';
+      inputY.value = yVal.toFixed(2);
+      inputY.addEventListener('input', () => {
+        p.y = useLocal
+          ? parseFloat(inputY.value) + height/2
+          : parseFloat(inputY.value);
+      });
+
+      container.appendChild(document.createTextNode(`${this.alphabet[i]}: `));
+      container.appendChild(inputX);
+      container.appendChild(inputY);
+      container.appendChild(document.createElement('br'));
+    });
   }
 
   drawReferenceLines() {
     if (document.getElementById('toggle-coordinates').checked) {
-      const centerX = width / 2;
-      const centerY = height / 2;
+      const cx = width/2, cy = height/2;
       stroke(150);
-      this.points.forEach((p) => {
-        line(centerX, centerY, p.x, p.y);
-      });
+      this.points.forEach(p => line(cx, cy, p.x, p.y));
     }
   }
 
   setup() {
-    const container = document.getElementById('canvas-container');
-    this.canvas = createCanvas(600, 600);
-    this.canvas.parent(container);
+    const parent = document.getElementById('coords-canvas-container');
+    const size = 500; // novo tamanho
+    this.canvas = createCanvas(size, size)
+                    .parent(parent);
     background(255);
     this.drawGrid();
   }
+
 
   draw() {
     background(255);
@@ -175,48 +149,33 @@ class CoordenadasApp {
 
   drawGrid() {
     stroke(200);
-    for (let x = 0; x <= width; x += width / 20) {
-      line(x, 0, x, height);
-    }
-    for (let y = 0; y <= height; y += height / 20) {
-      line(0, y, width, y);
-    }
+    for (let x=0; x<=width; x+=width/20) line(x,0,x,height);
+    for (let y=0; y<=height; y+=height/20) line(0,y,width,y);
     // Eixo X
-    stroke(0, 255, 0);
-    line(0, height / 2, width, height / 2);
-    fill(0, 255, 0);
-    noStroke();
-    textSize(16);
-    text("X", width - 20, height / 2 - 10);
+    stroke(0,255,0);
+    line(0, height/2, width, height/2);
+    noStroke(); fill(0,255,0); textSize(16);
+    text("X", width-20, height/2 - 10);
     // Eixo Y
-    stroke(255, 0, 0);
-    line(width / 2, 0, width / 2, height);
-    fill(255, 0, 0);
-    noStroke();
-    textSize(16);
-    text("Y", width / 2 + 10, 20);
+    stroke(255,0,0);
+    line(width/2,0, width/2, height);
+    noStroke(); fill(255,0,0); textSize(16);
+    text("Y", width/2 + 10, 20);
   }
 
   drawPoints() {
-    for (let i = 0; i < this.points.length; i++) {
-      let p = this.points[i];
-      fill(this.draggingPoint === p ? 'yellow' : 'red');
-      noStroke();
-      ellipse(p.x, p.y, 10, 10);
-      fill(0);
-      textSize(16);
-      text(this.alphabet[i], p.x + 10, p.y - 10);
-    }
+    this.points.forEach((p,i) => {
+      fill(this.draggingPoint===p ? 'yellow' : 'red');
+      noStroke(); ellipse(p.x,p.y,10,10);
+      fill(0); textSize(16);
+      text(this.alphabet[i], p.x+10, p.y-10);
+    });
   }
 
   drawShape() {
     if (this.shape.length > 1) {
-      fill(0, 0, 255, 100);
-      noStroke();
-      beginShape();
-      for (let p of this.shape) {
-        vertex(p.x, p.y);
-      }
+      fill(0,0,255,100); noStroke(); beginShape();
+      this.shape.forEach(p => vertex(p.x,p.y));
       endShape(CLOSE);
     }
   }
@@ -242,42 +201,21 @@ class CoordenadasApp {
     this.draggingPoint = null;
   }
 
-  addPoint(x, y) {
-    let canvasX = x || width / 2;
-    let canvasY = y || height / 2;
-    this.points.push({ x: canvasX, y: canvasY });
+  addPoint() {
+    this.points.push({ x: width/2, y: height/2 });
     this.updateInputs();
   }
 
   unirPontos() {
-    if (this.points.length >= 3) {
-      this.shape = [...this.points];
-    } else {
-      alert('Adicione pelo menos 3 pontos para formar uma geometria.');
-    }
+    if (this.points.length >= 3) this.shape = [...this.points];
+    else alert('Adicione pelo menos 3 pontos.');
   }
 }
 
-// Instancia a aplicação
+// Instancia e integra com p5.js
 const coordenadasApp = new CoordenadasApp();
-
-// Integração com p5.js: as funções globais chamam os métodos da instância
-function setup() {
-  coordenadasApp.setup();
-}
-
-function draw() {
-  coordenadasApp.draw();
-}
-
-function mousePressed() {
-  coordenadasApp.mousePressed();
-}
-
-function mouseDragged() {
-  coordenadasApp.mouseDragged();
-}
-
-function mouseReleased() {
-  coordenadasApp.mouseReleased();
-}
+function setup()        { coordenadasApp.setup(); }
+function draw()         { coordenadasApp.draw(); }
+function mousePressed() { coordenadasApp.mousePressed(); }
+function mouseDragged() { coordenadasApp.mouseDragged(); }
+function mouseReleased(){ coordenadasApp.mouseReleased(); }

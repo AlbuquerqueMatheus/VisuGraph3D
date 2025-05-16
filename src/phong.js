@@ -1,166 +1,242 @@
+// phong.js
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 
 class PhongApp {
   constructor() {
-    // Seleciona o container e define as dimensões iniciais
-    this.container = document.getElementById('phong-canvas');
-    this.container.innerHTML = ''; // Limpa conteúdo anterior
+    this._initScene();
+    this._initLights();
+    this._initMaterial();
+    this._initGeometry();
+    this._initHelpers();
+    this._initUI();
+    this.animate();
+  }
+
+  // Scene with WebGL and CSS2D renderers
+  _initScene() {
+    // agora usamos o container 'phong-viewer'
+    this.container = document.getElementById('phong-viewer');
+    this.container.innerHTML = '';
     this.width = this.container.offsetWidth || 600;
     this.height = this.container.offsetHeight || 400;
 
-    // Cria a cena, câmera e renderer
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, this.width / this.height, 0.1, 1000);
-    this.renderer = new THREE.WebGLRenderer();
+    this.camera.position.set(0, 2, 5);
+
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(this.width, this.height);
     this.container.appendChild(this.renderer.domElement);
 
-    // Cria as luzes
+    this.labelRenderer = new CSS2DRenderer();
+    this.labelRenderer.setSize(this.width, this.height);
+    this.labelRenderer.domElement.style.position = 'absolute';
+    this.labelRenderer.domElement.style.top = '0';
+    this.labelRenderer.domElement.style.pointerEvents = 'none';
+    this.container.appendChild(this.labelRenderer.domElement);
+
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+  }
+
+  // Ambient and point lights
+  _initLights() {
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     this.scene.add(this.ambientLight);
 
     this.pointLight = new THREE.PointLight(0xffffff, 1);
-    this.pointLight.position.set(5, 5, 5);
+    this.pointLight.position.set(5, 2, 0);
     this.scene.add(this.pointLight);
+  }
 
-    // Cria o material com cor base e propriedades iniciais
-    const baseColor = new THREE.Color(0x5555ff);
+  // MeshPhongMaterial
+  _initMaterial() {
     this.material = new THREE.MeshPhongMaterial({
-      color: baseColor,
+      color: new THREE.Color(0x5555ff),
       shininess: 10,
       specular: new THREE.Color(0xaaaaaa)
     });
+  }
 
-    // Cria a geometria e o mesh iniciais (esfera)
+  // Geometry and mesh
+  _initGeometry() {
     this.geometry = new THREE.SphereGeometry(1, 32, 32);
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.scene.add(this.mesh);
+  }
 
-    this.camera.position.z = 5;
+  // ArrowHelpers and labels for n̂, î̂, v̂
+  _initHelpers() {
+    const P = this.mesh.position;
 
-    // Seleciona os elementos do DOM (sliders e selector)
-    this.ambientSlider = document.getElementById('ambient-light');
-    this.diffuseSlider = document.getElementById('diffuse-light');
-    this.specularLightSlider = document.getElementById('specular-light');
-    this.ambientMaterialSlider = document.getElementById('ambient-material');
-    this.diffuseMaterialSlider = document.getElementById('diffuse-material');
-    this.specularMaterialSlider = document.getElementById('specular-material');
-    this.shininessSlider = document.getElementById('shininess');
+    // Normal
+    const nDir = new THREE.Vector3(0, 1, 0);
+    this.nArrow = new THREE.ArrowHelper(nDir, P, 1.5, 0x00ff00, 0.2, 0.1);
+    this.scene.add(this.nArrow);
+    this.nLabel = this._makeLabel('n̂', nDir.clone().setLength(1.7).add(P));
+    this.scene.add(this.nLabel);
+
+    // Light direction
+    const lDir = this.pointLight.position.clone().sub(P).normalize();
+    this.lArrow = new THREE.ArrowHelper(lDir, P, 2, 0xff0000, 0.2, 0.1);
+    this.scene.add(this.lArrow);
+    this.lLabel = this._makeLabel('î̂', lDir.clone().setLength(2.2).add(P));
+    this.scene.add(this.lLabel);
+
+    // View direction
+    const vDir = this.camera.position.clone().sub(P).normalize();
+    this.vArrow = new THREE.ArrowHelper(vDir, P, 2, 0x0000ff, 0.2, 0.1);
+    this.scene.add(this.vArrow);
+    this.vLabel = this._makeLabel('v̂', vDir.clone().setLength(2.2).add(P));
+    this.scene.add(this.vLabel);
+
+    // TransformControls for dragging light
+    this.transformControls = new TransformControls(this.camera, this.labelRenderer.domElement);
+    this.transformControls.attach(this.pointLight);
+    this.scene.add(this.transformControls);
+    this.transformControls.addEventListener('dragging-changed', (e) => {
+      this.controls.enabled = !e.value;
+    });
+  }
+
+  // Create CSS2D label
+  _makeLabel(text, position) {
+    const div = document.createElement('div');
+    div.className = 'label';
+    div.textContent = text;
+    div.style.color = '#fff';
+    div.style.fontSize = '20px';
+    div.style.fontWeight = 'bold';
+    const label = new CSS2DObject(div);
+    label.position.copy(position);
+    return label;
+  }
+
+  // UI sliders and geometry selector
+  _initUI() {
     this.geometrySelector = document.getElementById('geometry-selector');
-
-    // Vincula métodos para preservar o contexto
-    this.updateMaterial = this.updateMaterial.bind(this);
-    this.handleGeometryChange = this.handleGeometryChange.bind(this);
-    this.onWindowResize = this.onWindowResize.bind(this);
-
-    // Configura os eventos dos sliders e do selector
-    this.ambientSlider.addEventListener('input', this.updateMaterial);
-    this.diffuseSlider.addEventListener('input', this.updateMaterial);
-    this.specularLightSlider.addEventListener('input', this.updateMaterial);
-    this.ambientMaterialSlider.addEventListener('input', this.updateMaterial);
-    this.diffuseMaterialSlider.addEventListener('input', this.updateMaterial);
-    this.specularMaterialSlider.addEventListener('input', this.updateMaterial);
-    this.shininessSlider.addEventListener('input', this.updateMaterial);
-    this.geometrySelector.addEventListener('change', this.handleGeometryChange);
-
-    // Atualiza as dimensões da cena quando a janela for redimensionada
-    window.addEventListener('resize', this.onWindowResize);
+    const ids = [
+      'ambient-light','diffuse-light','specular-light',
+      'ambient-material','diffuse-material','specular-material',
+      'shininess'
+    ];
+    ids.forEach(id => {
+      document.getElementById(id)
+              .addEventListener('input', () => this._refresh());
+    });
+    this.geometrySelector.addEventListener('change', () => this._handleGeometryChange());
+    window.addEventListener('resize', () => this._onWindowResize());
+    this._refresh();
   }
 
-  updateMaterial() {
-    // Atualiza as propriedades do material e das luzes com base nos valores dos sliders
-    this.material.shininess = parseFloat(this.shininessSlider.value);
-    const ka = parseFloat(this.ambientMaterialSlider.value);
-    const kd = parseFloat(this.diffuseMaterialSlider.value);
-    const ks = parseFloat(this.specularMaterialSlider.value);
-    const ls = parseFloat(this.specularLightSlider.value);
+  // Update material, lights, arrows, labels, formula
+  _refresh() {
+    const La = parseFloat(document.getElementById('ambient-light').value);
+    const Ld = parseFloat(document.getElementById('diffuse-light').value);
+    const Ls = parseFloat(document.getElementById('specular-light').value);
+    const Ka = parseFloat(document.getElementById('ambient-material').value);
+    const Kd = parseFloat(document.getElementById('diffuse-material').value);
+    const Ks = parseFloat(document.getElementById('specular-material').value);
+    const shininess = parseFloat(document.getElementById('shininess').value);
 
-    // Atualiza a reflectância especular do material
-    this.material.specular.setRGB(ks, ks, ks);
+    this.material.shininess = shininess;
+    this.material.specular.setScalar(Ks);
+    this.ambientLight.intensity = La * Ka * 2;
+    this.pointLight.intensity = (Ld * Kd + Ls * Ks) * 2;
 
-    // Ajusta a intensidade das luzes
-    this.ambientLight.intensity = parseFloat(this.ambientSlider.value) * ka;
-    this.pointLight.intensity = parseFloat(this.diffuseSlider.value) * kd;
-    this.pointLight.intensity += ls * ks;
+    const P = this.mesh.position;
 
-    // Atualiza os diagramas (matemático e visual)
-    this.drawPhongDiagram(ka, kd, ks, this.ambientLight.intensity, this.pointLight.intensity, ls, this.material.shininess);
-    this.drawPhongVisualDiagram(ka, kd, ks, this.ambientLight.intensity, this.pointLight.intensity, ls, this.material.shininess);
+    // update arrows + labels
+    const nDir = new THREE.Vector3(0,1,0);
+    this.nArrow.setDirection(nDir);
+    this.nArrow.position.copy(P);
+    this.nLabel.position.copy(nDir.clone().setLength(1.7).add(P));
+
+    const lDir = this.pointLight.position.clone().sub(P).normalize();
+    this.lArrow.setDirection(lDir);
+    this.lArrow.position.copy(P);
+    this.lLabel.position.copy(lDir.clone().setLength(2.2).add(P));
+
+    const vDir = this.camera.position.clone().sub(P).normalize();
+    this.vArrow.setDirection(vDir);
+    this.vArrow.position.copy(P);
+    this.vLabel.position.copy(vDir.clone().setLength(2.2).add(P));
+
+    this._drawPhongDiagram(La, Ka, Ld, Kd, Ls, Ks, shininess);
+    this._updateLabels({ La, Ld, Ls, Ka, Kd, Ks, shininess });
   }
 
-  drawPhongDiagram(ka, kd, ks, Ia, Id, Is, shininess) {
-    const canvas = document.getElementById('phong-formula-canvas');
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.font = '16px Arial';
-    ctx.fillStyle = '#000';
-    ctx.fillText(`I = Ia * Ka + Id * Kd + Is * Ks`, 10, 30);
-    ctx.fillText(`Ia = ${Ia.toFixed(2)}, Ka = ${ka.toFixed(2)}`, 10, 60);
-    ctx.fillText(`Id = ${Id.toFixed(2)}, Kd = ${kd.toFixed(2)}`, 10, 90);
-    ctx.fillText(`Is = ${Is.toFixed(2)}, Ks = ${ks.toFixed(2)}, Shininess = ${shininess}`, 10, 120);
+  // Text formula canvas
+  _drawPhongDiagram(La, Ka, Ld, Kd, Ls, Ks, n) {
+    const cvs = document.getElementById('phong-formula-canvas');
+    const ctx = cvs.getContext('2d');
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    ctx.font = '14px Courier New';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('I = La·Ka + Ld·Kd + Ls·Ks', 10, 25);
+    ctx.fillText(`La=${La.toFixed(2)}, Ka=${Ka.toFixed(2)}`, 10, 55);
+    ctx.fillText(`Ld=${Ld.toFixed(2)}, Kd=${Kd.toFixed(2)}`, 10, 85);
+    ctx.fillText(`Ls=${Ls.toFixed(2)}, Ks=${Ks.toFixed(2)}, n=${n}`, 10, 115);
   }
 
-  drawPhongVisualDiagram(ka, kd, ks, Ia, Id, Is, shininess) {
-    const canvas = document.getElementById('phong-diagram-canvas');
-    if (!canvas) return; // Caso o canvas não exista
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#f0f0f0';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const baseX = 50;
-    const baseY = 100;
-    // Luz Ambiente
-    ctx.fillStyle = 'blue';
-    ctx.fillRect(baseX, baseY - Ia * ka * 50, 50, Ia * ka * 50);
-    ctx.fillText(`Ambiente`, baseX, baseY + 20);
-    // Luz Difusa
-    ctx.fillStyle = 'green';
-    ctx.fillRect(baseX + 70, baseY - Id * kd * 50, 50, Id * kd * 50);
-    ctx.fillText(`Difusa`, baseX + 70, baseY + 20);
-    // Luz Especular
-    ctx.fillStyle = 'red';
-    ctx.fillRect(baseX + 140, baseY - Is * ks * 50, 50, Is * ks * 50);
-    ctx.fillText(`Especular`, baseX + 140, baseY + 20);
-    // Exibe os valores
-    ctx.fillStyle = 'black';
-    ctx.fillText(`Ka: ${ka.toFixed(2)}`, baseX, baseY - 60);
-    ctx.fillText(`Kd: ${kd.toFixed(2)}`, baseX + 70, baseY - 60);
-    ctx.fillText(`Ks: ${ks.toFixed(2)}`, baseX + 140, baseY - 60);
+  // Update numeric labels
+  _updateLabels(v) {
+    document.getElementById('ambient-intensity-value').innerText = v.La;
+    document.getElementById('diffuse-intensity-value').innerText = v.Ld;
+    document.getElementById('specular-intensity-value').innerText = v.Ls;
+    document.getElementById('ka-value').innerText = v.Ka;
+    document.getElementById('kd-value').innerText = v.Kd;
+    document.getElementById('ks-value').innerText = v.Ks;
+    document.getElementById('shininess-value').innerText = v.shininess;
   }
 
-  handleGeometryChange() {
-    const selectedGeometry = this.geometrySelector.value;
+  // Change geometry type
+  _handleGeometryChange() {
     this.scene.remove(this.mesh);
-    // Seleciona a geometria com base na opção
-    this.geometry =
-      selectedGeometry === 'sphere'
-        ? new THREE.SphereGeometry(1, 32, 32)
-        : new THREE.TorusGeometry(1, 0.4, 16, 100);
+    const type = this.geometrySelector.value;
+    this.geometry = (type === 'sphere')
+      ? new THREE.SphereGeometry(1, 32, 32)
+      : new THREE.TorusGeometry(1, 0.4, 16, 100);
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.scene.add(this.mesh);
   }
 
-  onWindowResize() {
-    const newWidth = this.container.offsetWidth;
-    const newHeight = this.container.offsetHeight;
-    this.renderer.setSize(newWidth, newHeight);
-    this.camera.aspect = newWidth / newHeight;
+  // Handle window resize
+  _onWindowResize() {
+    this.width = this.container.offsetWidth;
+    this.height = this.container.offsetHeight;
+    this.renderer.setSize(this.width, this.height);
+    this.labelRenderer.setSize(this.width, this.height);
+    this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
   }
 
+  // Animation loop
   animate() {
     requestAnimationFrame(() => this.animate());
-    this.mesh.rotation.y += 0.01;
+    if (!this.transformControls.dragging) {
+      const t = Date.now() * 0.001;
+      const r = 5;
+      this.pointLight.position.set(Math.cos(t) * r, 2, Math.sin(t) * r);
+    }
+    this.controls.update();
+    this._refresh();
     this.renderer.render(this.scene, this.camera);
+    this.labelRenderer.render(this.scene, this.camera);
   }
 }
 
-// Configura o botão para exibir a interface Phong e iniciar a aplicação
-document.getElementById('btn-phong').addEventListener('click', () => {
-  document.getElementById('canvas-container').classList.add('hidden');
-  document.getElementById('color-system-container').classList.add('hidden');
-  document.getElementById('curvas-container').classList.add('hidden');
-  document.getElementById('phong-container').classList.remove('hidden');
-  const phongApp = new PhongApp();
-  phongApp.animate();
+// Bind to button and section
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btn-phong');
+  btn.addEventListener('click', () => {
+    // oculta todas as seções .section
+    document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+    // exibe a seção de Phong
+    document.getElementById('phong-section').classList.remove('hidden');
+    // inicializa o app
+    new PhongApp();
+  });
 });

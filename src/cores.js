@@ -13,6 +13,9 @@ class CoresApp {
     // Atualiza as pré-visualizações quando o DOM estiver carregado
     document.addEventListener('DOMContentLoaded', () => {
       this.updatePreviews();
+      this.updateRgbSliderBackgrounds();
+      this.updateHslSliderBackgrounds();
+      this.updateHsvSliderBackgrounds();
     });
 
     // Inicializa os modais de sistemas de cores
@@ -42,9 +45,33 @@ class CoresApp {
   }
 
   updateHslPreview(h, s, l) {
-    const rgb = this.hslToRgb(h, s, l);
-    const color = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-    document.getElementById('hsl-preview').style.backgroundColor = color;
+    const [r, g, b] = this.hslToRgb(h, s, l);
+    document.getElementById('hsl-preview')
+      .style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+
+    this.updateHexValues();
+    this.updateHslSliderBackgrounds();
+  }
+
+  updateHslSliderBackgrounds() {
+    const h = +document.getElementById('h-slider-hsl').value;
+    const s = +document.getElementById('s-slider-hsl').value;
+    const l = +document.getElementById('l-slider-hsl').value;
+
+    // Saturação: do cinza (0%) à cor plena (100%)
+    document.getElementById('s-slider-hsl').style.background = `
+      linear-gradient(to right,
+        hsl(${h},0%,${l}%),
+        hsl(${h},100%,${l}%)
+      )`;
+
+    // Luminosidade: do preto à cor no meio e ao branco
+    document.getElementById('l-slider-hsl').style.background = `
+      linear-gradient(to right,
+        hsl(${h},${s}%,0%),
+        hsl(${h},${s}%,50%),
+        hsl(${h},${s}%,100%)
+      )`;
   }
 
   // Conversão de HSV para RGB
@@ -68,9 +95,36 @@ class CoresApp {
   }
 
   updateHsvPreview(h, s, v) {
-    const rgb = this.hsvToRgb(h, s, v);
-    const color = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-    document.getElementById('hsv-preview').style.backgroundColor = color;
+    const [r, g, b] = this.hsvToRgb(h, s, v);
+    document.getElementById('hsv-preview')
+      .style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+
+    this.updateHexValues();
+    this.updateHsvSliderBackgrounds();
+  }
+
+  updateHsvSliderBackgrounds() {
+    const h = +document.getElementById('h-slider-hsv').value;
+    const s = +document.getElementById('s-slider-hsv').value;
+    const v = +document.getElementById('v-slider-hsv').value;
+
+    // Saturação: de “sem cor” (cinza) à cor cheia
+    const off = this.hsvToRgb(h, 0, v).join(',');
+    const on  = this.hsvToRgb(h, 100, v).join(',');
+    document.getElementById('s-slider-hsv').style.background = `
+      linear-gradient(to right,
+        rgb(${off}),
+        rgb(${on})
+      )`;
+
+    // Valor: do preto à cor plena
+    const black  = this.hsvToRgb(h, s, 0).join(',');
+    const bright = this.hsvToRgb(h, s, 100).join(',');
+    document.getElementById('v-slider-hsv').style.background = `
+      linear-gradient(to right,
+        rgb(${black}),
+        rgb(${bright})
+      )`;
   }
 
   // Atualiza os valores HEX para os três sistemas de cores
@@ -152,8 +206,32 @@ class CoresApp {
 
   updatePreviews() {
     const rgb = this.getRGB();
-    document.getElementById('rgb-preview').style.backgroundColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+    document.getElementById('rgb-preview')
+      .style.backgroundColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+
     this.updateHexValues();
+    this.updateRgbSliderBackgrounds();
+  }
+  updateRgbSliderBackgrounds() {
+    const { r, g, b } = this.getRGB();
+
+    document.getElementById('r-slider').style.background = `
+      linear-gradient(to right,
+        rgb(0,${g},${b}),
+        rgb(255,${g},${b})
+      )`;
+
+    document.getElementById('g-slider').style.background = `
+      linear-gradient(to right,
+        rgb(${r},0,${b}),
+        rgb(${r},255,${b})
+      )`;
+
+    document.getElementById('b-slider').style.background = `
+      linear-gradient(to right,
+        rgb(${r},${g},0),
+        rgb(${r},${g},255)
+      )`;
   }
 
   // Inicializa os sliders RGB e sincroniza seus inputs

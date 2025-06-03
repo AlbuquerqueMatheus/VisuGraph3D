@@ -1,62 +1,72 @@
 <!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VisuGraph</title>
-    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./style.css" />
 
     <!-- Importação do CSS do CodeMirror -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
-
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css"
+    />
     <!-- Tema opcional -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css"
+    />
 
     <!-- Importação do JavaScript do CodeMirror -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
-
     <!-- Módulo para linguagem JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/javascript/javascript.min.js"></script>
-</head>
+  </head>
 
-<body>
+  <body>
+    <!-- Tela de Menu -->
     <div id="menu-screen" class="screen">
-        <h1>Bem-vindo ao VisuGraph</h1>
-        <p>Escolha o modo de visualização:</p>
-        <div class="menu">
-            <button id="btn-3d">Modo 3D</button>
-            <a href="./index-2d.html">
-                <button id="btn-2d">Modo 2D</button>
-            </a>
-        </div>
+      <h1>Bem-vindo ao VisuGraph</h1>
+      <p>Escolha o modo de visualização:</p>
+      <div class="menu">
+        <button id="btn-3d">Modo 3D</button>
+        <a href="./index-2d.html">
+          <button id="btn-2d">Modo 2D</button>
+        </a>
+      </div>
     </div>
 
     <!-- Tela 3D -->
     <div id="screen-3d" class="screen hidden">
-        <canvas class="webgl"></canvas>
-        <div id="code-editor"></div>
+      <!-- Canvas do Three.js -->
+      <canvas class="webgl"></canvas>
 
-        <!-- Container dos botões -->
-        <div id="buttonContainer">
-            <button id="back-to-menu-3d">Voltar ao Menu</button>
-            <button id="toggleEditorBtn">Mostrar Editor</button>
-        </div>
+      <!-- Botões de navegação e ações -->
+      <div id="buttonContainer">
+        <button id="back-to-menu-3d">Voltar ao Menu</button>
+        <button id="toggleEditorBtn">Mostrar Editor</button>
+        <!-- Botão para abrir o diálogo de upload -->
+        <button id="upload-button">Carregar Modelo</button>
+        <!-- input[type=file] escondido, usado pelo ModelLoader.js -->
+        <input
+          type="file"
+          id="file-input"
+          accept=".obj,.glb,.gltf"
+          style="display: none;"
+        />
+      </div>
+
+      <!-- Botão para gerar código (inicialmente escondido) -->
+      <button id="generateCodeBtn" class="hidden">Gerar Código</button>
+      <!-- Container do editor de código (CodeMirror) -->
+      <div id="code-editor" class="hidden"></div>
     </div>
 
-    <!-- Botão para gerar código -->
-    <button id="generateCodeBtn" class="hidden">Gerar Código</button>
-
-    <!-- Container para o editor de código -->
-    <div id="code-editor" class="hidden"></div>
-
-    <!-- Tela 2D (placeholder para integração futura) -->
+    <!-- Tela 2D (ainda pode existir vazia ou conter o seu index-2d.html) -->
     <div id="screen-2d" class="screen hidden"></div>
 
-    <!-- Navegação -->
+    <!-- Scripts de navegação e da aplicação 3D (main.js importa todos os módulos) -->
     <script type="module" src="./navigation.js"></script>
-    <script type="module" src="./script-3d.js"></script>
-
-</body>
-
+    <script type="module" src="./main.js"></script>
+  </body>
 </html>

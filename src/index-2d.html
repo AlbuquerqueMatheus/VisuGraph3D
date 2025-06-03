@@ -9,6 +9,7 @@
     />
     <title>VisuGraph - Modo 2D</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
     <link rel="stylesheet" href="./styles-2d.css" />
   </head>
 
@@ -52,6 +53,116 @@
                   <input type="checkbox" id="toggle-coordinates" />
                   Mostrar Coordenadas Locais
                 </label>
+              </div>
+              <h3>Transformações com Coordenadas Homogêneas</h3>
+              <div id="transform-controls" class="transform-controls">
+                <div class="transform-toggles">
+                  <label
+                    ><input type="checkbox" id="toggle-translate" /> Aplicar
+                    Translação</label
+                  >
+                  <label
+                    ><input type="checkbox" id="toggle-rotate" /> Aplicar
+                    Rotação</label
+                  >
+                  <label
+                    ><input type="checkbox" id="toggle-scale" /> Aplicar
+                    Escala</label
+                  >
+                </div>
+
+                <div class="transform-group">
+                  <label
+                    ><input type="checkbox" id="toggle-reflection" /> Mostrar
+                    Reflexão (espelho)</label
+                  >
+                </div>
+
+                <!-- Sliders agrupados -->
+                <div id="group-translate" class="transform-group hidden">
+                  <label for="tx-slider"
+                    >Translação X: <span id="tx-value">0</span></label
+                  >
+                  <input
+                    type="range"
+                    id="tx-slider"
+                    min="-200"
+                    max="200"
+                    value="0"
+                  />
+                  <label for="ty-slider"
+                    >Translação Y: <span id="ty-value">0</span></label
+                  >
+                  <input
+                    type="range"
+                    id="ty-slider"
+                    min="-200"
+                    max="200"
+                    value="0"
+                  />
+                </div>
+
+                <div id="group-rotate" class="transform-group hidden">
+                  <label for="rot-slider"
+                    >Rotação: <span id="rot-value">0°</span></label
+                  >
+                  <input
+                    type="range"
+                    id="rot-slider"
+                    min="0"
+                    max="360"
+                    value="0"
+                  />
+                </div>
+
+                <div id="group-scale" class="transform-group hidden">
+                  <label for="scale-x-slider"
+                    >Escala X: <span id="scale-x-value">1.0</span></label
+                  >
+                  <input
+                    type="range"
+                    id="scale-x-slider"
+                    min="0.1"
+                    max="3"
+                    step="0.1"
+                    value="1"
+                  />
+                  <label for="scale-y-slider"
+                    >Escala Y: <span id="scale-y-value">1.0</span></label
+                  >
+                  <input
+                    type="range"
+                    id="scale-y-slider"
+                    min="0.1"
+                    max="3"
+                    step="0.1"
+                    value="1"
+                  />
+                </div>
+
+                <h4>Matriz de Transformação Atual:</h4>
+                <table id="matrix-table" class="matrix-table">
+                  <tr>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>0</td>
+                    <td>1</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>0</td>
+                    <td>0</td>
+                    <td>1</td>
+                  </tr>
+                </table>
+
+                <p class="tip">
+                  💡 A matriz representa a combinação de escala, rotação e
+                  translação no formato homogêneo.
+                </p>
               </div>
               <div class="coords-helpers">
                 <button id="btn-ajuda" class="coords-btn">Ajuda</button>
@@ -569,10 +680,67 @@
       aria-labelledby="modal-help-title"
     >
       <div class="modal-content">
-        <h2 id="modal-help-title">Ajuda Coordenadas</h2>
-        <p><strong>Globais:</strong> origem no canto superior esquerdo.</p>
-        <p><strong>Locais:</strong> origem no centro do canvas.</p>
-        <p>Use os botões para adicionar, unir ou resetar.</p>
+        <h2 id="modal-help-title">Ajuda</h2>
+
+        <!-- Abas -->
+        <div class="tab-header">
+          <button class="tab-btn active" data-tab="tab-coords">
+            Coordenadas
+          </button>
+          <button class="tab-btn" data-tab="tab-transform">
+            Transformações
+          </button>
+        </div>
+
+        <!-- Conteúdo: Coordenadas -->
+        <div id="tab-coords" class="tab-content active">
+          <p>
+            <strong>Coordenadas Globais:</strong> origem no canto superior
+            esquerdo da tela.
+          </p>
+          <p>
+            <strong>Coordenadas Locais:</strong> origem no centro do canvas (0,0
+            no meio).
+          </p>
+          <p>
+            Use os botões para <strong>adicionar pontos</strong>,
+            <strong>unir primitivos</strong> ou
+            <strong>resetar o canvas</strong>.
+          </p>
+        </div>
+
+        <!-- Conteúdo: Transformações -->
+        <div id="tab-transform" class="tab-content">
+          <h3>Matriz de Transformação Atual</h3>
+          <p>
+            Combina translação, rotação e escala em uma única matriz homogênea
+            3x3.
+          </p>
+
+          <pre>
+| x' |   | a11  a12  a13 |   | x |
+| y' | = | a21  a22  a23 | × | y |
+| w' |   |  0    0    1  |   | 1 |
+      </pre
+          >
+
+          <ul style="text-align: left; font-size: 0.9rem">
+            <li><strong>a11, a22</strong>: escala em X e Y</li>
+            <li><strong>a12, a21</strong>: rotação</li>
+            <li><strong>a13, a23</strong>: translação</li>
+            <li>
+              <strong>w'</strong>: constante (1), usada em coordenadas
+              homogêneas
+            </li>
+          </ul>
+
+          <p>
+            A tabela ao lado do canvas mostra os valores dessa matriz em tempo
+            real.
+          </p>
+          <p><em>Transformação aplicada:</em> P′ = M × P</p>
+        </div>
+
         <button class="close-btn">Fechar</button>
       </div>
     </div>
@@ -593,52 +761,7 @@
         <button class="close-btn">Fechar</button>
       </div>
     </div>
-
-    <!-- Scripts -->
-    <script>
-      // alterna visibilidade das seções
-      const sections = document.querySelectorAll(".section");
-      const navBtns = document.querySelectorAll(".nav-btn");
-      navBtns.forEach((btn) => {
-        btn.addEventListener("click", () => {
-          sections.forEach((s) => s.classList.add("hidden"));
-          document
-            .getElementById(
-              btn.id === "color-system-btn"
-                ? "color-system-section"
-                : btn.id === "btn-phong"
-                ? "phong-section"
-                : btn.id === "btn-curvas"
-                ? "curves-section"
-                : "coords-section"
-            )
-            .classList.remove("hidden");
-          navBtns.forEach((b) => b.classList.remove("active"));
-          btn.classList.add("active");
-        });
-      });
-
-      // modais
-      document.querySelectorAll(".modal .close-btn").forEach((b) => {
-        b.addEventListener("click", () =>
-          b.closest(".modal").classList.add("hidden")
-        );
-      });
-      document.getElementById("btn-cores").addEventListener("click", () => {
-        document.getElementById("modal-cores").classList.remove("hidden");
-      });
-      document.getElementById("btn-ajuda").addEventListener("click", () => {
-        document.getElementById("modal-help").classList.remove("hidden");
-      });
-      document
-        .getElementById("btn-phong-explain")
-        .addEventListener("click", () => {
-          document.getElementById("modal-phong").classList.remove("hidden");
-        });
-
-      document.getElementById("back-to-menu-2d").onclick = () =>
-        (window.location.href = "./index.html");
-    </script>
+    <script src="navigation.js"></script>
     <script src="coordenadas.js"></script>
     <script src="cores.js"></script>
     <script type="module" src="phong.js"></script>

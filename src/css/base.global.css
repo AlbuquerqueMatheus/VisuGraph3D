@@ -1,0 +1,45 @@
+@layer base {
+body {
+display: flex; min-height: 100vh;
+background: var(--bg-color); color: var(--text-color);
+font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+}
+
+
+/* Seleção & foco acessível */
+:where(a,button,input,select,textarea,[tabindex])::selection {
+background: color-mix(in oklab, var(--accent-color), white 60%); color: #000;
+}
+:where(a,button,input,select,textarea,[tabindex]):focus-visible {
+outline: var(--ring) solid var(--ring-color); outline-offset: 2px;
+}
+
+
+/* Baseline de inputs */
+:where(button):not(.nav-btn):not(.close-btn), :where(select) {
+background: var(--input-bg); border: 1px solid var(--input-border);
+border-radius: var(--radius-1); padding: 5px 10px; color: var(--text-color);
+cursor: pointer; transition: border-color .2s ease;
+}
+:where(button):not(.nav-btn):not(.close-btn):hover, :where(select):focus {
+border-color: var(--hover-border);
+}
+
+
+/* Sliders nativos (seções Phong e Curvas) */
+#phong-section input[type="range"], #curves-section input[type="range"] {
+-webkit-appearance: slider-horizontal; background: initial;
+}
+
+
+/* Utilitários globais */
+.hidden { display: none !important; }
+.sr-only { position: absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+
+/* Respeitar preferências do usuário */
+@media (prefers-reduced-motion: reduce) {
+* { transition: none !important; animation: none !important; }
+}
+@media (prefers-contrast: more) { :root { --ring-color: #fff; } }
+}

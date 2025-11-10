@@ -1,0 +1,29 @@
+@layer components {
+#curves-section { display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+#curves-section .header-buttons { display: flex; justify-content: flex-end; gap: 10px; }
+#curves-section .btn-info { background: var(--accent-color); border: none; color: #000; padding: 6px 12px; border-radius: 4px; cursor: pointer; transition: background .2s; }
+#curves-section .btn-info:hover { background: var(--accent-hover); }
+
+
+#curves-section .curves-title, #curves-section h2 { text-align: center; margin-bottom: 10px; }
+
+
+#curves-section .controls { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; padding: 10px; background: var(--sidebar-bg); border-radius: 8px; border: 1px solid var(--accent-color); }
+#curves-section .controls label { display: flex; white-space: nowrap; align-items: center; gap: 5px; font-size: .9rem; }
+
+
+#bezier-canvas { touch-action: none; width: min(100%, 960px); height: 520px; max-height: 70vh; display: block; margin: 0 auto 10px; contain: layout paint size; }
+#curves-section .controls input[type="range"] { width: 120px; }
+#play-btn { background: #28a745; color: #fff; border: none; padding: 6px 14px; border-radius: 5px; font-weight: bold; transition: background .2s; }
+#play-btn:hover { background: #1e7e34; }
+#curves-section canvas { background: #111; border: 2px solid var(--accent-color); border-radius: 6px; display: block; margin: 0 auto; box-shadow: 0 0 10px rgba(0,0,0,.4); }
+
+
+.badge { position: absolute; background: rgba(0,0,0,.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 12px; pointer-events: none; }
+.point-label { font-size: 11px; color: #ddd; }
+
+
+#properties { background: var(--sidebar-bg); border: 1px solid var(--accent-color); color: var(--text-color); padding: 16px; margin: 10px auto; max-width: 600px; border-radius: 8px; line-height: 1.5; }
+#properties h2 { margin-top: 0; font-size: 1.1rem; color: var(--accent-color); }
+#properties ul { padding-left: 20px; list-style-type: disc; }
+}

@@ -1,0 +1,40 @@
+@layer tokens {
+:root {
+/* Paleta base (tema escuro por padrão) */
+--bg-color: #1d1f27;
+--text-color: #fff;
+--sidebar-bg: #252932;
+--accent-color: #41c5ff;
+--accent-hover: #33a0d6;
+--input-bg: #333;
+--input-border: #41c5ff;
+--hover-border: #007acc;
+--modal-bg: #333;
+--modal-text: #ddd;
+--modal-header: #00bcd4;
+--close-btn-bg: #ff4444;
+--close-btn-hover: #cc0000;
+
+
+/* Tokens utilitários */
+--space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+--radius-1: 4px; --radius-2: 6px; --radius-3: 8px;
+--ring: 2px; --ring-color: color-mix(in oklab, var(--accent-color), white 30%);
+--shadow-1: 0 4px 12px rgba(0,0,0,.4);
+--shadow-inset: inset 0 0 10px rgba(0,0,0,.7);
+}
+
+
+[data-theme="light"] {
+--bg-color: #f7f9fc; --text-color: #0b1220; --sidebar-bg: #ffffff;
+--input-bg: #f0f3f7; --modal-bg: #fff; --modal-text: #1b2431; --modal-header: #0077aa;
+}
+
+
+@media (prefers-color-scheme: light) {
+:root:not([data-theme="dark"]) {
+--bg-color: #f7f9fc; --text-color: #0b1220; --sidebar-bg: #ffffff;
+--input-bg: #f0f3f7; --modal-bg: #fff; --modal-text: #1b2431; --modal-header: #0077aa;
+}
+}
+}

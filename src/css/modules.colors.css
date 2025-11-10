@@ -1,0 +1,106 @@
+@layer components {
+/* Títulos/headers */
+#color-system-section .color-header h2 { font-size: clamp(1.25rem, 1vw + 1rem, 1.6rem); color: var(--accent-color); margin: 0 0 18px; padding-bottom: 6px; border-bottom: 2px dashed var(--accent-hover); }
+#color-system-section .color-panel h3, #color-system-section #a11y-panel .a11y-title { font-size: 1.05rem; color: var(--accent-color); margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--accent-hover); }
+
+
+/* Sliders (WebKit/Firefox) usando var(--track-bg) */
+#color-system-section input[type="range"] { -webkit-appearance: none; background: transparent; }
+#color-system-section input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--track-bg, #3a3a3a); }
+#color-system-section input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--accent-color); margin-top: -4px; cursor: pointer; }
+#color-system-section input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: var(--track-bg, #3a3a3a); }
+#color-system-section input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--accent-color); }
+#color-system-section input[type="checkbox"],
+#color-system-section input[type="radio"],
+#color-system-section input[type="range"] { accent-color: var(--accent-color); }
+#color-system-section .color-panel input[type="number"] { width: 72px; padding: 4px 6px; background: #fff; color: #111; border: 1px solid #888; border-radius: 6px; text-align: center; }
+
+
+/* Grid principal */
+#color-system-section .color-main { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-areas: "rgb hsl hsv" "a11y ctrls ctrls"; gap: 30px; }
+#color-system-section #rgb-panel { grid-area: rgb; }
+#color-system-section #hsl-panel { grid-area: hsl; }
+#color-system-section #hsv-panel { grid-area: hsv; }
+#color-system-section #a11y-panel { grid-area: a11y; }
+#color-system-section #color-controls { grid-area: ctrls; width: 100%; }
+
+
+@media (max-width: 900px) {
+#color-system-section .color-main { grid-template-columns: 1fr; grid-template-areas: "rgb" "hsl" "hsv" "a11y" "ctrls"; gap: 16px; }
+#color-system-section #color-controls { grid-template-columns: 1fr; }
+#color-system-section #image-container { grid-column: 1; grid-row: auto; width: 100%; }
+}
+
+
+/* Cartões */
+#color-system-section .color-panel { background: var(--sidebar-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--accent-color); box-shadow: var(--shadow-1); display: grid; grid-auto-rows: min-content; }
+#color-system-section .slider-container { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+#color-system-section .sliders { flex: 1 1 180px; display: flex; flex-direction: column; gap: 15px; }
+#color-system-section .slider-group { display: flex; align-items: center; gap: 8px; }
+#color-system-section .slider-input { flex: 1; background: var(--input-bg); border: none; height: 6px; border-radius: 3px; outline: none; }
+#color-system-section .preview { flex: 0 0 120px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#color-system-section .color-preview { width: 100%; height: 80px; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
+#color-system-section .color-hex h3 { font-size: .9rem; }
+#color-system-section .color-hex p { font-variant-numeric: tabular-nums; }
+
+
+/* Contraste */
+#color-system-section .contrast-info { grid-column: 1 / -1; margin-top: 12px; font-size: .9rem; }
+#color-system-section .contrast-info .demo { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#color-system-section .contrast-info .sample { padding: 6px; border-radius: 6px; text-align: center; color: #000; }
+#color-system-section .contrast-info .sample.is-recommended { outline: 2px solid var(--accent-color); box-shadow: 0 0 0 2px rgba(0,0,0,.2) inset; }
+#color-system-section .text-rec { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #555; background: #222; color: #ddd; }
+#color-system-section .text-rec--dark { background: #fff; color: #000; border-color: #aaa; }
+#color-system-section .text-rec--light { background: #000; color: #fff; border-color: #000; }
+
+
+/* Acessibilidade & percepção */
+#color-system-section #a11y-panel { background: var(--sidebar-bg); border: 1px solid var(--accent-color); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+#color-system-section .a11y-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+@media (min-width: 900px) { #color-system-section .a11y-row { flex-wrap: nowrap; } }
+#color-system-section #cvd-sev { width: 200px; }
+#color-system-section #cvd-sev-value { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+
+
+/* Controles extras */
+#color-system-section #color-controls { align-self: start; display: grid; grid-template-columns: 1fr 320px; grid-auto-rows: min-content; column-gap: 20px; row-gap: 14px; padding: 20px; background: var(--sidebar-bg); border: 1px solid var(--accent-color); border-radius: 8px; }
+#color-system-section #image-container { grid-column: 2; grid-row: 1 / span 6; display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative; }
+#color-system-section .image-upload { grid-column: 1; }
+#color-system-section .color-palette { grid-column: 1; }
+#color-system-section .btn-help { grid-column: 1; }
+#color-system-section .harmony { grid-column: 1; }
+#color-system-section #image-canvas { display: block; width: 100%; height: auto; max-height: 320px; border: 1px solid #444; border-radius: 6px; margin: 8px 0; }
+#color-system-section #uploaded-image { display: none; }
+
+
+/* Lupa/conta-gotas */
+#color-system-section #color-loupe { position: absolute; left: 0; top: 0; width: 120px; height: 120px; border-radius: 50%; overflow: hidden; border: 2px solid #fff; box-shadow: 0 8px 20px rgba(0,0,0,.45); pointer-events: none; display: none; z-index: 5; }
+#color-system-section #color-loupe canvas { width: 100%; height: 100%; display: block; }
+#color-system-section #color-loupe .loupe-badge { position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); background: rgba(0,0,0,.75); color: #fff; font: 12px ui-monospace, Menlo, monospace; padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+
+
+/* File input estilizado */
+#color-system-section input[type="file"] { color: #cfd3d7; background: transparent; border-radius: 6px; border: 1px dashed #4a4a4a; padding: 6px; }
+#color-system-section input[type="file"]::file-selector-button,
+#color-system-section input[type="file"]::-webkit-file-upload-button { background: var(--accent-color); color: #000; border: none; border-radius: 6px; padding: 6px 12px; margin-inline-end: 10px; cursor: pointer; transition: background .2s; }
+#color-system-section input[type="file"]::file-selector-button:hover,
+#color-system-section input[type="file"]::-webkit-file-upload-button:hover { background: var(--accent-hover); }
+
+
+/* Botão de ajuda */
+#color-system-section .btn-help { background: var(--accent-color); border: none; color: #000; padding: 6px 12px; border-radius: 4px; cursor: pointer; transition: background .2s; }
+#color-system-section .btn-help:hover { background: var(--accent-hover); }
+#color-system-section #colors > div { margin-right: 10px; }
+
+
+/* ===== Gradientes via classes (substituem style="background: ...") ===== */
+.grad-rgb-r { --track-bg: linear-gradient(to right, #000, red); }
+.grad-rgb-g { --track-bg: linear-gradient(to right, #000, green); }
+.grad-rgb-b { --track-bg: linear-gradient(to right, #000, blue); }
+.grad-hsl-h { --track-bg: linear-gradient(to right, red, yellow, green, cyan, blue, magenta, red); }
+.grad-hsl-s { --track-bg: linear-gradient(to right, gray, white); }
+.grad-hsl-l { --track-bg: linear-gradient(to right, #000, #fff); }
+.grad-hsv-h { --track-bg: linear-gradient(to right, red, yellow, green, cyan, blue, magenta, red); }
+.grad-hsv-s { --track-bg: linear-gradient(to right, gray, white); }
+.grad-hsv-v { --track-bg: linear-gradient(to right, #000, #fff); }
+}

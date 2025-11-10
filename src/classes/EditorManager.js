@@ -1,41 +1,35 @@
 // src/classes/EditorManager.js
-
+// Aceita seletor string ou elemento; funciona com CodeMirror via CDN, com fallback.
 export class EditorManager {
-  /**
-   * @param {HTMLElement} editorContainer (div onde o CodeMirror ficará)
-   * @param {HTMLButtonElement} toggleBtn
-   * @param {HTMLButtonElement} generateCodeBtn
-   */
-  constructor(editorContainer, toggleBtn, generateCodeBtn) {
-    // Inicializa o CodeMirror
-    this.codeEditor = CodeMirror(editorContainer, {
-      mode: "javascript",
-      theme: "dracula",
-      lineNumbers: true,
-    });
-    this.toggleBtn = toggleBtn;
-    this.generateCodeBtn = generateCodeBtn;
-    this.editorContainer = editorContainer;
+  constructor(selectorOrEl, { theme = "dracula", language = "javascript" } = {}) {
+    const root = typeof selectorOrEl === "string" ? document.querySelector(selectorOrEl) : selectorOrEl;
+    if (!root) throw new Error("Editor root não encontrado.");
+    this.root = root;
 
-    this._setupToggle();
-  }
+    this.textarea = document.createElement("textarea");
+    this.root.appendChild(this.textarea);
 
-  _setupToggle() {
-    this.toggleBtn.addEventListener("click", () => {
-      const hidden = this.editorContainer.classList.contains("hidden");
-      if (hidden) {
-        this.editorContainer.classList.remove("hidden");
-        this.generateCodeBtn.classList.remove("hidden");
-        this.toggleBtn.textContent = "Esconder Editor";
-      } else {
-        this.editorContainer.classList.add("hidden");
-        this.generateCodeBtn.classList.add("hidden");
-        this.toggleBtn.textContent = "Mostrar Editor";
-      }
-    });
+    if (window.CodeMirror) {
+      this.cm = window.CodeMirror.fromTextArea(this.textarea, {
+        mode: language,
+        theme,
+        lineNumbers: true,
+        tabSize: 2,
+        lineWrapping: true,
+      });
+      this.cm.setSize("480px", "280px");
+    } else {
+      // fallback simples
+      Object.assign(this.textarea.style, {
+        width: "480px",
+        height: "280px",
+        background: "#111",
+        color: "#eee",
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontSize: "13px",
+      });
+    }
   }
-
-  getEditorInstance() {
-    return this.codeEditor;
-  }
+  setValue(s) { this.cm ? this.cm.setValue(s) : (this.textarea.value = s); }
+  getValue()  { return this.cm ? this.cm.getValue() : this.textarea.value; }
 }

@@ -1,0 +1,21 @@
+@layer components {
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal.hidden { display: none; }
+.modal-content { background: var(--modal-bg); color: var(--modal-text); padding: 24px 28px; border-radius: 10px; width: 90%; max-width: 500px; text-align: left; box-shadow: 0 8px 20px rgba(0,0,0,.4); font-size: .95rem; line-height: 1.6; }
+.modal-content h2 { margin-top: 0; margin-bottom: 16px; color: var(--modal-header); font-size: 1.3rem; text-align: center; }
+.close-btn { margin-top: 20px; padding: 8px 14px; background: var(--close-btn-bg); border: none; border-radius: 5px; color: #fff; cursor: pointer; transition: background .2s; display: block; margin-inline: auto; }
+.close-btn:hover { background: var(--close-btn-hover); }
+
+
+/* Abas */
+.tab-header { display: flex; justify-content: center; gap: 12px; margin-bottom: 20px; }
+.tab-btn { background: var(--accent-color); border: none; padding: 6px 16px; border-radius: 6px; color: #000; cursor: pointer; font-weight: bold; transition: background .2s; }
+.tab-btn.active { background: var(--accent-hover); }
+.tab-content { display: none; text-align: left; padding: 4px 2px; }
+.tab-content.active { display: block; }
+
+
+.modal-content pre { background: #222; color: #ccc; padding: 8px; border-radius: 6px; font-family: monospace; overflow-x: auto; margin-bottom: 12px; }
+.modal-content ul { padding-left: 20px; margin-bottom: 16px; }
+.modal-content ul li { margin-bottom: 6px; }
+}

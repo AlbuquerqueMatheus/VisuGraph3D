@@ -1,0 +1,21 @@
+/* styles-2d.css — agregador com camadas em ordem estável */
+@import url("base.reset.css") layer(reset);
+@import url("base.tokens.css") layer(tokens);
+@import url("base.global.css") layer(base);
+
+
+/* Components genéricos */
+@import url("components.sidebar.css") layer(components);
+@import url("components.modal.css") layer(components);
+
+
+/* Módulos (páginas/seções) */
+@import url("modules.coords.css") layer(components);
+@import url("modules.colors.css") layer(components);
+@import url("modules.phong.css") layer(components);
+@import url("modules.curves.css") layer(components);
+@import url("modules.home.css")   layer(components);
+@import url("modules.3d.css")     layer(components);
+
+/* Ajustes finais responsivos/perf */
+@import url("overrides.css") layer(overrides);

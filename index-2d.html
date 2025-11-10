@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="VisuGraph 2D — coordenadas, sistemas de cores, modelo Phong e curvas Bézier."
+    />
+    <title>VisuGraph - Modo 2D</title>
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="src/css/styles-2d.css" />
+    <link rel="icon" href="/favicon.ico" />
+
+    <!-- Libs necessárias -->
+    <script
+      defer
+      src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"
+    ></script>
+    <script
+      defer
+      src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"
+    ></script>
+  </head>
+
+  <body>
+    <div class="app-container">
+      <!-- Sidebar -->
+      <nav class="sidebar">
+        <h1 class="sidebar-title">VisuGraph 2D</h1>
+        <button id="btn-coordenadas" class="nav-btn">Coordenadas</button>
+        <button id="color-system-btn" class="nav-btn">Sistemas de Cores</button>
+        <button id="btn-phong" class="nav-btn">Modelo Phong</button>
+        <button id="btn-curvas" class="nav-btn">Curvas</button>
+        <button id="back-to-menu-2d" class="nav-btn">Voltar ao Menu</button>
+      </nav>
+
+      <!-- Conteúdo principal -->
+      <div class="content">
+        <!-- ========================= COORDENADAS ========================= -->
+        <section id="coords-section" class="section coords-section hidden">
+          <div class="coords-layout">
+            <!-- Painel lateral com abas -->
+            <aside class="coords-sidebar">
+              <div class="coords-title-row">
+                <h2 class="coords-title">Sistema de Coordenadas</h2>
+                <button id="btn-coords-help" class="btn-info small">
+                  Ajuda
+                </button>
+              </div>
+
+              <div class="coords-tabs">
+                <button class="coord-tab is-active" data-tab="build">
+                  Construir
+                </button>
+                <button class="coord-tab" data-tab="transform">
+                  Transformar
+                </button>
+                <button class="coord-tab" data-tab="measure">
+                  Medir &amp; Matriz
+                </button>
+              </div>
+
+              <div class="coords-tabpanels">
+                <!-- CONSTRUIR -->
+                <div
+                  id="tab-build"
+                  class="coords-tabpanel is-active"
+                  role="region"
+                >
+                  <div class="group">
+                    <div class="row">
+                      <label for="primitive-select">Adicionar Primitiva:</label>
+                      <select id="primitive-select" class="coords-select">
+                        <option value="point">Ponto</option>
+                        <option value="triangle">Triângulo</option>
+                        <option value="rectangle">Retângulo</option>
+                      </select>
+                      <button id="btn-add-point" class="coords-btn">
+                        Adicionar
+                      </button>
+                      <button id="btn-unir" class="coords-btn">
+                        Unir Pontos
+                      </button>
+                      <button id="btn-reset" class="coords-btn ghost">
+                        Limpar
+                      </button>
+                    </div>
+
+                    <div class="row">
+                      <label class="coords-check">
+                        <input type="checkbox" id="chk-show-local" />
+                        Mostrar coordenadas locais (linhas até a origem
+                        transformada)
+                      </label>
+                    </div>
+                    <div class="row">
+                      <label class="coords-check">
+                        <input type="checkbox" id="chk-snap" />
+                        Snap à grade (segure Shift para snap temporário)
+                      </label>
+                    </div>
+
+                    <div class="row">
+                      <label for="grid-step">Passo da grade:</label>
+                      <input
+                        id="grid-step"
+                        type="range"
+                        min="10"
+                        max="60"
+                        step="5"
+                        value="25"
+                      />
+                      <span id="grid-step-value" class="mono">25px</span>
+                    </div>
+                  </div>
+
+                  <h4 class="subtle">Modificar Coordenadas</h4>
+                  <div id="coords-modifier" class="coords-modifier"></div>
+                </div>
+
+                <!-- TRANSFORMAR -->
+                <div id="tab-transform" class="coords-tabpanel" role="region">
+                  <div class="group">
+                    <div class="row toggles">
+                      <label class="coords-check"
+                        ><input id="chk-translate" type="checkbox" /> Aplicar
+                        Translação</label
+                      >
+                      <label class="coords-check"
+                        ><input id="chk-rotate" type="checkbox" /> Aplicar
+                        Rotação</label
+                      >
+                      <label class="coords-check"
+                        ><input id="chk-scale" type="checkbox" /> Aplicar
+                        Escala</label
+                      >
+                    </div>
+
+                    <div id="group-translate" class="slider-group hidden">
+                      <div class="row">
+                        <label class="w-16">tx</label>
+                        <input
+                          id="tx-slider"
+                          type="range"
+                          min="-400"
+                          max="400"
+                          step="1"
+                          value="0"
+                        />
+                        <span id="tx-value" class="mono">0</span>
+                      </div>
+                      <div class="row">
+                        <label class="w-16">ty</label>
+                        <input
+                          id="ty-slider"
+                          type="range"
+                          min="-400"
+                          max="400"
+                          step="1"
+                          value="0"
+                        />
+                        <span id="ty-value" class="mono">0</span>
+                      </div>
+                    </div>
+
+                    <div id="group-rotate" class="slider-group hidden">
+                      <div class="row">
+                        <label class="w-16">θ</label>
+                        <input
+                          id="rot-slider"
+                          type="range"
+                          min="-180"
+                          max="180"
+                          step="1"
+                          value="0"
+                        />
+                        <span id="rot-value" class="mono">0°</span>
+                      </div>
+                    </div>
+
+                    <div id="group-scale" class="slider-group hidden">
+                      <div class="row">
+                        <label class="w-16">sx</label>
+                        <input
+                          id="scale-x-slider"
+                          type="range"
+                          min="0.1"
+                          max="3"
+                          step="0.01"
+                          value="1"
+                        />
+                        <span id="scale-x-value" class="mono">1.00</span>
+                      </div>
+                      <div class="row">
+                        <label class="w-16">sy</label>
+                        <input
+                          id="scale-y-slider"
+                          type="range"
+                          min="0.1"
+                          max="3"
+                          step="0.01"
+                          value="1"
+                        />
+                        <span id="scale-y-value" class="mono">1.00</span>
+                      </div>
+                    </div>
+
+                    <div class="row">
+                      <label for="order-select">Ordem:</label>
+                      <select id="order-select" class="coords-select">
+                        <option value="TRS">T·R·S (P' = T·R·S·P)</option>
+                        <option value="TSR">T·S·R</option>
+                        <option value="RTS">R·T·S</option>
+                        <option value="RST">R·S·T</option>
+                        <option value="STR">S·T·R</option>
+                        <option value="SRT">S·R·T</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- MEDIR & MATRIZ -->
+                <div id="tab-measure" class="coords-tabpanel" role="region">
+                  <div class="group">
+                    <div class="row">
+                      <button id="btn-measure" class="coords-btn">
+                        Medir distância &amp; ângulo
+                      </button>
+                      <label class="coords-check"
+                        ><input id="chk-reflect" type="checkbox" /> Mostrar
+                        Reflexão (espelho x=0)</label
+                      >
+                    </div>
+                  </div>
+
+                  <h4 class="subtle">Matriz de Transformação Atual</h4>
+                  <table id="matrix-table" class="matrix-table"></table>
+
+                  <p class="note">
+                    A matriz representa a combinação de escala, rotação e
+                    translação na ordem escolhida.
+                  </p>
+                </div>
+              </div>
+            </aside>
+
+            <!-- Canvas -->
+            <div id="coords-canvas-container" class="coords-canvas-wrap">
+              <div class="canvas-hint">
+                Arraste pontos (Shift = snap). Clique em <b>Medir</b> para
+                distância/ângulo. Veja a base local <b>i′</b>, <b>j′</b> após
+                transformar.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================== SISTEMA DE CORES ======================== -->
+        <section id="color-system-section" class="section color-section hidden">
+          <div class="color-header">
+            <h2>Explore diferentes representações de cores</h2>
+          </div>
+
+          <div id="color-main" class="color-main">
+            <!-- RGB -->
+            <div id="rgb-panel" class="color-panel">
+              <h3>Sistema RGB</h3>
+              <div class="slider-container">
+                <div class="sliders">
+                  <div class="slider-group">
+                    <label for="r-value">R:</label>
+                    <input
+                      id="r-value"
+                      type="number"
+                      min="0"
+                      max="255"
+                      value="255"
+                    />
+                    <input
+                      id="r-slider"
+                      type="range"
+                      min="0"
+                      max="255"
+                      value="255"
+                      class="slider-input grad-rgb-r"
+                    />
+                  </div>
+                  <div class="slider-group">
+                    <label for="g-value">G:</label>
+                    <input
+                      id="g-value"
+                      type="number"
+                      min="0"
+                      max="255"
+                      value="255"
+                    />
+                    <input
+                      id="g-slider"
+                      type="range"
+                      min="0"
+                      max="255"
+                      value="255"
+                      class="slider-input grad-rgb-g"
+                    />
+                  </div>
+                  <div class="slider-group">
+                    <label for="b-value">B:</label>
+                    <input
+                      id="b-value"
+                      type="number"
+                      min="0"
+                      max="255"
+                      value="255"
+                    />
+                    <input
+                      id="b-slider"
+                      type="range"
+                      min="0"
+                      max="255"
+                      value="255"
+                      class="slider-input grad-rgb-b"
+                    />
+                  </div>
+                </div>
+
+                <div class="preview">
+                  <div id="rgb-preview" class="color-preview"></div>
+                  <div class="color-hex">
+                    <h3>Valor HEX</h3>
+                    <p id="hex-value-rgb">#FFFFFF</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- HSL -->
+            <div id="hsl-panel" class="color-panel">
+              <h3>Sistema HSL</h3>
+              <div class="slider-container">
+                <div class="sliders">
+                  <div class="slider-group">
+                    <label for="h-value-hsl">H:</label>
+                    <input
+                      id="h-value-hsl"
+                      type="number"
+                      min="0"
+                      max="360"
+                      value="0"
+                    />
+                    <input
+                      id="h-slider-hsl"
+                      type="range"
+                      min="0"
+                      max="360"
+                      value="0"
+                      class="slider-input grad-hsl-h"
+                    />
+                  </div>
+                  <div class="slider-group">
+                    <label for="s-value-hsl">S:</label>
+                    <input
+                      id="s-value-hsl"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value="100"
+                    />
+                    <input
+                      id="s-slider-hsl"
+                      type="range"
+                      min="0"
+                      max="100"
+                      value="100"
+                      class="slider-input grad-hsl-s"
+                    />
+                  </div>
+                  <div class="slider-group">
+                    <label for="l-value-hsl">L:</label>
+                    <input
+                      id="l-value-hsl"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value="100"
+                    />
+                    <input
+                      id="l-slider-hsl"
+                      type="range"
+                      min="0"
+                      max="100"
+                      value="100"
+                      class="slider-input grad-hsl-l"
+                    />
+                  </div>
+                </div>
+
+                <div class="preview">
+                  <div id="hsl-preview" class="color-preview"></div>
+                  <div class="color-hex">
+                    <h3>Valor HEX</h3>
+                    <p id="hex-value-hsl">#FFFFFF</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- HSV -->
+            <div id="hsv-panel" class="color-panel">
+              <h3>Sistema HSV</h3>
+              <div class="slider-container">
+                <div class="sliders">
+                  <div class="slider-group">
+                    <label for="h-value-hsv">H:</label>
+                    <input
+                      id="h-value-hsv"
+                      type="number"
+                      min="0"
+                      max="360"
+                      value="0"
+                    />
+                    <input
+                      id="h-slider-hsv"
+                      type="range"
+                      min="0"
+                      max="360"
+                      value="0"
+                      class="slider-input grad-hsv-h"
+                    />
+                  </div>
+                  <div class="slider-group">
+                    <label for="s-value-hsv">S:</label>
+                    <input
+                      id="s-value-hsv"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value="0"
+                    />
+                    <input
+                      id="s-slider-hsv"
+                      type="range"
+                      min="0"
+                      max="100"
+                      value="0"
+                      class="slider-input grad-hsv-s"
+                    />
+                  </div>
+                  <div class="slider-group">
+                    <label for="v-value-hsv">V:</label>
+                    <input
+                      id="v-value-hsv"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value="100"
+                    />
+                    <input
+                      id="v-slider-hsv"
+                      type="range"
+                      min="0"
+                      max="100"
+                      value="100"
+                      class="slider-input grad-hsv-v"
+                    />
+                  </div>
+                </div>
+
+                <div class="preview">
+                  <div id="hsv-preview" class="color-preview"></div>
+                  <div class="color-hex">
+                    <h3>Valor HEX</h3>
+                    <p id="hex-value-hsv">#FFFFFF</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Controles extras -->
+            <div id="color-controls" class="color-controls">
+              <div class="image-upload">
+                <label for="image-upload">Carregue uma imagem:</label>
+                <input type="file" id="image-upload" accept="image/*" />
+              </div>
+              <div id="image-container" class="image-container">
+                <canvas id="image-canvas" class="hidden"></canvas>
+                <img id="uploaded-image" alt="Imagem carregada" />
+              </div>
+              <div id="color-palette" class="color-palette">
+                <h3>Paleta de Cores Predominante</h3>
+                <div id="colors"></div>
+              </div>
+            </div>
+
+            <!-- Acessibilidade & Percepção -->
+            <div class="a11y-panel" id="a11y-panel">
+              <h3 class="a11y-title">Acessibilidade &amp; Percepção</h3>
+
+              <div class="a11y-row">
+                <label class="a11y-check">
+                  <input type="checkbox" id="toggle-lch" />
+                  Usar harmonias em <strong>LCH</strong> (perceptual)
+                </label>
+                <span class="tip"
+                  >No LCH, mudanças de matiz tendem a manter percepção de
+                  luminosidade/croma.</span
+                >
+              </div>
+
+              <div class="a11y-row">
+                <label for="cvd-type">Simular daltonismo:</label>
+                <select id="cvd-type">
+                  <option value="none" selected>Nenhum</option>
+                  <option value="protan">Protan (vermelho)</option>
+                  <option value="deutan">Deutan (verde)</option>
+                  <option value="tritan">Tritan (azul)</option>
+                </select>
+
+                <label for="cvd-sev" class="cvd-sev-label">Intensidade:</label>
+                <input
+                  type="range"
+                  id="cvd-sev"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="100"
+                />
+                <span id="cvd-sev-value" class="slider-value">100%</span>
+              </div>
+
+              <p class="tip">
+                A simulação afeta as <strong>pré-vias</strong> e a
+                <strong>paleta</strong>. Os valores
+                <strong>HEX</strong> permanecem da cor original (sem simulação).
+              </p>
+
+              <div id="help-button-container">
+                <button id="btn-cores" class="btn-help">
+                  Ajuda sobre Sistemas de Cores
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- =========================== MODELO PHONG =========================== -->
+        <section id="phong-section" class="section phong-section hidden">
+          <div class="phong-header">
+            <h2>Explorando o Modelo Phong</h2>
+            <p>
+              Ajuste os parâmetros para ver o efeito na superfície e nos termos
+              da equação.
+            </p>
+          </div>
+
+          <div id="phong-main" class="phong-main">
+            <!-- CONTROLES -->
+            <div class="phong-controls">
+              <div class="row">
+                <label for="model-type">Modelo:</label>
+                <select id="model-type">
+                  <option value="phong" selected>Phong (r·v)^n</option>
+                  <option value="blinn">Blinn–Phong (h·n)^n</option>
+                </select>
+              </div>
+
+              <div class="row">
+                <label for="geometry-selector">Geometria:</label>
+                <select id="geometry-selector">
+                  <option value="sphere" selected>Esfera</option>
+                  <option value="torus">Toroide</option>
+                </select>
+              </div>
+
+              <div class="row">
+                <label
+                  ><input type="checkbox" id="auto-light" checked /> Rotação
+                  automática da luz</label
+                >
+                <label
+                  ><input type="checkbox" id="show-grid" checked /> Grade /
+                  eixos</label
+                >
+                <label
+                  ><input type="checkbox" id="show-wire" /> Wireframe</label
+                >
+                <label
+                  ><input type="checkbox" id="show-vectors" checked /> Vetores
+                  no ponto</label
+                >
+              </div>
+
+              <h3 class="phong-title">Intensidades de Luz (L)</h3>
+              <div class="phong-slider-group">
+                <label>La:</label>
+                <input
+                  type="range"
+                  id="ambient-light"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value="0.2"
+                />
+                <span id="ambient-intensity-value" class="slider-value"
+                  >0.2</span
+                >
+              </div>
+              <div class="phong-slider-group">
+                <label>Ld:</label>
+                <input
+                  type="range"
+                  id="diffuse-light"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value="0.8"
+                />
+                <span id="diffuse-intensity-value" class="slider-value"
+                  >0.8</span
+                >
+              </div>
+              <div class="phong-slider-group">
+                <label>Ls:</label>
+                <input
+                  type="range"
+                  id="specular-light"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value="0.8"
+                />
+                <span id="specular-intensity-value" class="slider-value"
+                  >0.8</span
+                >
+              </div>
+
+              <h3 class="phong-title">Coeficientes do Material (K)</h3>
+              <div class="phong-slider-group">
+                <label>Ka:</label>
+                <input
+                  type="range"
+                  id="ambient-material"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value="0.2"
+                />
+                <span id="ka-value" class="slider-value">0.2</span>
+              </div>
+              <div class="phong-slider-group">
+                <label>Kd:</label>
+                <input
+                  type="range"
+                  id="diffuse-material"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value="0.7"
+                />
+                <span id="kd-value" class="slider-value">0.7</span>
+              </div>
+              <div class="phong-slider-group">
+                <label>Ks:</label>
+                <input
+                  type="range"
+                  id="specular-material"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value="0.5"
+                />
+                <span id="ks-value" class="slider-value">0.5</span>
+              </div>
+
+              <div class="phong-slider-group">
+                <label for="shininess-slider">n (shininess):</label>
+                <input
+                  type="range"
+                  id="shininess-slider"
+                  min="1"
+                  max="200"
+                  step="1"
+                  value="32"
+                />
+                <span id="shininess-value" class="slider-value">32</span>
+              </div>
+
+              <div class="row">
+                <label
+                  ><input type="checkbox" id="term-ambient" checked /> Ativar
+                  ambiente</label
+                >
+                <label
+                  ><input type="checkbox" id="term-diffuse" checked /> Ativar
+                  difusa</label
+                >
+                <label
+                  ><input type="checkbox" id="term-specular" checked /> Ativar
+                  especular</label
+                >
+              </div>
+
+              <div class="row">
+                <label
+                  >Cor da luz:
+                  <input type="color" id="light-color" value="#ffffff"
+                /></label>
+                <label
+                  >Cor do objeto:
+                  <input type="color" id="object-color" value="#6699ff"
+                /></label>
+              </div>
+
+              <p class="tip">
+                Dica: clique/arraste sobre o objeto para mudar o
+                <strong>ponto de inspeção</strong>. Os vetores e os valores ao
+                lado atualizam em tempo real.
+              </p>
+            </div>
+
+            <!-- VISOR 3D -->
+            <div id="phong-viewer" class="phong-viewer"></div>
+
+            <!-- PAINEL DIDÁTICO -->
+            <div class="phong-side">
+              <canvas id="phong-formula-canvas" class="phong-formula"></canvas>
+
+              <div class="numbers">
+                <div>
+                  n·l = <span id="dot-nl">0.00</span> (clamp ⟶
+                  <span id="dot-nl-clamped">0.00</span>)
+                </div>
+                <div id="rv-line">r·v = <span id="dot-rv">0.00</span></div>
+                <div id="hn-line" class="hidden">
+                  h·n = <span id="dot-hn">0.00</span>
+                </div>
+                <div>Especular^n = <span id="specular-term">0.00</span></div>
+                <div>Intensidade I = <strong id="intensity">0.00</strong></div>
+              </div>
+
+              <button id="btn-phong-explain" class="btn-explain">
+                Explicações
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- =============================== CURVAS =============================== -->
+        <section id="curves-section" class="section hidden">
+          <div class="header-buttons">
+            <button id="btn-curves-help" class="btn-info">Ajuda</button>
+          </div>
+
+          <h2 class="curves-title">Sistema de Curvas Bézier Didático</h2>
+
+          <div class="controls">
+            <label for="bezier-degree">Grau:</label>
+            <select id="bezier-degree">
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+            </select>
+
+            <label for="t-slider">t: <span id="t-value">0.00</span></label>
+            <input
+              type="range"
+              id="t-slider"
+              min="0"
+              max="1"
+              step="0.01"
+              value="0"
+            />
+
+            <label for="speed-slider">velocidade:</label>
+            <input
+              type="range"
+              id="speed-slider"
+              min="0.25"
+              max="4"
+              step="0.25"
+              value="1"
+            />
+
+            <button id="play-btn">Iniciar Animação</button>
+
+            <label
+              ><input type="checkbox" id="show-polygon" checked />
+              Polígono</label
+            >
+            <label
+              ><input type="checkbox" id="show-decasteljau" checked /> De
+              Casteljau</label
+            >
+            <label
+              ><input type="checkbox" id="show-point" checked /> Ponto
+              B(t)</label
+            >
+            <label><input type="checkbox" id="show-tangent" /> Tangente</label>
+            <label
+              ><input type="checkbox" id="show-grid" checked /> Grade</label
+            >
+            <label
+              ><input type="checkbox" id="lock-degree" checked /> Travar
+              grau</label
+            >
+
+            <button id="reset-curve">Limpar</button>
+          </div>
+
+          <canvas id="bezier-canvas" width="800" height="400"></canvas>
+
+          <section id="properties">
+            <h2>Propriedades das Curvas de Bézier</h2>
+            <ul>
+              <li>Interpolam os pontos extremos (B(0)=P0, B(1)=Pn).</li>
+              <li>Estão contidas no fecho convexo dos pontos de controle.</li>
+              <li>Invariantes a transformações afins.</li>
+              <li>
+                Derivadas nas extremidades seguem as primeiras arestas do
+                polígono.
+              </li>
+            </ul>
+          </section>
+        </section>
+      </div>
+    </div>
+
+    <!-- =============================== MODAIS (REFEITOS) =============================== -->
+
+    <!-- AJUDA — COORDENADAS -->
+    <div
+      id="modal-help"
+      class="modal modal-help hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-help-title"
+    >
+      <div class="modal-content">
+        <h2 id="modal-help-title">Coordenadas — Aprenda por Passos</h2>
+
+        <!-- Abas -->
+        <div class="tab-header" role="tablist" aria-label="Ajuda: Coordenadas">
+          <button
+            class="tab-btn active"
+            data-tab="coords-quick"
+            role="tab"
+            id="tab-coords-quick"
+            aria-controls="coords-quick"
+            aria-selected="true"
+          >
+            Guia Rápido
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="coords-beginner"
+            role="tab"
+            id="tab-coords-beginner"
+            aria-controls="coords-beginner"
+            aria-selected="false"
+          >
+            Aprender do Zero
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="coords-concepts"
+            role="tab"
+            id="tab-coords-concepts"
+            aria-controls="coords-concepts"
+            aria-selected="false"
+          >
+            Conceitos &amp; Intuição
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="coords-advanced"
+            role="tab"
+            id="tab-coords-advanced"
+            aria-controls="coords-advanced"
+            aria-selected="false"
+          >
+            Avançado
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="coords-exercises"
+            role="tab"
+            id="tab-coords-exercises"
+            aria-controls="coords-exercises"
+            aria-selected="false"
+          >
+            Exercícios
+          </button>
+        </div>
+
+        <!-- Guia Rápido -->
+        <div
+          id="coords-quick"
+          class="tab-content active"
+          role="tabpanel"
+          aria-labelledby="tab-coords-quick"
+          tabindex="0"
+        >
+          <ol>
+            <li>
+              <strong>Adicionar</strong> pontos/figuras em
+              <em>Construir</em> (menu lateral).
+            </li>
+            <li>
+              <strong>Mover</strong> arrastando; segure <kbd>Shift</kbd> para
+              <em>snap</em> à grade.
+            </li>
+            <li>
+              Marque <strong>Translação/Rotação/Escala</strong>, ajuste os
+              <em>sliders</em> e veja o efeito.
+            </li>
+            <li>
+              Abra <strong>Medir &amp; Matriz</strong> para distância, ângulo e
+              a matriz 3×3 resultante.
+            </li>
+          </ol>
+          <p class="tip">
+            Dica: “Ordem” muda a sequência S/R/T — isso altera o resultado
+            final.
+          </p>
+          <ul class="compact">
+            <li>
+              <strong>Grade:</strong> ajuste o passo; use <kbd>Shift</kbd> para
+              snap temporário.
+            </li>
+            <li>
+              <strong>Coordenadas locais:</strong> exibe linhas da base
+              <em>i′</em>, <em>j′</em> do objeto.
+            </li>
+          </ul>
+        </div>
+
+        <!-- Aprender do Zero -->
+        <div
+          id="coords-beginner"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-coords-beginner"
+          tabindex="0"
+        >
+          <h3>O que são coordenadas?</h3>
+          <p>
+            São números que dizem <em>onde</em> algo está. Pensando em um mapa:
+            “x” (horizontal) e “y” (vertical).
+          </p>
+          <h3>Dois jeitos de ver:</h3>
+          <ul>
+            <li><strong>Globais:</strong> posição na tela.</li>
+            <li>
+              <strong>Locais:</strong> posição relativa ao próprio objeto (como
+              medir peças em uma mesa móvel).
+            </li>
+          </ul>
+          <h3>Transformações</h3>
+          <ul>
+            <li><strong>Translação:</strong> mover.</li>
+            <li><strong>Rotação:</strong> girar.</li>
+            <li><strong>Escala:</strong> aumentar/diminuir.</li>
+          </ul>
+          <p class="note">
+            Você pode combinar todas. A ordem influencia o resultado.
+          </p>
+        </div>
+
+        <!-- Conceitos & Intuição -->
+        <div
+          id="coords-concepts"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-coords-concepts"
+          tabindex="0"
+        >
+          <h3>Por que a ordem importa?</h3>
+          <p>
+            Rotacionar e depois transladar não é o mesmo que transladar e depois
+            rotacionar. Pense em <em>pegar a xícara</em> (transladar) e
+            <em>girá-la</em> (rotacionar): a orientação muda a direção da
+            “alça”.
+          </p>
+          <h3>Matriz 3×3 (homogênea)</h3>
+          <pre class="mono small">
+| x' |   | a11 a12 a13 |   | x |
+| y' | = | a21 a22 a23 | × | y |
+| 1  |   |  0   0   1  |   | 1 |
+          </pre>
+          <ul class="compact">
+            <li>a13 e a23: translação</li>
+            <li>a11,a22: escala; a12,a21: rotação/cisalhamento</li>
+          </ul>
+          <p class="tip">
+            Use o painel para <strong>sentir</strong> a matriz mudando.
+          </p>
+        </div>
+
+        <!-- Avançado -->
+        <div
+          id="coords-advanced"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-coords-advanced"
+          tabindex="0"
+        >
+          <ul>
+            <li>
+              <strong>Ordem TRS:</strong> P′ = T·R·S·P (aplica S, depois R,
+              depois T no espaço do objeto).
+            </li>
+            <li>
+              <strong>Composição:</strong> multiplique matrizes para acumular
+              transformações.
+            </li>
+            <li>
+              <strong>Base local:</strong> eixos do objeto transformado (útil
+              para hierarquias).
+            </li>
+          </ul>
+          <p class="note">Para 3D, a ideia é a mesma, só que com 4×4.</p>
+        </div>
+
+        <!-- Exercícios -->
+        <div
+          id="coords-exercises"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-coords-exercises"
+          tabindex="0"
+        >
+          <ol>
+            <li>Faça um L e rotacione 45° no centro. O comprimento mudou?</li>
+            <li>
+              Aplique S(2,1), depois R(90°), depois T(50,0). Troque a ordem e
+              compare.
+            </li>
+            <li>Meça distância e ângulo entre dois pontos criados por você.</li>
+          </ol>
+          <p class="tip">
+            Fotografe a matriz final (print) e explique a cada termo o que
+            representa.
+          </p>
+        </div>
+
+        <button class="close-btn">Fechar</button>
+      </div>
+    </div>
+
+    <!-- AJUDA — SISTEMAS DE CORES -->
+    <div
+      id="modal-cores"
+      class="modal modal-cores hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-cores-title"
+    >
+      <div class="modal-content">
+        <h2 id="modal-cores-title">Sistemas de Cores — do Básico ao Pro</h2>
+
+        <div class="tab-header" role="tablist" aria-label="Ajuda: Cores">
+          <button
+            class="tab-btn active"
+            data-tab="colors-quick"
+            role="tab"
+            id="tab-colors-quick"
+            aria-controls="colors-quick"
+            aria-selected="true"
+          >
+            Guia Rápido
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="colors-beginner"
+            role="tab"
+            id="tab-colors-beginner"
+            aria-controls="colors-beginner"
+            aria-selected="false"
+          >
+            Aprender do Zero
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="colors-concepts"
+            role="tab"
+            id="tab-colors-concepts"
+            aria-controls="colors-concepts"
+            aria-selected="false"
+          >
+            Conceitos &amp; Intuição
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="colors-advanced"
+            role="tab"
+            id="tab-colors-advanced"
+            aria-controls="colors-advanced"
+            aria-selected="false"
+          >
+            Avançado
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="colors-exercises"
+            role="tab"
+            id="tab-colors-exercises"
+            aria-controls="colors-exercises"
+            aria-selected="false"
+          >
+            Exercícios
+          </button>
+        </div>
+
+        <!-- Guia Rápido -->
+        <div
+          id="colors-quick"
+          class="tab-content active"
+          role="tabpanel"
+          aria-labelledby="tab-colors-quick"
+          tabindex="0"
+        >
+          <ol>
+            <li>
+              Use os <strong>sliders</strong> de <em>RGB, HSL ou HSV</em> e veja
+              a cor na prévia.
+            </li>
+            <li>
+              Carregue uma <strong>imagem</strong> para extrair a paleta
+              predominante.
+            </li>
+            <li>
+              Ative <strong>Simular daltonismo</strong> e ajuste a intensidade
+              para avaliar acessibilidade.
+            </li>
+          </ol>
+          <ul class="compact">
+            <li><strong>RGB:</strong> bom para telas e implementação.</li>
+            <li>
+              <strong>HSL/HSV:</strong> bom para escolher “matiz, saturação,
+              brilho” de forma intuitiva.
+            </li>
+          </ul>
+          <p class="tip">
+            Anote o <strong>HEX</strong> final para reutilizar no seu design.
+          </p>
+        </div>
+
+        <!-- Aprender do Zero -->
+        <div
+          id="colors-beginner"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-colors-beginner"
+          tabindex="0"
+        >
+          <h3>Três jeitos de falar a mesma cor</h3>
+          <ul>
+            <li>
+              <strong>RGB</strong>: quanto de <em>luz</em> vermelha, verde e
+              azul (0–255).
+            </li>
+            <li>
+              <strong>HSL</strong>: matiz (cor), saturação (intensidade),
+              <em>luminosidade</em>.
+            </li>
+            <li>
+              <strong>HSV</strong>: matiz, saturação e <em>valor</em> (brilho
+              máximo).
+            </li>
+          </ul>
+          <p class="note">
+            Todos descrevem a mesma cor; são perspectivas diferentes.
+          </p>
+        </div>
+
+        <!-- Conceitos & Intuição -->
+        <div
+          id="colors-concepts"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-colors-concepts"
+          tabindex="0"
+        >
+          <h3>Quando usar cada um?</h3>
+          <ul>
+            <li><strong>RGB</strong>: programação, efeitos, pixel a pixel.</li>
+            <li>
+              <strong>HSL</strong>: criar paletas equilibradas (ajuste L para
+              tons claros/escuros).
+            </li>
+            <li>
+              <strong>HSV</strong>: bom para seletores de cor (pintura digital).
+            </li>
+          </ul>
+          <h3>Acessibilidade</h3>
+          <ul class="compact">
+            <li>Teste combinações com <em>simulação de daltonismo</em>.</li>
+            <li>
+              Mantenha contraste suficiente para leitura (especialmente texto).
+            </li>
+          </ul>
+        </div>
+
+        <!-- Avançado -->
+        <div
+          id="colors-advanced"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-colors-advanced"
+          tabindex="0"
+        >
+          <ul>
+            <li>
+              <strong>Conversões</strong> entre RGB↔HSL↔HSV preservam a cor,
+              mudam a representação.
+            </li>
+            <li>
+              <strong>LCH</strong> (perceptual) mantém contraste percebido ao
+              variar matiz.
+            </li>
+            <li>
+              Use <strong>quantização</strong> para extrair paletas de imagens
+              (métodos como k-means).
+            </li>
+          </ul>
+        </div>
+
+        <!-- Exercícios -->
+        <div
+          id="colors-exercises"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-colors-exercises"
+          tabindex="0"
+        >
+          <ol>
+            <li>
+              Monte uma paleta “clara”, outra “escura”, variando apenas L (HSL).
+            </li>
+            <li>Carregue uma imagem e reproduza a paleta usando HSL.</li>
+            <li>Simule “deutan” e ajuste as cores até manter legibilidade.</li>
+          </ol>
+        </div>
+
+        <button class="close-btn">Fechar</button>
+      </div>
+    </div>
+
+    <!-- AJUDA — PHONG -->
+    <div
+      id="modal-phong"
+      class="modal modal-phong hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-phong-title"
+    >
+      <div class="modal-content">
+        <h2 id="modal-phong-title">Modelo Phong — Veja a Luz Agir</h2>
+
+        <div class="tab-header" role="tablist" aria-label="Ajuda: Phong">
+          <button
+            class="tab-btn active"
+            data-tab="phong-quick"
+            role="tab"
+            id="tab-phong-quick"
+            aria-controls="phong-quick"
+            aria-selected="true"
+          >
+            Guia Rápido
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="phong-beginner"
+            role="tab"
+            id="tab-phong-beginner"
+            aria-controls="phong-beginner"
+            aria-selected="false"
+          >
+            Aprender do Zero
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="phong-concepts"
+            role="tab"
+            id="tab-phong-concepts"
+            aria-controls="phong-concepts"
+            aria-selected="false"
+          >
+            Conceitos &amp; Intuição
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="phong-advanced"
+            role="tab"
+            id="tab-phong-advanced"
+            aria-controls="phong-advanced"
+            aria-selected="false"
+          >
+            Avançado
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="phong-exercises"
+            role="tab"
+            id="tab-phong-exercises"
+            aria-controls="phong-exercises"
+            aria-selected="false"
+          >
+            Exercícios
+          </button>
+        </div>
+
+        <!-- Guia Rápido -->
+        <div
+          id="phong-quick"
+          class="tab-content active"
+          role="tabpanel"
+          aria-labelledby="tab-phong-quick"
+          tabindex="0"
+        >
+          <ol>
+            <li>
+              Escolha <strong>Phong</strong> ou <strong>Blinn–Phong</strong>.
+            </li>
+            <li>
+              Ajuste <strong>La, Ld, Ls</strong> (luz) e
+              <strong>Ka, Kd, Ks</strong> (material).
+            </li>
+            <li>
+              Mova <strong>n (shininess)</strong> para ver o brilho ficar menor
+              e mais intenso.
+            </li>
+            <li>Clique/arraste no objeto para mudar o ponto avaliado.</li>
+          </ol>
+          <p class="tip">
+            Ative “Vetores no ponto” para entender os ângulos envolvidos.
+          </p>
+        </div>
+
+        <!-- Aprender do Zero -->
+        <div
+          id="phong-beginner"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-phong-beginner"
+          tabindex="0"
+        >
+          <h3>Qual é a ideia?</h3>
+          <p>
+            A cor que vemos em um ponto é a soma de: luz ambiente, luz que bate
+            de frente (difusa) e brilho do reflexo (especular).
+          </p>
+          <ul>
+            <li>
+              <strong>Ambiente (La·Ka):</strong> iluminação geral do ambiente.
+            </li>
+            <li>
+              <strong>Difusa (Ld·Kd·max(n·l,0)):</strong> quanto a superfície
+              “aponta” para a luz.
+            </li>
+            <li>
+              <strong>Especular (Ls·Ks·(r·v)^n):</strong> brilho alinhado à
+              direção do observador.
+            </li>
+          </ul>
+        </div>
+
+        <!-- Conceitos & Intuição -->
+        <div
+          id="phong-concepts"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-phong-concepts"
+          tabindex="0"
+        >
+          <h3>Phong vs. Blinn–Phong</h3>
+          <ul>
+            <li>
+              <strong>Phong:</strong> usa r·v (reflexão vs. visão) elevado a
+              <em>n</em>.
+            </li>
+            <li>
+              <strong>Blinn–Phong:</strong> usa h·n, onde <em>h</em> é o vetor
+              “meio” entre luz e visão — costuma ser mais estável.
+            </li>
+          </ul>
+          <p class="note">
+            Aumentar <em>n</em> concentra o brilho; diminuir espalha.
+          </p>
+        </div>
+
+        <!-- Avançado -->
+        <div
+          id="phong-advanced"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-phong-advanced"
+          tabindex="0"
+        >
+          <ul>
+            <li>Todos os termos são <strong>clampados</strong> a [0,1].</li>
+            <li>
+              Cores podem ser vetor RGB: I = La·Ka + Ld·Kd·max(n·l,0) +
+              Ls·Ks·(…)
+            </li>
+            <li>
+              Para materiais metálicos, <em>Ks</em> pode carregar a cor do
+              objeto.
+            </li>
+          </ul>
+        </div>
+
+        <!-- Exercícios -->
+        <div
+          id="phong-exercises"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-phong-exercises"
+          tabindex="0"
+        >
+          <ol>
+            <li>
+              Compare Phong e Blinn com o mesmo <em>n</em> e descreva a
+              diferença do highlight.
+            </li>
+            <li>
+              Simule plástico (Kd alto, Ks médio) e metal (Ks alto, Kd menor).
+            </li>
+            <li>
+              Troque a geometria e explique por que a curvatura afeta o brilho.
+            </li>
+          </ol>
+        </div>
+
+        <button class="close-btn">Fechar</button>
+      </div>
+    </div>
+
+    <!-- AJUDA — CURVAS -->
+    <div
+      id="modal-curves"
+      class="modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-curves-title"
+    >
+      <div class="modal-content">
+        <h2 id="modal-curves-title">Curvas Bézier — Do Clique ao Conceito</h2>
+
+        <div class="tab-header" role="tablist" aria-label="Ajuda: Curvas">
+          <button
+            class="tab-btn active"
+            data-tab="curves-quick"
+            role="tab"
+            id="tab-curves-quick"
+            aria-controls="curves-quick"
+            aria-selected="true"
+          >
+            Guia Rápido
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="curves-beginner"
+            role="tab"
+            id="tab-curves-beginner"
+            aria-controls="curves-beginner"
+            aria-selected="false"
+          >
+            Aprender do Zero
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="curves-concepts"
+            role="tab"
+            id="tab-curves-concepts"
+            aria-controls="curves-concepts"
+            aria-selected="false"
+          >
+            Conceitos &amp; Intuição
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="curves-advanced"
+            role="tab"
+            id="tab-curves-advanced"
+            aria-controls="curves-advanced"
+            aria-selected="false"
+          >
+            Avançado
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="curves-exercises"
+            role="tab"
+            id="tab-curves-exercises"
+            aria-controls="curves-exercises"
+            aria-selected="false"
+          >
+            Exercícios
+          </button>
+        </div>
+
+        <!-- Guia Rápido -->
+        <div
+          id="curves-quick"
+          class="tab-content active"
+          role="tabpanel"
+          aria-labelledby="tab-curves-quick"
+          tabindex="0"
+        >
+          <ol>
+            <li>Escolha o <strong>grau</strong> (2, 3 ou 4).</li>
+            <li>
+              <strong>Duplo clique</strong> no canvas para criar pontos P₀…Pₙ e
+              <strong>arraste</strong> para ajustar.
+            </li>
+            <li>
+              Use o <strong>t</strong> para percorrer a curva; marque
+              <em>Polígono</em> e <em>De Casteljau</em> para entender a
+              construção.
+            </li>
+            <li>Ative <em>Tangente</em> para ver a direção no ponto B(t).</li>
+            <li>
+              <kbd>Shift</kbd> liga o <em>snap</em> (passos de 10px) ao mover
+              pontos.
+            </li>
+          </ol>
+        </div>
+
+        <!-- Aprender do Zero -->
+        <div
+          id="curves-beginner"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-curves-beginner"
+          tabindex="0"
+        >
+          <h3>O que é uma Bézier?</h3>
+          <p>
+            É uma curva “puxada” por pontos de controle. Você move os pontos, a
+            curva acompanha suavemente.
+          </p>
+          <ul>
+            <li>Passa pelo primeiro e último ponto.</li>
+            <li>
+              Fica “dentro” do polígono que liga os pontos (invólucro convexo).
+            </li>
+            <li>A direção inicial/final segue as primeiras/últimas arestas.</li>
+          </ul>
+        </div>
+
+        <!-- Conceitos & Intuição -->
+        <div
+          id="curves-concepts"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-curves-concepts"
+          tabindex="0"
+        >
+          <h3>Parâmetro t</h3>
+          <p>
+            <em>t</em> vai de 0 a 1 e indica “onde” você está na curva — como um
+            cronômetro percorrendo o traçado.
+          </p>
+          <h3>Algoritmo de De Casteljau</h3>
+          <p>
+            Interpole os pontos vizinhos repetidamente. No fim, sobra um ponto
+            só — esse é B(t).
+          </p>
+          <p class="mono small">B(t) = Σ C(n,i)(1−t)^{n−i} t^i P_i</p>
+        </div>
+
+        <!-- Avançado -->
+        <div
+          id="curves-advanced"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-curves-advanced"
+          tabindex="0"
+        >
+          <ul>
+            <li>
+              <strong>Continuidade</strong> em junções: C⁰ (posições), C¹
+              (tangentes), C² (curvatura).
+            </li>
+            <li>
+              <strong>Derivada:</strong> B′(t) = n Σ C(n−1,i)(1−t)^{n−1−i} t^i
+              (P_{i+1} − P_i)
+            </li>
+            <li>
+              Amostragem da curva e aproximação por polilinhas para
+              renderização.
+            </li>
+          </ul>
+        </div>
+
+        <!-- Exercícios -->
+        <div
+          id="curves-exercises"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-curves-exercises"
+          tabindex="0"
+        >
+          <ol>
+            <li>Crie um “S” suave com Bézier cúbica e alinhe as tangentes.</li>
+            <li>
+              Faça um coração com duas cúbicas e garanta continuidade C¹ na
+              junção.
+            </li>
+            <li>
+              Use “De Casteljau” para ilustrar B(0.5) no seu conjunto de pontos.
+            </li>
+          </ol>
+        </div>
+
+        <button class="close-btn">Fechar</button>
+      </div>
+    </div>
+
+    <!-- SCRIPTS (AGORA NO CAMINHO NOVO) -->
+    <script src="src/js/navigation.js" defer></script>
+    <script src="src/js/coordenadas.js" defer></script>
+    <script src="src/js/cores.js" defer></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/examples/jsm/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="src/js/phong.js"></script>
+    <script src="src/js/curvas.js" defer></script>
+  </body>
+</html>

@@ -1,143 +1,148 @@
-// src/classes/TextureManager.js
-
 import * as THREE from "three";
-import { textures, debugObject } from "./Constants.js";
 
 export class TextureManager {
-  constructor(material) {
-    this.material = material;
-    this.loadingManager = new THREE.LoadingManager();
-    this.textureLoader = new THREE.TextureLoader(this.loadingManager);
+  constructor(renderer) {
+    this.renderer = renderer;
+    this.loader = new THREE.TextureLoader();
+    this.aniso = renderer?.capabilities.getMaxAnisotropy?.() || 8;
 
-    this.loadingManager.onStart = () => console.log("Texture loading started");
-    this.loadingManager.onLoad = () => console.log("Texture loading finished");
-    this.loadingManager.onProgress = () => console.log("Texture loading progressing");
-    this.loadingManager.onError = () => console.log("Texture loading error");
+    // Ajuste estes paths conforme sua estrutura em /texturas
+    this.sets = {
+      none: null,
+      metal: {
+        color: "/texturas/metal/metal_Color.png",
+        roughness: "/texturas/metal/metal_Roughness.png",
+        normal: "/texturas/metal/metal_NormalGL.png",
+        ao: "/texturas/metal/metal_AO.png",
+        displacement: "/texturas/metal/metal_Displacement.png",
+      },
+      wood: {
+        color: "/texturas/madeira/madeira_Color.png",
+        roughness: "/texturas/madeira/madeira_Roughness.png",
+        normal: "/texturas/madeira/madeira_NormalGL.png",
+        ao: "/texturas/madeira/madeira_AO.png",
+        displacement: "/texturas/madeira/madeira_Displacement.png",
+      },
+      pedra: {
+        color: "/texturas/pedra/pedra_Color.png",
+        roughness: "/texturas/pedra/pedra_Roughness.png",
+        normal: "/texturas/pedra/pedra_NormalGL.png",
+        ao: "/texturas/pedra/pedra_AO.png",
+        displacement: "/texturas/pedra/pedra_Displacement.png",
+      },
+      moss: {
+        color: "/texturas/moss/moss_Color.png",
+        roughness: "/texturas/moss/moss_Roughness.png",
+        normal: "/texturas/moss/moss_NormalGL.png",
+        ao: "/texturas/moss/moss_AO.png",
+        displacement: "/texturas/moss/moss_Displacement.png",
+      },
+    };
   }
 
-  // Carrega uma textura genérica
-  loadTextureAsync(url) {
-    return new Promise((resolve) => {
-      this.textureLoader.load(
-        url,
-        (texture) => {
-          texture.minFilter = THREE.LinearFilter;
-          texture.generateMipmaps = false;
-          // Garante sRGB encoding
-          texture.encoding = THREE.sRGBEncoding;
-          resolve(texture);
-        },
-        undefined,
-        () => {
-          console.error(`Falha ao carregar textura: ${url}`);
-          resolve(null);
+  /* --------------------------- loaders util --------------------------- */
+  _load(url, srgb = false) {
+    if (!url) return null;
+    const tex = this.loader.load(url);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = this.aniso;
+    if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  loadColor(url) { return this._load(url, true); }
+  loadLinear(url) { return this._load(url, false); }
+
+  /* -------------------- helpers: UV2 para aoMap ---------------------- */
+  _ensureUV2(mesh) {
+    if (!mesh?.isMesh || !mesh.geometry) return;
+    const geo = mesh.geometry;
+    if (!geo.attributes.uv2 && geo.attributes.uv) {
+      geo.setAttribute("uv2", geo.attributes.uv);
+      geo.attributes.uv2.needsUpdate = true;
+    }
+  }
+
+  /* --------------------------- API principal ------------------------- */
+  applyTextureToObject(object, key) {
+    if (!object) return;
+
+    // Remover texturas
+    if (!key || key === "none") {
+      object.traverse((c) => {
+        if (c.isMesh && c.material) {
+          c.material.map = null;
+          c.material.normalMap = null;
+          c.material.roughnessMap = null;
+          c.material.metalnessMap = null;
+          c.material.aoMap = null;
+          c.material.displacementMap = null;
+          c.material.alphaMap = null;
+          c.material.transparent = false;
+          c.material.alphaTest = 0;
+          c.material.color?.set(0xff0000); // deixa a cor atual (UI que manda)
+          c.material.needsUpdate = true;
         }
-      );
-    });
-  }
-
-  // Carrega todas as texturas de um tipo (“metal”, “wood”, “pedra”, “moss”)
-  async loadTexturesForMaterial(type) {
-    if (type === "metal") {
-      const [color, displacement, metalness, normal, roughness] = await Promise.all([
-        this.loadTextureAsync("./texturas/metal/Metal_Color.png"),
-        this.loadTextureAsync("./texturas/metal/Metal_Displacement.png"),
-        this.loadTextureAsync("./texturas/metal/Metal_Metalness.png"),
-        this.loadTextureAsync("./texturas/metal/Metal_NormalGL.png"),
-        this.loadTextureAsync("./texturas/metal/Metal_Roughness.png"),
-      ]);
-      textures.metal.color = color;
-      textures.metal.displacement = displacement;
-      textures.metal.metalness = metalness;
-      textures.metal.normal = normal;
-      textures.metal.roughness = roughness;
-    } else if (type === "wood") {
-      const [color, displacement, normal, roughness] = await Promise.all([
-        this.loadTextureAsync("./texturas/madeira/Wood_Color.png"),
-        this.loadTextureAsync("./texturas/madeira/Wood_Displacement.png"),
-        this.loadTextureAsync("./texturas/madeira/Wood_NormalGL.png"),
-        this.loadTextureAsync("./texturas/madeira/Wood_Roughness.png"),
-      ]);
-      textures.wood.color = color;
-      textures.wood.displacement = displacement;
-      textures.wood.normal = normal;
-      textures.wood.roughness = roughness;
-    } else if (type === "pedra") {
-      const [color, displacement, normal, roughness, ambientOcclusion] = await Promise.all([
-        this.loadTextureAsync("./texturas/pedra/pedra_Color.png"),
-        this.loadTextureAsync("./texturas/pedra/pedra_Displacement.png"),
-        this.loadTextureAsync("./texturas/pedra/pedra_NormalGL.png"),
-        this.loadTextureAsync("./texturas/pedra/pedra_Roughness.png"),
-        this.loadTextureAsync("./texturas/pedra/pedra_AO.png"),
-      ]);
-      textures.pedra.color = color;
-      textures.pedra.displacement = displacement;
-      textures.pedra.normal = normal;
-      textures.pedra.roughness = roughness;
-      textures.pedra.ambientOcclusion = ambientOcclusion;
-    } else if (type === "moss") {
-      const [color, displacement, normal, ambientOcclusion, roughness] = await Promise.all([
-        this.loadTextureAsync("./texturas/moss/moss_Color.png"),
-        this.loadTextureAsync("./texturas/moss/moss_Displacement.png"),
-        this.loadTextureAsync("./texturas/moss/moss_NormalGL.png"),
-        this.loadTextureAsync("./texturas/moss/moss_Roughness.png"),
-        this.loadTextureAsync("./texturas/moss/moss_AO.png"),
-      ]);
-      textures.moss.color = color;
-      textures.moss.displacement = displacement;
-      textures.moss.normal = normal;
-      textures.moss.ambientOcclusion = ambientOcclusion;
-      textures.moss.roughness = roughness;
-    }
-  }
-
-  // Aplica as texturas carregadas no material atual
-  applyTextures(currentObject) {
-    const selected = textures[debugObject.selectedTexture];
-    if (selected && debugObject.selectedTexture !== "none") {
-      this.material.map = selected.color;
-      this.material.displacementMap = selected.displacement;
-      this.material.metalnessMap = selected.metalness;
-      this.material.normalMap = selected.normal;
-      this.material.roughnessMap = selected.roughness;
-      this.material.aoMap = selected.ambientOcclusion;
-
-      this.material.metalness = 0.5;
-      this.material.roughness = 0.15;
-      this.material.normalScale.set(2, 2);
-      this.material.displacementScale = 0;
-    } else {
-      // Remove texturas
-      this.material.map = null;
-      this.material.displacementMap = null;
-      this.material.metalnessMap = null;
-      this.material.normalMap = null;
-      this.material.roughnessMap = null;
-      this.material.aoMap = null;
-
-      // Valores padrões
-      this.material.metalness = 0.5;
-      this.material.roughness = 0.5;
-      this.material.displacementScale = 0;
+      });
+      return;
     }
 
-    // Aplica ao objeto inteiro
-    currentObject.traverse((child) => {
-      if (child.isMesh) {
-        child.material = this.material;
+    const set = this.sets[key];
+    if (!set) return;
+
+    object.traverse((mesh) => {
+      if (!mesh.isMesh) return;
+
+      this._ensureUV2(mesh);
+
+      // Garante material PBR
+      let mat = mesh.material;
+      if (Array.isArray(mat) || !(mat instanceof THREE.MeshStandardMaterial)) {
+        mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
       }
-    });
 
-    this.material.needsUpdate = true;
+      // Encodings corretos
+      mat.map = set.color ? this.loadColor(set.color) : null;
+      mat.normalMap = set.normal ? this.loadLinear(set.normal) : null;
+      mat.roughnessMap = set.roughness ? this.loadLinear(set.roughness) : null;
+      mat.metalnessMap = set.metalness ? this.loadLinear(set.metalness) : null;
+      mat.aoMap = set.ao ? this.loadLinear(set.ao) : null;
+
+      // IMPORTANTE: displacement desabilitado por padrão para evitar “frestas” em BoxGeometry
+      mat.displacementMap = set.displacement ? this.loadLinear(set.displacement) : null;
+      mat.displacementScale = 0; // <- evita abrir as quinas do cubo
+      mat.displacementBias = 0;
+
+      // Sem alpha/cutout por padrão
+      mat.alphaMap = null;
+      mat.transparent = false;
+      mat.alphaTest = 0;
+
+      // Visual estável
+      mat.flatShading = false;
+      mat.side = THREE.FrontSide;
+      mat.metalness = 0.0;
+      mat.roughness = 1.0;
+
+      // Textura não deve ser “tingida”: branco neutro
+      mat.color.set(0xffffff);
+
+      mat.needsUpdate = true;
+      mesh.material = mat;
+    });
   }
 
-  // Pré-carregamento inicial (no load da página)
+  // Compat com versões antigas
+  applyTextures(object, opts) {
+    if (typeof opts === "string") return this.applyTextureToObject(object, opts);
+    if (opts?.kind) return this.applyTextureToObject(object, opts.kind);
+  }
+
   preloadAll() {
-    ["metal", "wood", "pedra", "moss"].forEach(async (type) => {
-      if (!textures[type].color) {
-        await this.loadTexturesForMaterial(type);
-        console.log(`${type} preloaded`);
-      }
+    Object.values(this.sets).forEach((set) => {
+      if (!set) return;
+      ["color", "normal", "roughness", "metalness", "ao", "displacement"].forEach((k) => {
+        if (set[k]) this._load(set[k], k === "color");
+      });
     });
   }
 }

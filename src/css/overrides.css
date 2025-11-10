@@ -1,0 +1,67 @@
+@layer overrides {
+@media (max-width: 800px) {
+.app-container { flex-direction: column; }
+.sidebar { width: 200px; background: #222; padding: 10px; }
+.sidebar-title { display: none; }
+.nav-btn { flex: 1; white-space: nowrap; }
+
+
+/* Fallback de grids grandes para coluna */
+.phong-main, .color-main { display: flex; flex-direction: column; }
+}
+
+
+/* Render skipping para seções ocultas (perf) */
+.section.hidden { content-visibility: auto; contain-intrinsic-size: 1000px 800px; }
+}
+/* ========= Fixes visuais finais ========= */
+
+/* Tela inicial: papel de parede correto (assets em /public/images) */
+.page-home {
+  background-image: url("/images/6193220.jpg"); /* ou 6193220.jpg se preferir */
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+.page-home::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.40); /* leve escurecido p/ contraste */
+  z-index: -1;
+}
+
+/* Modo 3D: garante que a sidebar fique por cima do canvas */
+.page-3d .webgl {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  outline: none;
+  z-index: 1; /* canvas fica abaixo da sidebar */
+}
+
+/* Sidebar fixa e visível no 3D (por cima do canvas) */
+.page-3d aside#sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;          /* ajuste se quiser mais largo */
+  height: 100vh;
+  background: rgba(34, 34, 34, 0.92);
+  color: #fff;
+  padding: 1rem;
+  overflow-y: auto;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.5);
+  z-index: 20;
+}
+
+/* Botões flutuantes ficam acima de tudo */
+.page-3d #buttonContainer {
+  z-index: 30;
+  position: fixed; /* se já for, mantém */
+  top: 20px;
+  left: 300px;     /* evita ficar “debaixo” da sidebar */
+}

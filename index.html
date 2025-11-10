@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VisuGraph</title>
+
+    <!-- Perf (opcional) -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <link rel="preconnect" href="https://unpkg.com" crossorigin />
+
+    <!-- CSS modular (agregador único) -->
+    <link rel="stylesheet" href="src/css/styles-2d.css" />
+
+    <!-- (opcional) favicon para evitar 404 -->
+    <link rel="icon" href="/favicon.ico" />
+
+    <!-- CodeMirror (CDN) -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css"
+    />
+    <script
+      defer
+      src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"
+    ></script>
+    <script
+      defer
+      src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/javascript/javascript.min.js"
+    ></script>
+  </head>
+
+  <!-- page-home ativa o papel de parede do menu; ao entrar no 3D alternamos para page-3d -->
+  <body class="page-home">
+    <!-- Tela de menu -->
+    <div
+      id="menu-screen"
+      class="screen"
+      role="region"
+      aria-labelledby="menu-title"
+    >
+      <div id="logo-container" aria-hidden="true">
+        <canvas id="logo-canvas"></canvas>
+      </div>
+      <h1 id="menu-title" class="sr-only">VisuGraph — escolha o modo</h1>
+      <p>Escolha o modo de visualização:</p>
+      <div class="menu" role="group" aria-label="Seleção de modo">
+        <button id="btn-3d" type="button">Modo 3D</button>
+        <a href="./index-2d.html"
+          ><button id="btn-2d" type="button">Modo 2D</button></a
+        >
+      </div>
+    </div>
+
+    <!-- Tela 3D -->
+    <div id="screen-3d" class="screen hidden" aria-hidden="true">
+      <!-- Canvas Three.js -->
+      <canvas class="webgl" aria-label="Visualização 3D"></canvas>
+
+      <!-- Sidebar de controles -->
+      <aside id="sidebar" aria-label="Controles 3D">
+        <nav aria-label="Categorias de controle">
+          <button
+            data-section="cube"
+            class="active"
+            aria-controls="section-cube"
+          >
+            Cube Appearance
+          </button>
+          <button data-section="shadows" aria-controls="section-shadows">
+            Shadows
+          </button>
+          <button data-section="camera" aria-controls="section-camera">
+            Camera
+          </button>
+          <button data-section="animations" aria-controls="section-animations">
+            Animations
+          </button>
+          <button data-section="transforms" aria-controls="section-transforms">
+            Transform Modes
+          </button>
+          <button data-section="array" aria-controls="section-array">
+            Array Modifier
+          </button>
+          <button data-section="lights" aria-controls="section-lights">
+            Lights
+          </button>
+        </nav>
+
+        <!-- Cube Appearance -->
+        <div
+          class="section active"
+          id="section-cube"
+          role="region"
+          aria-labelledby="section-cube-title"
+        >
+          <h2 id="section-cube-title" class="sr-only">Cube Appearance</h2>
+          <label
+            >Geometry:
+            <select id="geometry-select">
+              <option>Box</option>
+              <option>UV Sphere</option>
+              <option>Cylinder</option>
+              <option>Cone</option>
+              <option>Ico Sphere</option>
+              <option>Torus</option>
+            </select>
+          </label>
+          <label
+            >Texture:
+            <select id="texture-select">
+              <option value="none">None</option>
+              <option value="metal">Metal</option>
+              <option value="wood">Wood</option>
+              <option value="pedra">Pedra</option>
+              <option value="moss">Moss</option>
+            </select>
+          </label>
+          <label
+            >Render Style:
+            <select id="renderStyle-select">
+              <option value="normal">Normal</option>
+              <option value="wireframe">Wireframe</option>
+              <option value="flat">Flat</option>
+            </select>
+          </label>
+          <label
+            >Subdivisions:
+            <input
+              type="range"
+              id="subdivisions-range"
+              min="1"
+              max="5"
+              value="2"
+            />
+          </label>
+          <label
+            >Color:
+            <input type="color" id="color-picker" value="#ff0000" />
+          </label>
+          <label
+            >Opacity:
+            <input
+              type="range"
+              id="opacity-range"
+              min="0"
+              max="1"
+              step="0.01"
+              value="1"
+            />
+          </label>
+        </div>
+
+        <!-- Shadows -->
+        <div
+          class="section"
+          id="section-shadows"
+          role="region"
+          aria-labelledby="section-shadows-title"
+        >
+          <h2 id="section-shadows-title" class="sr-only">Shadows</h2>
+          <label
+            ><input type="checkbox" id="shadows-checkbox" checked /> Enable
+            Shadows</label
+          >
+        </div>
+
+        <!-- Camera -->
+        <div
+          class="section"
+          id="section-camera"
+          role="region"
+          aria-labelledby="section-camera-title"
+        >
+          <h2 id="section-camera-title" class="sr-only">Camera</h2>
+          <label
+            >Camera Z:
+            <input
+              type="range"
+              id="cameraZ-range"
+              min="1"
+              max="10"
+              step="0.1"
+              value="3"
+            />
+          </label>
+        </div>
+
+        <!-- Animations -->
+        <div
+          class="section"
+          id="section-animations"
+          role="region"
+          aria-labelledby="section-animations-title"
+        >
+          <h2 id="section-animations-title" class="sr-only">Animations</h2>
+          <button id="spin-btn" type="button">Spin</button>
+          <button id="reset-btn" type="button">Reset Transform</button>
+          <label
+            >Extrude:
+            <input
+              type="range"
+              id="extrude-range"
+              min="0"
+              max="1"
+              step="0.01"
+              value="0"
+            />
+          </label>
+        </div>
+
+        <!-- Transform Modes -->
+        <div
+          class="section"
+          id="section-transforms"
+          role="region"
+          aria-labelledby="section-transforms-title"
+        >
+          <h2 id="section-transforms-title" class="sr-only">Transform Modes</h2>
+          <label
+            ><input type="radio" name="mode" value="none" checked /> None</label
+          >
+          <label
+            ><input type="radio" name="mode" value="translate" />
+            Translate</label
+          >
+          <label
+            ><input type="radio" name="mode" value="rotate" /> Rotate</label
+          >
+          <label><input type="radio" name="mode" value="scale" /> Scale</label>
+        </div>
+
+        <!-- Array Modifier -->
+        <div
+          class="section"
+          id="section-array"
+          role="region"
+          aria-labelledby="section-array-title"
+        >
+          <h2 id="section-array-title" class="sr-only">Array Modifier</h2>
+          <label
+            >Count:
+            <input type="range" id="array-count" min="1" max="10" value="1"
+          /></label>
+          <label
+            >Offset X:
+            <input
+              type="range"
+              id="array-offsetX"
+              min="-2"
+              max="2"
+              step="0.1"
+              value="1"
+          /></label>
+          <label
+            >Offset Y:
+            <input
+              type="range"
+              id="array-offsetY"
+              min="-2"
+              max="2"
+              step="0.1"
+              value="0"
+          /></label>
+          <label
+            >Offset Z:
+            <input
+              type="range"
+              id="array-offsetZ"
+              min="-2"
+              max="2"
+              step="0.1"
+              value="0"
+          /></label>
+        </div>
+
+        <!-- Lights -->
+        <div
+          class="section"
+          id="section-lights"
+          role="region"
+          aria-labelledby="section-lights-title"
+        >
+          <h2 id="section-lights-title" class="sr-only">Lights</h2>
+          <label
+            >Ambient Intensity:
+            <input
+              type="range"
+              id="ambient-range"
+              min="0"
+              max="2"
+              step="0.01"
+              value="0.5"
+          /></label>
+          <label
+            >Directional Intensity:
+            <input
+              type="range"
+              id="directional-range"
+              min="0"
+              max="2"
+              step="0.01"
+              value="1"
+          /></label>
+          <label
+            >EnvMap Intensity:
+            <input
+              type="range"
+              id="envmap-range"
+              min="0"
+              max="3"
+              step="0.05"
+              value="1"
+            />
+          </label>
+
+          <label
+            >Dir Light X:
+            <input
+              type="range"
+              id="dirPosX-range"
+              min="-10"
+              max="10"
+              step="0.1"
+              value="5"
+          /></label>
+          <label
+            >Dir Light Y:
+            <input
+              type="range"
+              id="dirPosY-range"
+              min="-10"
+              max="10"
+              step="0.1"
+              value="5"
+          /></label>
+          <label
+            >Dir Light Z:
+            <input
+              type="range"
+              id="dirPosZ-range"
+              min="-10"
+              max="10"
+              step="0.1"
+              value="5"
+          /></label>
+          <label
+            >Dir Light Color:
+            <input type="color" id="dirColor-picker" value="#ffffff"
+          /></label>
+        </div>
+      </aside>
+
+      <!-- Botões flutuantes e editor de código -->
+      <div id="buttonContainer" role="group" aria-label="Ações 3D">
+        <button id="back-to-menu-3d" type="button">Voltar ao Menu</button>
+        <button id="toggleEditorBtn" type="button">Mostrar Editor</button>
+        <button id="upload-button" type="button">Carregar Modelo</button>
+        <input
+          type="file"
+          id="file-input"
+          accept=".obj,.glb,.gltf"
+          style="display: none"
+        />
+      </div>
+      <button id="generateCodeBtn" class="hidden" type="button">
+        Gerar Código
+      </button>
+      <div id="code-editor" class="hidden" aria-label="Editor de código"></div>
+    </div>
+
+    <!-- Tela 2D isolada abre em outra página -->
+    <div id="screen-2d" class="screen hidden" aria-hidden="true"></div>
+
+    <!-- Scripts (agora em src/js) -->
+    <script type="module" src="src/js/navigation.js"></script>
+    <script type="module" src="src/js/main.js"></script>
+    <script type="module" src="src/js/logo.js"></script>
+
+    <!-- Helper para alternar classes do body (home <-> 3D) -->
+    <script>
+      (function () {
+        const to3d = document.getElementById("btn-3d");
+        const back = document.getElementById("back-to-menu-3d");
+        const scrMenu = document.getElementById("menu-screen");
+        const scr3d = document.getElementById("screen-3d");
+        if (to3d) {
+          to3d.addEventListener("click", () => {
+            document.body.classList.remove("page-home");
+            document.body.classList.add("page-3d");
+            scrMenu?.classList.add("hidden");
+            scr3d?.classList.remove("hidden");
+            scr3d?.setAttribute("aria-hidden", "false");
+          });
+        }
+        if (back) {
+          back.addEventListener("click", () => {
+            document.body.classList.remove("page-3d");
+            document.body.classList.add("page-home");
+            scr3d?.classList.add("hidden");
+            scr3d?.setAttribute("aria-hidden", "true");
+            scrMenu?.classList.remove("hidden");
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

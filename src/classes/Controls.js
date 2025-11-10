@@ -1,58 +1,96 @@
 // src/classes/Controls.js
-
+import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 
 export class Controls {
-  /**
-   * @param {THREE.Camera} camera
-   * @param {HTMLCanvasElement} canvas
-   * @param {THREE.Object3D} defaultObject (por padrão, o cubo inicial)
-   * @param {function} onTransformChange callback para ativar/desativar orbit
-   */
-  constructor(camera, canvas, defaultObject) {
+  constructor(camera, domElement) {
     this.camera = camera;
-    this.canvas = canvas;
-    this.currentObject = defaultObject;
+    this.domElement = domElement;
 
-    // OrbitControls
-    this.orbitControls = new OrbitControls(this.camera, this.canvas);
-    this.orbitControls.enableDamping = true;
+    this.orbit = new OrbitControls(camera, domElement);
+    this.orbit.enableDamping = true;
+    this.orbit.dampingFactor = 0.075;
 
-    // TransformControls
-    this.transformControls = new TransformControls(this.camera, this.canvas);
-    this.transformControls.attach(this.currentObject);
-    this.transformControls.addEventListener("dragging-changed", (event) => {
-      this.orbitControls.enabled = !event.value;
+    this.transform = new TransformControls(camera, domElement);
+    this.transform.setSize(1.0);
+    this.transform.enabled = true;
+
+    this.transform.addEventListener("dragging-changed", (e) => {
+      this.orbit.enabled = !e.value;
     });
+
+    this.current = null;
+    this._spinEnabled = false;
+    this._spinSpeed = 0.02;
+    this._initialTRS = new WeakMap();
   }
 
-  // Atualiza o objeto que está sendo manipulado pelos TransformControls
-  setControlledObject(object) {
-    this.currentObject = object;
-    this.transformControls.attach(this.currentObject);
+  mount(scene) {
+    if (!this.transform.parent) scene.add(this.transform);
   }
 
-  // Converte a string de modo em transformControls.setMode
-  updateTransformMode(mode) {
-    if (mode === "none") {
-      this.transformControls.detach();
-    } else {
-      this.transformControls.attach(this.currentObject);
-      this.transformControls.setMode(mode);
+  setControlledObject(object3D) {
+    this.current = object3D || null;
+
+    if (!this.current) {
+      this.transform.detach();
+      return;
+    }
+
+    if (!this._initialTRS.has(this.current)) {
+      this._initialTRS.set(this.current, {
+        position: this.current.position.clone(),
+        rotation: this.current.rotation.clone(),
+        scale: this.current.scale.clone(),
+      });
+    }
+
+    if (this.transform.getMode && this.transform.getMode() !== "none") {
+      this.transform.attach(this.current);
     }
   }
 
-  // Devolve as instâncias para adicionar na cena
-  getOrbitControls() {
-    return this.orbitControls;
-  }
-  getTransformControls() {
-    return this.transformControls;
+  /** <- adicionado para facilitar leituras externas */
+  getControlledObject() {
+    return this.current;
   }
 
-  // Chamado no loop de animação para atualizar damping
+  setMode(mode) {
+    if (!this.transform) return;
+
+    if (!mode || mode === "none") {
+      this.transform.detach();
+      return;
+    }
+
+    this.transform.setMode(mode);
+    if (this.current) this.transform.attach(this.current);
+  }
+
+  spin(toggle = true) {
+    if (typeof toggle === "boolean") this._spinEnabled = toggle;
+    else this._spinEnabled = !this._spinEnabled;
+  }
+
+  reset() {
+    if (!this.current) return;
+    const init = this._initialTRS.get(this.current);
+    if (!init) {
+      this.current.position.set(0, 0, 0);
+      this.current.rotation.set(0, 0, 0);
+      this.current.scale.set(1, 1, 1);
+    } else {
+      this.current.position.copy(init.position);
+      this.current.rotation.copy(init.rotation);
+      this.current.scale.copy(init.scale);
+    }
+  }
+
   update() {
-    this.orbitControls.update();
+    if (this._spinEnabled && this.current) {
+      this.current.rotation.y += this._spinSpeed;
+    }
+    this.orbit?.update?.();
   }
 }

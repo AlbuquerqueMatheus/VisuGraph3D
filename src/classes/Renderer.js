@@ -1,46 +1,58 @@
 // src/classes/Renderer.js
-
 import * as THREE from "three";
-import { sizes } from "./Constants.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
 export class Renderer {
-  constructor(canvas, scene) {
+  constructor(canvas, sizes) {
     this.canvas = canvas;
-    this.scene = scene;
-    this.sizes = { ...sizes };
+    this.sizes = sizes || { width: window.innerWidth, height: window.innerHeight };
 
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.25;
-    this.renderer.outputEncoding = THREE.sRGBEncoding;
+    const renderer = new THREE.WebGLRenderer({
+      canvas: this.canvas,
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance",
+      preserveDrawingBuffer: false
+    });
 
-    this.setSize(this.sizes.width, this.sizes.height);
-    this.setPixelRatio();
+    // Color management / tonemapping for PBR
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    renderer.physicallyCorrectLights = true;
+
+    // Shadows
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // Size / DPR
+    renderer.setSize(this.sizes.width, this.sizes.height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Transparent clear so the CSS background can be seen
+    renderer.setClearColor(0x000000, 0);
+
+    this.renderer = renderer;
+
+    // PMREM for IBL (neutral, no HDR files required)
+    this.pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.pmrem.compileEquirectangularShader();
   }
 
-  setSize(width, height) {
-    this.renderer.setSize(width, height);
+  /**
+   * Creates a neutral environment map using RoomEnvironment and assigns it
+   * to the given scene (good default for PBR when you don't have an HDR).
+   */
+  initEnvironment(scene, { intensity = 1 } = {}) {
+    if (!scene) return;
+    const env = this.pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = env;
+    scene.environmentIntensity = intensity;
   }
 
-  setPixelRatio() {
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  }
-
-  // Método de resize
   onResize(newSizes) {
-    this.sizes = newSizes;
-    this.setSize(this.sizes.width, this.sizes.height);
-    this.setPixelRatio();
-  }
-
-  // Renderiza a cena com a câmera informada
-  render(scene, camera) {
-    this.renderer.render(scene, camera);
-  }
-
-  getInstance() {
-    return this.renderer;
+    this.sizes = newSizes || this.sizes;
+    this.renderer.setSize(this.sizes.width, this.sizes.height);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   }
 }

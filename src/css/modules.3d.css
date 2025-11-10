@@ -1,0 +1,356 @@
+@layer components {
+/* =========================
+   LAYOUT BASE DO MODO 3D
+   ========================= */
+.page-3d{
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  color: #fff;
+}
+
+/* Canvas WebGL em tela cheia (fica abaixo da UI) */
+.page-3d .webgl{
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  outline: none;
+  z-index: 1;
+}
+
+/* =========================
+   SIDEBAR
+   ========================= */
+.page-3d aside#sidebar{
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;           /* largura real */
+  height: 100vh;
+  background: rgba(34,34,34,.92);
+  color: #fff;
+  padding: 1rem;
+  overflow-y: auto;
+  box-shadow: 2px 0 8px rgba(0,0,0,.5);
+  z-index: 20;            /* acima do canvas */
+}
+
+.page-3d aside#sidebar nav{
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  margin-bottom: 1rem;
+}
+.page-3d aside#sidebar nav button{
+  background: none;
+  border: none;
+  color: inherit;
+  padding: .5rem;
+  text-align: left;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background .2s;
+}
+.page-3d aside#sidebar nav button:hover{ background: rgba(255,255,255,.1); }
+.page-3d aside#sidebar nav button.active{ background: rgba(255,255,255,.2); }
+
+.page-3d aside#sidebar .section{ display: none; margin-top: .5rem; }
+.page-3d aside#sidebar .section.active{ display: block; }
+
+.page-3d aside#sidebar .section label{
+  display: block;
+  margin: .5rem 0;
+  font-size: .9rem;
+}
+.page-3d aside#sidebar .section input[type="range"]{ width: 100%; margin-top: .25rem; }
+.page-3d aside#sidebar .section input[type="color"]{ width: 100%; height: 2rem; border: none; padding: 0; }
+.page-3d aside#sidebar .section select{
+  width: 100%;
+  padding: .3rem;
+  margin-top: .25rem;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background: #333;
+  color: #fff;
+}
+.page-3d aside#sidebar .section button{
+  width: 100%;
+  margin: .25rem 0;
+  padding: .5rem;
+  font-size: .9rem;
+  background: #61dafb;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.page-3d aside#sidebar .section button:hover{ background: #21a1f1; }
+
+/* =========================
+   BOTÕES FLUTUANTES
+   ========================= */
+.page-3d #buttonContainer{
+  position: fixed;        /* fora do fluxo, acima do canvas */
+  top: 20px;
+  left: 300px;            /* 280 (sidebar) + 20 de respiro */
+  display: flex;
+  gap: 10px;
+  z-index: 30;
+}
+.page-3d #back-to-menu-3d,
+.page-3d #toggleEditorBtn{
+  padding: 10px 15px;
+  background-color: #ff5722;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.page-3d #back-to-menu-3d:hover,
+.page-3d #toggleEditorBtn:hover{ background-color: #e64a19; }
+
+/* =========================
+   EDITOR DE CÓDIGO + FIX SOBRAS
+   ========================= */
+.page-3d #code-editor{
+  position: fixed;
+  bottom: 20px;
+  left: 300px;                          /* alinha com os botões */
+  width: min(700px, calc(100vw - 320px));
+  height: 350px;
+  /* fundo unificado e sem “sobra preta” */
+  background: #1e1f29;                  /* cor próxima do tema dracula */
+  border: 1px solid #3b3f52;
+  border-radius: 8px;
+  box-sizing: border-box;
+  z-index: 25;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* CodeMirror deve ocupar 100% do contêiner */
+.page-3d #code-editor .CodeMirror{
+  height: 100% !important;
+  width: 100% !important;
+  background: transparent !important;   /* usa o fundo do #code-editor */
+}
+.page-3d #code-editor .CodeMirror-scroll{ height: 100% !important; }
+.page-3d #code-editor .CodeMirror-gutters{
+  background: transparent !important;
+  border-right: 1px solid #2b2f3b !important;
+}
+
+/* Botão “Gerar Código” colado ao editor */
+.page-3d #generateCodeBtn{
+  position: fixed;
+  bottom: 20px;
+  left: 300px;
+  transform: translateY(calc(-350px - 12px)); /* sobe para ficar acima da base do editor */
+  z-index: 26;
+}
+
+/* Esconde elementos com a classe hidden */
+.hidden{ display: none !important; }
+}
+
+/* =========================
+   RESPONSIVO
+   ========================= */
+@layer overrides {
+@media (max-width: 900px){
+  .page-3d aside#sidebar{ width: 240px; }
+
+  .page-3d #buttonContainer,
+  .page-3d #code-editor,
+  .page-3d #generateCodeBtn{
+    left: 260px;                          /* 240 + 20 */
+    width: calc(100vw - 280px);
+  }
+
+  /* editor um pouco mais baixo em telas pequenas */
+  .page-3d #code-editor{ height: 300px; }
+  .page-3d #generateCodeBtn{
+    transform: translateY(calc(-300px - 12px));
+  }
+}
+}
+@layer components {
+/* =========================
+   LAYOUT BASE DO MODO 3D
+   ========================= */
+.page-3d{
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  color: #fff;
+}
+
+/* Canvas WebGL em tela cheia (fica abaixo da UI) */
+.page-3d .webgl{
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  outline: none;
+  z-index: 1;
+}
+
+/* =========================
+   SIDEBAR
+   ========================= */
+.page-3d aside#sidebar{
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;           /* largura real */
+  height: 100vh;
+  background: rgba(34,34,34,.92);
+  color: #fff;
+  padding: 1rem;
+  overflow-y: auto;
+  box-shadow: 2px 0 8px rgba(0,0,0,.5);
+  z-index: 20;            /* acima do canvas */
+}
+
+.page-3d aside#sidebar nav{
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  margin-bottom: 1rem;
+}
+.page-3d aside#sidebar nav button{
+  background: none;
+  border: none;
+  color: inherit;
+  padding: .5rem;
+  text-align: left;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background .2s;
+}
+.page-3d aside#sidebar nav button:hover{ background: rgba(255,255,255,.1); }
+.page-3d aside#sidebar nav button.active{ background: rgba(255,255,255,.2); }
+
+.page-3d aside#sidebar .section{ display: none; margin-top: .5rem; }
+.page-3d aside#sidebar .section.active{ display: block; }
+
+.page-3d aside#sidebar .section label{
+  display: block;
+  margin: .5rem 0;
+  font-size: .9rem;
+}
+.page-3d aside#sidebar .section input[type="range"]{ width: 100%; margin-top: .25rem; }
+.page-3d aside#sidebar .section input[type="color"]{ width: 100%; height: 2rem; border: none; padding: 0; }
+.page-3d aside#sidebar .section select{
+  width: 100%;
+  padding: .3rem;
+  margin-top: .25rem;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background: #333;
+  color: #fff;
+}
+.page-3d aside#sidebar .section button{
+  width: 100%;
+  margin: .25rem 0;
+  padding: .5rem;
+  font-size: .9rem;
+  background: #61dafb;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.page-3d aside#sidebar .section button:hover{ background: #21a1f1; }
+
+/* =========================
+   BOTÕES FLUTUANTES
+   ========================= */
+.page-3d #buttonContainer{
+  position: fixed;        /* fora do fluxo, acima do canvas */
+  top: 20px;
+  left: 300px;            /* 280 (sidebar) + 20 de respiro */
+  display: flex;
+  gap: 10px;
+  z-index: 30;
+}
+.page-3d #back-to-menu-3d,
+.page-3d #toggleEditorBtn{
+  padding: 10px 15px;
+  background-color: #ff5722;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.page-3d #back-to-menu-3d:hover,
+.page-3d #toggleEditorBtn:hover{ background-color: #e64a19; }
+
+/* =========================
+   EDITOR DE CÓDIGO + FIX SOBRAS
+   ========================= */
+.page-3d #code-editor{
+  position: fixed;
+  bottom: 20px;
+  left: 300px;                          /* alinha com os botões */
+  width: min(700px, calc(100vw - 320px));
+  height: 350px;
+  /* fundo unificado e sem “sobra preta” */
+  background: #1e1f29;                  /* cor próxima do tema dracula */
+  border: 1px solid #3b3f52;
+  border-radius: 8px;
+  box-sizing: border-box;
+  z-index: 25;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* CodeMirror deve ocupar 100% do contêiner */
+.page-3d #code-editor .CodeMirror{
+  height: 100% !important;
+  width: 100% !important;
+  background: transparent !important;   /* usa o fundo do #code-editor */
+}
+.page-3d #code-editor .CodeMirror-scroll{ height: 100% !important; }
+.page-3d #code-editor .CodeMirror-gutters{
+  background: transparent !important;
+  border-right: 1px solid #2b2f3b !important;
+}
+
+/* Botão “Gerar Código” colado ao editor */
+.page-3d #generateCodeBtn{
+  position: fixed;
+  bottom: 20px;
+  left: 300px;
+  transform: translateY(calc(-350px - 12px)); /* sobe para ficar acima da base do editor */
+  z-index: 26;
+}
+
+/* Esconde elementos com a classe hidden */
+.hidden{ display: none !important; }
+}
+
+/* =========================
+   RESPONSIVO
+   ========================= */
+@layer overrides {
+@media (max-width: 900px){
+  .page-3d aside#sidebar{ width: 240px; }
+
+  .page-3d #buttonContainer,
+  .page-3d #code-editor,
+  .page-3d #generateCodeBtn{
+    left: 260px;                          /* 240 + 20 */
+    width: calc(100vw - 280px);
+  }
+
+  /* editor um pouco mais baixo em telas pequenas */
+  .page-3d #code-editor{ height: 300px; }
+  .page-3d #generateCodeBtn{
+    transform: translateY(calc(-300px - 12px));
+  }
+}
+}

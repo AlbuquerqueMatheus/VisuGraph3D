@@ -46,6 +46,16 @@ const rngSubdivisions = $("#subdivisions-range");
 const colorPicker = $("#color-picker");
 const rngOpacity = $("#opacity-range");
 
+// Upload PBR
+const pbrGroup = $("#pbr-group");
+const inpPbrColor = $("#pbr-color");
+const inpPbrNormal = $("#pbr-normal");
+const inpPbrRoughness = $("#pbr-roughness");
+const inpPbrMetalness = $("#pbr-metalness");
+const inpPbrAo = $("#pbr-ao");
+const inpPbrDisplacement = $("#pbr-displacement");
+
+
 // Sombras
 const chkShadows = $("#shadows-checkbox");
 
@@ -155,8 +165,42 @@ selGeometry?.addEventListener("change", (e) => {
 selTexture?.addEventListener("change", (e) => {
   const tex = e.target.value;
   const obj = getActiveObject();
+
+  // Mostra/esconde o grupo de upload PBR
+  if (pbrGroup) {
+    pbrGroup.classList.toggle("hidden", tex !== "custom");
+  }
+
   textureManager?.applyTextureToObject?.(obj, tex);
 });
+
+function bindPbrInput(input, mapName) {
+  if (!input) return;
+  input.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Atualiza o set "custom" dentro do TextureManager
+    textureManager?.setCustomMapFromFile?.(mapName, file);
+
+    // Garante que o select esteja em "custom"
+    if (selTexture && selTexture.value !== "custom") {
+      selTexture.value = "custom";
+      if (pbrGroup) pbrGroup.classList.remove("hidden");
+    }
+
+    const obj = getActiveObject();
+    textureManager?.applyTextureToObject?.(obj, "custom");
+  });
+}
+
+bindPbrInput(inpPbrColor, "color");
+bindPbrInput(inpPbrNormal, "normal");
+bindPbrInput(inpPbrRoughness, "roughness");
+bindPbrInput(inpPbrMetalness, "metalness");
+bindPbrInput(inpPbrAo, "ao");
+bindPbrInput(inpPbrDisplacement, "displacement");
+
 
 selRenderStyle?.addEventListener("change", (e) => {
   const value = e.target.value; // normal|wireframe|flat

@@ -6,38 +6,19 @@ export class TextureManager {
     this.loader = new THREE.TextureLoader();
     this.aniso = renderer?.capabilities.getMaxAnisotropy?.() || 8;
 
-    // Ajuste estes paths conforme sua estrutura em /texturas
+    // textura atualmente escolhida pela UI
+    this.currentKey = "none";
+
+    // Só “none” + espaço para um set custom que será preenchido em runtime
     this.sets = {
       none: null,
-      metal: {
-        color: "/texturas/metal/metal_Color.png",
-        roughness: "/texturas/metal/metal_Roughness.png",
-        normal: "/texturas/metal/metal_NormalGL.png",
-        ao: "/texturas/metal/metal_AO.png",
-        displacement: "/texturas/metal/metal_Displacement.png",
-      },
-      wood: {
-        color: "/texturas/madeira/madeira_Color.png",
-        roughness: "/texturas/madeira/madeira_Roughness.png",
-        normal: "/texturas/madeira/madeira_NormalGL.png",
-        ao: "/texturas/madeira/madeira_AO.png",
-        displacement: "/texturas/madeira/madeira_Displacement.png",
-      },
-      pedra: {
-        color: "/texturas/pedra/pedra_Color.png",
-        roughness: "/texturas/pedra/pedra_Roughness.png",
-        normal: "/texturas/pedra/pedra_NormalGL.png",
-        ao: "/texturas/pedra/pedra_AO.png",
-        displacement: "/texturas/pedra/pedra_Displacement.png",
-      },
-      moss: {
-        color: "/texturas/moss/moss_Color.png",
-        roughness: "/texturas/moss/moss_Roughness.png",
-        normal: "/texturas/moss/moss_NormalGL.png",
-        ao: "/texturas/moss/moss_AO.png",
-        displacement: "/texturas/moss/moss_Displacement.png",
+      custom: {
+        // color, normal, roughness, metalness, ao, displacement
       },
     };
+
+    // para controlar os objectURLs criados a partir dos Files
+    this._customObjectURLs = {};
   }
 
   /* --------------------------- loaders util --------------------------- */
@@ -49,8 +30,12 @@ export class TextureManager {
     if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }
-  loadColor(url) { return this._load(url, true); }
-  loadLinear(url) { return this._load(url, false); }
+  loadColor(url) {
+    return this._load(url, true);
+  }
+  loadLinear(url) {
+    return this._load(url, false);
+  }
 
   /* -------------------- helpers: UV2 para aoMap ---------------------- */
   _ensureUV2(mesh) {
@@ -62,9 +47,50 @@ export class TextureManager {
     }
   }
 
+  /* ---------------------- API: upload de PBR ------------------------- */
+  /**
+   * Recebe um File (input type="file") e registra dentro do set "custom".
+   * mapName: "color" | "normal" | "roughness" | "metalness" | "ao" | "displacement"
+   */
+  setCustomMapFromFile(mapName, file) {
+    if (!file || !mapName) return;
+    if (!this.sets.custom) this.sets.custom = {};
+    if (!this._customObjectURLs) this._customObjectURLs = {};
+
+    // libera o objectURL anterior, se existir
+    if (this._customObjectURLs[mapName]) {
+      try {
+        URL.revokeObjectURL(this._customObjectURLs[mapName]);
+      } catch {}
+    }
+
+    const url = URL.createObjectURL(file);
+    this._customObjectURLs[mapName] = url;
+    this.sets.custom[mapName] = url;
+  }
+
+  clearCustomMaps() {
+    if (this._customObjectURLs) {
+      Object.values(this._customObjectURLs).forEach((u) => {
+        try {
+          URL.revokeObjectURL(u);
+        } catch {}
+      });
+    }
+    this._customObjectURLs = {};
+    this.sets.custom = {};
+  }
+
   /* --------------------------- API principal ------------------------- */
   applyTextureToObject(object, key) {
     if (!object) return;
+
+    // se não vier key, reaplica a textura atualmente selecionada
+    if (!key) {
+      key = this.currentKey || "none";
+    } else {
+      this.currentKey = key;
+    }
 
     // Remover texturas
     if (!key || key === "none") {
@@ -79,7 +105,7 @@ export class TextureManager {
           c.material.alphaMap = null;
           c.material.transparent = false;
           c.material.alphaTest = 0;
-          c.material.color?.set(0xff0000); // deixa a cor atual (UI que manda)
+          c.material.color?.set(0xff0000); // volta pro padrão (UI depois sobrescreve)
           c.material.needsUpdate = true;
         }
       });
@@ -107,9 +133,11 @@ export class TextureManager {
       mat.metalnessMap = set.metalness ? this.loadLinear(set.metalness) : null;
       mat.aoMap = set.ao ? this.loadLinear(set.ao) : null;
 
-      // IMPORTANTE: displacement desabilitado por padrão para evitar “frestas” em BoxGeometry
-      mat.displacementMap = set.displacement ? this.loadLinear(set.displacement) : null;
-      mat.displacementScale = 0; // <- evita abrir as quinas do cubo
+      // displacement desabilitado por padrão para não abrir quinas
+      mat.displacementMap = set.displacement
+        ? this.loadLinear(set.displacement)
+        : null;
+      mat.displacementScale = 0;
       mat.displacementBias = 0;
 
       // Sem alpha/cutout por padrão
@@ -123,7 +151,7 @@ export class TextureManager {
       mat.metalness = 0.0;
       mat.roughness = 1.0;
 
-      // Textura não deve ser “tingida”: branco neutro
+      // Branco neutro para não “tingir” a textura
       mat.color.set(0xffffff);
 
       mat.needsUpdate = true;
@@ -131,18 +159,22 @@ export class TextureManager {
     });
   }
 
-  // Compat com versões antigas
+  // Compat com versões antigas / reaplicar textura atual
   applyTextures(object, opts) {
+    if (!opts) return this.applyTextureToObject(object, this.currentKey);
     if (typeof opts === "string") return this.applyTextureToObject(object, opts);
     if (opts?.kind) return this.applyTextureToObject(object, opts.kind);
   }
 
   preloadAll() {
-    Object.values(this.sets).forEach((set) => {
-      if (!set) return;
-      ["color", "normal", "roughness", "metalness", "ao", "displacement"].forEach((k) => {
-        if (set[k]) this._load(set[k], k === "color");
-      });
+    // hoje não há sets prontos, mas deixo compatível se você quiser adicionar no futuro
+    Object.entries(this.sets).forEach(([key, set]) => {
+      if (!set || key === "custom") return; // "custom" é em runtime
+      ["color", "normal", "roughness", "metalness", "ao", "displacement"].forEach(
+        (k) => {
+          if (set[k]) this._load(set[k], k === "color");
+        }
+      );
     });
   }
 }

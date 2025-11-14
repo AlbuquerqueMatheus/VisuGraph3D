@@ -114,12 +114,45 @@
             >Texture:
             <select id="texture-select">
               <option value="none">None</option>
-              <option value="metal">Metal</option>
-              <option value="wood">Wood</option>
-              <option value="pedra">Pedra</option>
-              <option value="moss">Moss</option>
+              <option value="custom">Custom PBR (upload)</option>
             </select>
           </label>
+
+          <!-- grupo de upload PBR: inicialmente escondido -->
+          <div id="pbr-group" class="hidden">
+            <p>Upload de mapas PBR (opcionais):</p>
+
+            <label
+              >Base Color / Albedo:
+              <input type="file" id="pbr-color" accept="image/*" />
+            </label>
+
+            <label
+              >Normal:
+              <input type="file" id="pbr-normal" accept="image/*" />
+            </label>
+
+            <label
+              >Roughness:
+              <input type="file" id="pbr-roughness" accept="image/*" />
+            </label>
+
+            <label
+              >Metalness:
+              <input type="file" id="pbr-metalness" accept="image/*" />
+            </label>
+
+            <label
+              >Ambient Occlusion:
+              <input type="file" id="pbr-ao" accept="image/*" />
+            </label>
+
+            <label
+              >Height / Displacement:
+              <input type="file" id="pbr-displacement" accept="image/*" />
+            </label>
+          </div>
+
           <label
             >Render Style:
             <select id="renderStyle-select">

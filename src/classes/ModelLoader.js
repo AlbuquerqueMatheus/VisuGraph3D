@@ -1,85 +1,111 @@
 // src/classes/ModelLoader.js
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+// 👇 MANTÉM o caminho igual ao que você já tem hoje nesse import
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 
 export class ModelLoader {
-  constructor(fileInputEl, triggerButtonEl, scene, onLoaded) {
-    this.fileInputEl = fileInputEl;
-    this.triggerButtonEl = triggerButtonEl;
+  constructor(fileInput, button, scene, onLoaded) {
+    this.fileInput = fileInput;
+    this.button = button;
     this.scene = scene;
     this.onLoaded = onLoaded;
+    this.loader = new OBJLoader();
 
-    if (this.fileInputEl && this.triggerButtonEl) {
-      this._bind();
+    if (this.fileInput) {
+      this.fileInput.addEventListener("change", (e) =>
+        this.handleFileChange(e)
+      );
     }
   }
 
-  _bind() {
-    this.triggerButtonEl.addEventListener("click", () => this.fileInputEl.click());
-    this.fileInputEl.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+  handleFileChange(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (ext !== "obj") {
+      alert("Por enquanto o carregador suporta apenas arquivos .obj");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
       try {
-        const object = await this._loadFile(file);
-        this._finalize(object);
-        this.onLoaded?.(object);
+        const text = e.target.result;
+        const object = this.loader.parse(text);
+
+        // Normaliza posição/escala/normais
+        this.normalizeObject(object);
+
+        // Habilita sombras e garante materiais “ok”
+        object.traverse((child) => {
+          if (!child.isMesh) return;
+
+          child.castShadow = true;
+          child.receiveShadow = true;
+
+          // Recalcula normais pra evitar shading bizarro
+          if (child.geometry && child.geometry.isBufferGeometry) {
+            child.geometry.computeVertexNormals();
+          }
+
+          // Se o material não for PBR, troca pra MeshStandardMaterial
+          if (
+            !(
+              child.material &&
+              child.material instanceof THREE.MeshStandardMaterial
+            )
+          ) {
+            const baseColor =
+              child.material && child.material.color
+                ? child.material.color
+                : new THREE.Color(0xffffff);
+
+            child.material = new THREE.MeshStandardMaterial({
+              color: baseColor,
+            });
+          }
+        });
+
+        // Devolve o objeto pronto pro callback definido no main.js
+        if (this.onLoaded) this.onLoaded(object);
       } catch (err) {
-        console.error("Erro ao carregar modelo:", err);
-      } finally {
-        this.fileInputEl.value = "";
+        console.error("Erro ao carregar modelo OBJ:", err);
+        alert("Não foi possível carregar o modelo. O arquivo OBJ é válido?");
       }
-    });
+    };
+
+    // Lê o arquivo como texto (OBJ é texto)
+    reader.readAsText(file);
   }
 
-  async _loadFile(file) {
-    const url = URL.createObjectURL(file);
-    const lower = file.name.toLowerCase();
+  normalizeObject(object) {
+    if (!object) return;
 
-    if (lower.endsWith(".glb") || lower.endsWith(".gltf")) {
-      const gltfLoader = new GLTFLoader();
-      const draco = new DRACOLoader().setDecoderPath("/draco/"); // public/draco/
-      gltfLoader.setDRACOLoader(draco);
-      const gltf = await gltfLoader.loadAsync(url);
-      return gltf.scene || gltf.scenes?.[0];
-    }
-    if (lower.endsWith(".obj")) {
-      return await new OBJLoader().loadAsync(url);
-    }
-    throw new Error("Formato não suportado: " + file.name);
-  }
+    // Zera transformações do grupo principal
+    object.position.set(0, 0, 0);
+    object.rotation.set(0, 0, 0);
+    object.scale.set(1, 1, 1);
+    object.updateMatrixWorld(true);
 
-  _finalize(object) {
-    object.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        // Garanta PBR
-        if (!(child.material instanceof THREE.MeshStandardMaterial)) {
-          child.material = new THREE.MeshStandardMaterial({
-            color: 0xffffff,
-            metalness: 0.1,
-            roughness: 0.8,
-          });
-        }
-        if (child.material.map) {
-          child.material.map.colorSpace = THREE.SRGBColorSpace;
-        }
-      }
-    });
-    this._centerAndScale(object, 1.2);
-  }
-
-  _centerAndScale(object, targetSize = 1.2) {
     const box = new THREE.Box3().setFromObject(object);
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-    box.getSize(size);
-    box.getCenter(center);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+
+    // 1) Centraliza na origem
+    // (leva o centro do bounding box para (0,0,0))
     object.position.sub(center);
-    const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    const scale = targetSize / maxDim;
-    object.scale.setScalar(scale);
+    object.updateMatrixWorld(true);
+
+    // 2) Ajusta escala para ficar num tamanho “padrão”
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim > 0) {
+      const targetSize = 5; // tamanho final em unidades de mundo
+      const scale = targetSize / maxDim;
+      object.scale.setScalar(scale);
+      object.updateMatrixWorld(true);
+    }
+
   }
 }

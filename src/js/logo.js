@@ -2,9 +2,13 @@
 import * as THREE from "three";
 import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
 import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry.js";
+import { isShown } from "../lib/dom.js";
 
 const canvas = document.getElementById("logo-canvas");
 const container = document.getElementById("logo-container");
+const menuScreen = document.getElementById("menu-screen");
+// Arquivos de public/ relativos à base do site (funciona também em subpasta, ex.: GitHub Pages)
+const publicUrl = (path) => `${import.meta.env.BASE_URL}${path}`;
 
 const scene = new THREE.Scene(); // canvas transparente (CSS faz o fundo)
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
@@ -27,7 +31,7 @@ resize();
 
 // Environment (usando arquivo em public/images)
 new THREE.TextureLoader().load(
-  "/images/6193220.jpg",
+  publicUrl("images/6193220.jpg"),
   (tex) => {
     tex.mapping = THREE.EquirectangularReflectionMapping;
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -69,7 +73,7 @@ orbit.add(ball);
 // Texto
 const fontLoader = new FontLoader();
 fontLoader.load(
-  "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json",
+  publicUrl("fonts/helvetiker_regular.typeface.json"),
   (font) => {
     const geo = new TextGeometry("VisuGraph", { font, size: 0.8, depth: 0.05, curveSegments: 12 });
     const mat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 1, roughness: 0.1, envMapIntensity: 0.2 });
@@ -82,10 +86,11 @@ fontLoader.load(
 );
 
 function tick(t) {
+  requestAnimationFrame(tick);
+  if (!isShown(menuScreen)) return; // a logo só aparece no menu
   cube.rotation.y += 0.002;
   const a = (t || 0) * 0.001, r = 2.5;
   ball.position.set(r * Math.cos(a), r * Math.sin(a), 0);
   renderer.render(scene, camera);
-  requestAnimationFrame(tick);
 }
-tick();
+requestAnimationFrame(tick);

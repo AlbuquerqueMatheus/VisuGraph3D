@@ -157,7 +157,7 @@ export class CodeSyncEngine {
     // Debounce para evitar updates excessivos
     let debounceTimer = null;
 
-    this.editor.cm.on('change', (instance, changeObj) => {
+    this.editor.cm.on('change', () => {
       if (this.isUpdatingFromUI) return; // Evita loop infinito
 
       clearTimeout(debounceTimer);

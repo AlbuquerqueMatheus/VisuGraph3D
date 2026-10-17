@@ -34,7 +34,7 @@ export const CodeGenerator = {
   /**
    * Gera código completo baseado no objeto principal
    */
-  generate({ scene, camera, object, lights, sceneState, animationManager }) {
+  generate({ camera, object, lights, sceneState, animationManager }) {
     try {
       // Se não houver objeto, usa fallback
       if (!object && !sceneState) {
@@ -132,7 +132,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 document.body.appendChild(renderer.domElement);`;
   },
 

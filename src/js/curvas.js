@@ -1,3 +1,6 @@
+// curvas.js — Curvas de Bézier (canvas 2D, algoritmo de De Casteljau)
+import { isShown, isTypingTarget, onReady } from "../lib/dom.js";
+
 class CurvasApp {
   constructor() {
     // ===== DOM base =====
@@ -51,7 +54,7 @@ class CurvasApp {
     // Ponteiro unificado
     this.canvas.addEventListener("pointerdown", (e) => this.onPointerDown(e));
     this.canvas.addEventListener("pointermove", (e) => this.onPointerMove(e));
-    window.addEventListener("pointerup", () => this.onPointerUp());
+    window.addEventListener("pointerup", (e) => this.onPointerUp(e));
 
     // Duplo clique para adicionar ponto
     this.canvas.addEventListener("dblclick", (e) => this.addPoint(e));
@@ -82,9 +85,11 @@ class CurvasApp {
       this.redraw();
     });
 
-    // Teclado (delete último ponto)
+    // Teclado (delete último ponto) — só com a seção na tela e fora de campos de texto
     window.addEventListener("keydown", (e) => {
+      if (!isShown(this.section) || isTypingTarget(e.target)) return;
       if ((e.key === "Backspace" || e.key === "Delete") && this.points.length) {
+        e.preventDefault();
         this.points.pop();
         this.redraw();
       }
@@ -122,14 +127,14 @@ class CurvasApp {
     }
   }
 
-  animLoop(timestamp) {
+  animLoop() {
     const speed = parseFloat(this.speedSlider?.value || "1");
     this.animT += 0.005 * speed;
     if (this.animT > 1) this.animT = 0;
     if (this.tSlider) this.tSlider.value = String(this.animT);
     if (this.tValue) this.tValue.textContent = this.animT.toFixed(2);
     this.redraw();
-    this.animationId = requestAnimationFrame((t) => this.animLoop(t));
+    this.animationId = requestAnimationFrame(() => this.animLoop());
   }
 
   /* ==================== Canvas utils ==================== */
@@ -177,8 +182,8 @@ class CurvasApp {
     this.redraw();
   }
 
-  onPointerUp() {
-    this.canvas.releasePointerCapture?.(event.pointerId);
+  onPointerUp(e) {
+    if (this.canvas.hasPointerCapture?.(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
     this.dragIndex = -1;
   }
 
@@ -374,6 +379,4 @@ class CurvasApp {
   }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  new CurvasApp();
-});
+onReady(() => new CurvasApp());

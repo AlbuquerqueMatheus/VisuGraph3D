@@ -1,8 +1,7 @@
 @layer components {
 /* ====== Fundo com imagem e overlay só no MENU ====== */
 .page-home {
-  /* o agregador está em /src/css → caminho relativo para /src/images */
-  background-image: url("../images/6193220.jpg");
+  /* a imagem de fundo vem de overrides.css (arquivo em public/images) */
   background-size: cover;
   background-position: center;
   background-attachment: fixed;

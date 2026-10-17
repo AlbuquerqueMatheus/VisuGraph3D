@@ -223,9 +223,7 @@ class CoresApp {
     const c = v * s,
       x = c * (1 - Math.abs(((h / 60) % 2) - 1)),
       m = v - c;
-    let r = 0,
-      g = 0,
-      b = 0;
+    let r, g, b;
     if (h < 60) [r, g, b] = [c, x, 0];
     else if (h < 120) [r, g, b] = [x, c, 0];
     else if (h < 180) [r, g, b] = [0, c, x];
@@ -532,8 +530,7 @@ class CoresApp {
 
   updateHarmonies() {
     if (!this.blocks?.harmony) return;
-    const hexBase = this.rgbToHex(this.state.r, this.state.g, this.state.b);
-    let harmonies = {};
+    let harmonies;
     if (this.state.useLCH) {
       const { X, Y, Z } = this.rgbToXyz(
         this.state.r,
@@ -709,8 +706,7 @@ class CoresApp {
 
     const { x, y } = this.canvasPixelFromEvent(e);
     const px = this.ctx.getImageData(x, y, 1, 1).data;
-    const hex = this.rgbToHex(px[0], px[1], px[2]);
-    const showHex = this.getDisplayHex(hex); // aparência (respeita simulação)
+    const hex = this.rgbToHex(px[0], px[1], px[2]); // valor original, sem simulação
 
     // posiciona perto do cursor, sem sair do container
     const contRect = this.el.imageContainer.getBoundingClientRect();

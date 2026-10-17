@@ -1,6 +1,7 @@
 @layer tokens {
 :root {
-/* Paleta base (tema escuro por padrão) */
+/* Paleta base: o app é escuro (painéis, canvas e editor foram desenhados para fundo escuro) */
+color-scheme: dark;
 --bg-color: #1d1f27;
 --text-color: #fff;
 --sidebar-bg: #252932;
@@ -25,16 +26,12 @@
 }
 
 
+/* Tema claro só por escolha explícita (data-theme="light"). Ele não é aplicado
+   automaticamente pelo sistema operacional porque vários painéis têm fundo escuro
+   fixo e o texto ficava invisível. */
 [data-theme="light"] {
+color-scheme: light;
 --bg-color: #f7f9fc; --text-color: #0b1220; --sidebar-bg: #ffffff;
 --input-bg: #f0f3f7; --modal-bg: #fff; --modal-text: #1b2431; --modal-header: #0077aa;
-}
-
-
-@media (prefers-color-scheme: light) {
-:root:not([data-theme="dark"]) {
---bg-color: #f7f9fc; --text-color: #0b1220; --sidebar-bg: #ffffff;
---input-bg: #f0f3f7; --modal-bg: #fff; --modal-text: #1b2431; --modal-header: #0077aa;
-}
 }
 }

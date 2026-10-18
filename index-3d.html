@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VisuGraph 3D · código vivo</title>
+    <link rel="stylesheet" href="src/css/live.css" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+
+  <body class="page-live">
+    <header class="lv-top">
+      <a class="lv-back" href="./index.html" title="Voltar ao menu">← Menu</a>
+      <h1 class="lv-title">VisuGraph 3D <span>código vivo</span></h1>
+
+      <div class="lv-tools" role="toolbar" aria-label="Ferramentas da cena">
+        <details class="lv-menu" id="lv-add">
+          <summary>+ Adicionar</summary>
+          <div class="lv-menu__list" id="lv-add-list" role="menu" aria-label="Objetos para adicionar"></div>
+        </details>
+
+        <div class="lv-seg" role="group" aria-label="Ferramenta do gizmo">
+          <button type="button" data-mode="translate" aria-pressed="true" title="Mover (W)">Mover</button>
+          <button type="button" data-mode="rotate" aria-pressed="false" title="Girar (E)">Girar</button>
+          <button type="button" data-mode="scale" aria-pressed="false" title="Escalar (R)">Escalar</button>
+        </div>
+
+        <button type="button" id="lv-view" aria-pressed="false">Câmera do código</button>
+        <button type="button" id="lv-play" aria-pressed="true">⏸ Pausar</button>
+        <button type="button" id="lv-restart" title="Rodar o código de novo e zerar o tempo (Ctrl+Enter)">↻ Rodar</button>
+
+        <span class="lv-sep" aria-hidden="true"></span>
+
+        <button type="button" id="lv-copy">Copiar código</button>
+        <button type="button" id="lv-download" title="Página HTML que roda a cena sozinha">Baixar HTML</button>
+        <button type="button" id="lv-reset" title="Volta ao código inicial (Ctrl+Z desfaz)">Restaurar exemplo</button>
+      </div>
+    </header>
+
+    <main class="lv-grid">
+      <section class="lv-code" aria-label="Código da cena">
+        <div id="lv-editor"></div>
+      </section>
+
+      <section class="lv-view" aria-label="Visor 3D">
+        <!-- O visor roda o código num iframe: um erro ou um laço infinito não derruba o editor. -->
+        <iframe id="lv-viewport" src="viewport.html" title="Visor da cena 3D" sandbox="allow-scripts allow-same-origin"></iframe>
+        <p class="lv-view__hint">
+          Clique para selecionar · arraste para girar a vista · W, E e R trocam a ferramenta · F centraliza
+        </p>
+      </section>
+
+      <aside class="lv-inspector" aria-label="Objetos e propriedades">
+        <section class="lv-objects">
+          <h2>Objetos</h2>
+          <ul id="lv-objects"></ul>
+        </section>
+        <section class="lv-props" id="lv-props" aria-live="polite"></section>
+      </aside>
+    </main>
+
+    <footer class="lv-status" id="lv-status" data-kind="info">
+      <span id="lv-status-text" role="status" aria-live="polite">Carregando…</span>
+      <a class="lv-docs" href="https://github.com/AlbuquerqueMatheus/VisuGraph3D/blob/main/docs/codigo-vivo.md" target="_blank" rel="noopener">O que dá para editar pela cena?</a>
+    </footer>
+
+    <script type="module" src="src/live/app.js"></script>
+  </body>
+</html>

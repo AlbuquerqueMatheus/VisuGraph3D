@@ -19,11 +19,10 @@ export class Renderer {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
-    renderer.physicallyCorrectLights = true;
 
     // Shadows
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoftShadowMap foi removido no r186
 
     // Size / DPR
     renderer.setSize(this.sizes.width, this.sizes.height);

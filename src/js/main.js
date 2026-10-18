@@ -20,6 +20,7 @@ import { ChangeDetector } from "../classes/ChangeDetector.js";
 import { CodeSyncEngine } from "../classes/CodeSyncEngine.js";
 import { DiffViewer } from "../classes/DiffViewer.js";
 import { TooltipSystem } from "../classes/TooltipSystem.js";
+import { isShown } from "../lib/dom.js";
 
 /* util DOM */
 const $ = (s, r = document) => r.querySelector(s);
@@ -66,9 +67,7 @@ const btnCamReset = $("#cam-reset");
 const rngCamDistance = $("#cam-distance");
 const rngCamFov = $("#cam-fov");
 // Animações
-const btnSpin = $("#spin-btn");
 const btnReset = $("#reset-btn");
-const rngExtrude = $("#extrude-range");
 // Nova UI de animação
 const chkAnimRotate = $("#anim-rotate-enabled");
 const selAnimAxis = $("#anim-rotate-axis");
@@ -109,7 +108,6 @@ const textureManager = new TextureManager(renderer);
 const animationManager = new AnimationManager();
 const changeDetector = new ChangeDetector();
 
-let currentSceneState = null;
 let autoUpdateEnabled = false; // Controla atualização automática
 
 /* Inicializa o OBJETO ATIVO logo no começo! */
@@ -171,7 +169,6 @@ setSectionActive("cube");
 let editor = null;
 let codeSyncEngine = null;
 let diffViewer = null;
-let tooltipSystem = null;
 
 if (EditorManager && $("#code-editor")) {
   try {
@@ -179,7 +176,9 @@ if (EditorManager && $("#code-editor")) {
       theme: "dracula",
       language: "javascript",
     });
-  } catch {}
+  } catch (err) {
+    console.error("Editor de código indisponível:", err);
+  }
 }
 
 // Instancia os sistemas de sync e UI educacional
@@ -195,7 +194,7 @@ if (editor) {
   });
 
   diffViewer = new DiffViewer('#diff-viewer');
-  tooltipSystem = new TooltipSystem(editor);
+  const tooltipSystem = new TooltipSystem(editor);
   tooltipSystem.enable();
 
   codeSyncEngine.onCodeChange((data) => {
@@ -278,13 +277,16 @@ function startAutoUpdate() {
     lightsManager,
     geometryManager,
     animationManager,
-    (changeResult, newState) => {
+    () => {
       const editorVisible = !$("#code-editor-container")?.classList.contains("hidden");
       if (editorVisible && autoUpdateEnabled) generateAndDisplayCode();
     }
   );
 }
 
+// Ainda não é chamada: o detector de mudanças antigo não dispara de forma confiável.
+// O passo 2 (código vivo) substitui este fluxo inteiro.
+// eslint-disable-next-line no-unused-vars
 function createAutoUpdateToggle() {
   const checkbox = $("#auto-update-code");
   if (!checkbox) return;
@@ -590,8 +592,13 @@ $("#download-code-btn")?.addEventListener("click", () => {
 });
 
 btnToggleEditor?.addEventListener("click", () => {
-  $("#code-editor-container")?.classList.toggle("hidden");
-  btnGenerateCode?.classList.toggle("hidden");
+  const panel = $("#code-editor-container");
+  if (!panel) return;
+  const opening = panel.classList.contains("hidden");
+  panel.classList.toggle("hidden", !opening);
+  btnToggleEditor.textContent = opening ? "Ocultar Editor" : "Mostrar Editor";
+  // o CodeMirror foi criado com o painel oculto: recalcula o layout ao aparecer
+  if (opening) editor?.refresh?.();
 });
 btnGenerateCode?.addEventListener("click", () => {
   generateAndDisplayCode();
@@ -613,16 +620,19 @@ window.addEventListener("resize", () => {
   rendererManager?.onResize?.(newSizes);
 });
 
-/* Loop */
-const clock = new THREE.Clock();
-function tick() {
-  const delta = clock.getDelta();
+/* Loop — só desenha enquanto a tela 3D está aberta */
+const timer = new THREE.Timer();
+timer.connect(document);
+function tick(timestamp) {
+  requestAnimationFrame(tick);
+  timer.update(timestamp);
+  if (!isShown(screen3D)) return;
+  const delta = timer.getDelta();
   animationManager?.update?.(delta);
   controlsManager.update();
   renderer.render(scene, camera);
-  requestAnimationFrame(tick);
 }
-tick();
+requestAnimationFrame(tick);
 
 /* Preload */
 textureManager?.preloadAll?.();

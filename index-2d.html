@@ -14,17 +14,7 @@
 
     <!-- Estilos -->
     <link rel="stylesheet" href="src/css/styles-2d.css" />
-    <link rel="icon" href="/favicon.ico" />
-
-    <!-- Libs necessárias -->
-    <script
-      defer
-      src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"
-    ></script>
-    <script
-      defer
-      src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"
-    ></script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
 
   <body>
@@ -740,6 +730,10 @@
                 </div>
                 <div>Especular^n = <span id="specular-term">0.00</span></div>
                 <div>Intensidade I = <strong id="intensity">0.00</strong></div>
+                <div>
+                  Cor no ponto = <span id="phong-rgb">(0, 0, 0)</span>
+                  <span id="phong-swatch" class="phong-swatch" aria-hidden="true"></span>
+                </div>
               </div>
 
               <button id="btn-phong-explain" class="btn-explain">
@@ -1622,20 +1616,11 @@
       </div>
     </div>
 
-    <!-- SCRIPTS (AGORA NO CAMINHO NOVO) -->
-    <script src="src/js/navigation.js" defer></script>
-    <script src="src/js/coordenadas.js" defer></script>
-    <script src="src/js/cores.js" defer></script>
-
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-          "three/examples/jsm/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-        }
-      }
-    </script>
+    <!-- Scripts (módulos empacotados pelo Vite; nenhuma dependência de CDN) -->
+    <script type="module" src="src/js/navigation.js"></script>
+    <script type="module" src="src/js/coordenadas.js"></script>
+    <script type="module" src="src/js/cores.js"></script>
     <script type="module" src="src/js/phong.js"></script>
-    <script src="src/js/curvas.js" defer></script>
+    <script type="module" src="src/js/curvas.js"></script>
   </body>
 </html>

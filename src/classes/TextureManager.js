@@ -61,7 +61,9 @@ export class TextureManager {
     if (this._customObjectURLs[mapName]) {
       try {
         URL.revokeObjectURL(this._customObjectURLs[mapName]);
-      } catch {}
+      } catch {
+        // URL já liberada: nada a fazer
+      }
     }
 
     const url = URL.createObjectURL(file);
@@ -74,7 +76,9 @@ export class TextureManager {
       Object.values(this._customObjectURLs).forEach((u) => {
         try {
           URL.revokeObjectURL(u);
-        } catch {}
+        } catch {
+          // URL já liberada: nada a fazer
+        }
       });
     }
     this._customObjectURLs = {};

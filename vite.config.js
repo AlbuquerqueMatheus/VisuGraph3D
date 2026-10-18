@@ -1,24 +1,46 @@
 // vite.config.js
 import { defineConfig } from "vite";
-import { resolve } from "path";
+import { fileURLToPath } from "node:url";
+
+const page = (file) => fileURLToPath(new URL(file, import.meta.url));
 
 export default defineConfig({
-  root: ".",                 // <- raiz do projeto (onde estão index.html e index-2d.html)
+  // Caminhos relativos: o mesmo build funciona em localhost e no GitHub Pages,
+  // onde o site fica numa subpasta com o nome do repositório.
+  base: "./",
   server: {
     host: true,
     open: "/index.html",
     port: 5173,
   },
+  preview: {
+    port: 4173,
+    open: false,
+  },
   build: {
     outDir: "dist",
     assetsDir: "assets",
     emptyOutDir: true,
-    rollupOptions: {
+    // three.js e p5.js são grandes por natureza; ficam em arquivos próprios (cache melhor)
+    chunkSizeWarningLimit: 1100,
+    rolldownOptions: {
       input: {
-        main: resolve(__dirname, "index.html"),
-        twoD: resolve(__dirname, "index-2d.html"),
+        main: page("./index.html"),
+        twoD: page("./index-2d.html"),
+      },
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: "three", test: /node_modules[\\/]three[\\/]/ },
+            { name: "p5", test: /node_modules[\\/]p5[\\/]/ },
+            { name: "codemirror", test: /node_modules[\\/]codemirror5[\\/]/ },
+          ],
+        },
       },
     },
   },
-  base: "/",
+  // Vitest: testes unitários das funções puras (src/lib)
+  test: {
+    include: ["tests/unit/**/*.test.js"],
+  },
 });

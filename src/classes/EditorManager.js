@@ -1,5 +1,10 @@
 // src/classes/EditorManager.js
-// Aceita seletor string ou elemento; funciona com CodeMirror via CDN, com fallback.
+// Editor de código do modo 3D (CodeMirror 5 empacotado pelo Vite, sem CDN).
+import CodeMirror from "codemirror5";
+import "codemirror5/mode/javascript/javascript.js";
+import "codemirror5/lib/codemirror.css";
+import "codemirror5/theme/dracula.css";
+
 export class EditorManager {
   constructor(selectorOrEl, { theme = "dracula", language = "javascript" } = {}) {
     const root = typeof selectorOrEl === "string" ? document.querySelector(selectorOrEl) : selectorOrEl;
@@ -9,27 +14,27 @@ export class EditorManager {
     this.textarea = document.createElement("textarea");
     this.root.appendChild(this.textarea);
 
-    if (window.CodeMirror) {
-      this.cm = window.CodeMirror.fromTextArea(this.textarea, {
-        mode: language,
-        theme,
-        lineNumbers: true,
-        tabSize: 2,
-        lineWrapping: true,
-      });
-      this.cm.setSize("480px", "280px");
-    } else {
-      // fallback simples
-      Object.assign(this.textarea.style, {
-        width: "480px",
-        height: "280px",
-        background: "#111",
-        color: "#eee",
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-        fontSize: "13px",
-      });
-    }
+    this.cm = CodeMirror.fromTextArea(this.textarea, {
+      mode: language,
+      theme,
+      lineNumbers: true,
+      tabSize: 2,
+      lineWrapping: true,
+    });
+    // O tamanho vem do CSS de #code-editor; o editor só preenche o contêiner.
+    this.cm.setSize("100%", "100%");
   }
-  setValue(s) { this.cm ? this.cm.setValue(s) : (this.textarea.value = s); }
-  getValue()  { return this.cm ? this.cm.getValue() : this.textarea.value; }
+
+  setValue(s) {
+    this.cm.setValue(s);
+  }
+
+  getValue() {
+    return this.cm.getValue();
+  }
+
+  /** Recalcula o layout depois que o painel deixa de estar oculto. */
+  refresh() {
+    this.cm.refresh();
+  }
 }

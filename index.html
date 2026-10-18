@@ -5,33 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>VisuGraph</title>
 
-    <!-- Perf (opcional) -->
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
-    <link rel="preconnect" href="https://unpkg.com" crossorigin />
-
     <!-- CSS modular (agregador único) -->
     <link rel="stylesheet" href="src/css/styles-2d.css" />
 
-    <!-- (opcional) favicon para evitar 404 -->
-    <link rel="icon" href="/favicon.ico" />
-
-    <!-- CodeMirror (CDN) -->
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css"
-    />
-    <script
-      defer
-      src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"
-    ></script>
-    <script
-      defer
-      src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/javascript/javascript.min.js"
-    ></script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
 
   <!-- page-home ativa o papel de parede do menu; ao entrar no 3D alternamos para page-3d -->
@@ -477,121 +454,35 @@
           style="display: none"
         />
       </div>
-      <button id="generateCodeBtn" class="hidden" type="button">
-        Gerar Código
-      </button>
-
-      <div
-        id="code-editor-container"
-        class="hidden"
-        style="
-          position: fixed;
-          bottom: 32px;
-          right: 32px;
-          width: 600px;
-          max-width: 96vw;
-          z-index: 10000;
-          background: #21222c;
-          border-radius: 8px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-          overflow: hidden;
-        "
-      >
-        <div
-          style="
-            background: #1e1e1e;
-            border-bottom: 2px solid #333;
-            padding: 12px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          "
-        >
-          <div style="display: flex; align-items: center; gap: 12px">
-            <h3
-              style="margin: 0; color: #fff; font-size: 14px; font-weight: 600"
-            >
-              📝 Código Gerado
-            </h3>
-            <label
-              style="
-                color: #aaa;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                cursor: pointer;
-                font-size: 13px;
-              "
-            >
-              <input
-                type="checkbox"
-                id="auto-update-code"
-                style="cursor: pointer"
-              />
+      <!-- Painel do editor de código: tudo o que ele controla fica dentro dele -->
+      <div id="code-editor-container" class="code-panel hidden">
+        <div class="code-panel__header">
+          <h3 class="code-panel__title">📝 Código Gerado</h3>
+          <div class="code-panel__options">
+            <label class="code-panel__option">
+              <input type="checkbox" id="auto-update-code" />
               <span>🔄 Auto-atualizar</span>
             </label>
-            <label
-              style="
-                color: #aaa;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                cursor: pointer;
-                font-size: 13px;
-                border-left: 1px solid #444;
-                padding-left: 12px;
-              "
-            >
-              <input
-                type="checkbox"
-                id="sync-bidirectional"
-                style="cursor: pointer"
-              />
+            <label class="code-panel__option">
+              <input type="checkbox" id="sync-bidirectional" />
               <span>↔️ Sync Bidirecional</span>
             </label>
           </div>
-          <div style="display: flex; gap: 8px">
-            <button
-              id="copy-code-btn"
-              style="
-                padding: 6px 12px;
-                background: #4caf50;
-                border: none;
-                border-radius: 4px;
-                color: white;
-                cursor: pointer;
-                font-size: 12px;
-              "
-            >
+          <div class="code-panel__actions">
+            <button id="generateCodeBtn" class="code-panel__btn code-panel__btn--primary" type="button">
+              Gerar Código
+            </button>
+            <button id="copy-code-btn" class="code-panel__btn code-panel__btn--copy" type="button">
               📋 Copiar
             </button>
-            <button
-              id="download-code-btn"
-              style="
-                padding: 6px 12px;
-                background: #2196f3;
-                border: none;
-                border-radius: 4px;
-                color: white;
-                cursor: pointer;
-                font-size: 12px;
-              "
-            >
+            <button id="download-code-btn" class="code-panel__btn code-panel__btn--download" type="button">
               💾 Download
             </button>
           </div>
         </div>
-        <div id="code-editor" style="min-height: 400px"></div>
+        <div id="code-editor"></div>
         <div id="diff-viewer" class="hidden"></div>
-        <div
-          style="
-            background: #1a1a1a;
-            border-top: 1px solid #333;
-            padding: 8px 16px;
-            color: #888;
-            font-size: 11px;
-          "
-        >
+        <div class="code-panel__footer">
           <span id="code-status">Pronto para gerar código</span>
         </div>
       </div>

@@ -38,13 +38,9 @@
   $("#btn-phong")?.addEventListener("click", () => showSection("phong"));
   $("#btn-curvas")?.addEventListener("click", () => showSection("curves"));
 
+  // Caminho relativo: funciona no servidor local e quando o site está em subpasta
   $("#back-to-menu-2d")?.addEventListener("click", () => {
-    try {
-      if (document.referrer) history.back();
-      else location.href = "/";
-    } catch {
-      location.href = "/";
-    }
+    location.href = "./index.html";
   });
 
   // Se nenhuma seção estiver visível (por HTML/CSS), mostra a primeira existente

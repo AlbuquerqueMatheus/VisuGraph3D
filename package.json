@@ -1,30 +1,33 @@
 {
-  "name": "tcc",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "visugraph3d",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Laboratório interativo de Computação Gráfica (2D e 3D) para o navegador.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "npm run lint && npm test && npm run build && npm run test:e2e"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "@codemirror/basic-setup": "^0.20.0",
-    "@codemirror/lang-javascript": "^6.2.2",
-    "@codemirror/state": "^6.5.0",
-    "@codemirror/view": "^6.36.1",
-    "codemirror": "^6.0.1",
-    "gsap": "^3.12.5",
-    "lil-gui": "^0.19.2",
-    "noisejs": "^2.1.0",
-    "three": "^0.168.0",
-    "three-subdivide": "^1.1.5",
-    "three-subdivision-modifier": "^1.0.5",
-    "vite": "^5.4.2"
+    "codemirror5": "npm:codemirror@^5.65.21",
+    "p5": "^1.11.13",
+    "three": "^0.186.1"
   },
   "devDependencies": {
-    "vite-plugin-restart": "^0.4.1"
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.56.1",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
   }
 }

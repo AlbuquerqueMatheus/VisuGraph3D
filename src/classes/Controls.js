@@ -1,5 +1,4 @@
 // src/classes/Controls.js
-import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 
@@ -27,7 +26,10 @@ export class Controls {
   }
 
   mount(scene) {
-    if (!this.transform.parent) scene.add(this.transform);
+    // Desde o three r169 o TransformControls não é mais um Object3D: o que vai
+    // para a cena é o gizmo devolvido por getHelper().
+    const gizmo = this.transform.getHelper();
+    if (!gizmo.parent) scene.add(gizmo);
   }
 
   setControlledObject(object3D) {

@@ -88,8 +88,9 @@ const SET_DOCS = {
 
 const WORD_DOCS = {
   THREE: "A biblioteca Three.js. Todas as classes (THREE.Mesh, THREE.Scene…) vêm daqui; no VisuGraph ela já está carregada.",
-  animar: "O VisuGraph chama animar(tempo) a cada quadro, cerca de 60 vezes por segundo. Mude propriedades aqui para animar a cena.",
+  animar: "O VisuGraph chama animar(tempo, delta) a cada quadro, cerca de 60 vezes por segundo. Mude propriedades aqui para animar a cena.",
   tempo: "Tempo em segundos desde que a cena começou a rodar.",
+  delta: "Segundos desde o quadro anterior: velocidade * delta é o quanto algo anda em um quadro.",
 };
 
 const isWord = (c) => !!c && /[\w$]/.test(c);
@@ -112,11 +113,13 @@ export function explain(analysis, pos) {
   const word = code.slice(from, to);
   if (/^\d/.test(word)) return null;
   const prev = code[from - 1] === "." ? previousWord(code, from - 1) : null;
+  // chave de um objeto de opções, como em { roughness: 0.4 }
+  const isKey = !prev && /^\s*:/.test(code.slice(to, to + 40)) && /[{,]\s*$/.test(code.slice(Math.max(0, from - 40), from));
   const range = { from, to };
 
   if (prev === "THREE" && CLASS_DOCS[word]) return { ...range, title: `THREE.${word}`, text: CLASS_DOCS[word] };
   if (word === "set" && prev && SET_DOCS[prev]) return { ...range, title: `${prev}.set`, text: SET_DOCS[prev] };
-  if (prev && MEMBER_DOCS[word]) return { ...range, title: word, text: MEMBER_DOCS[word] };
+  if ((prev || isKey) && MEMBER_DOCS[word]) return { ...range, title: word, text: MEMBER_DOCS[word] };
   if (WORD_DOCS[word]) return { ...range, title: word, text: WORD_DOCS[word] };
   if (analysis.ok && !prev) {
     const obj = analysis.objects.find((o) => o.name === word);

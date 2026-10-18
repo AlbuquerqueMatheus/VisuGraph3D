@@ -2,7 +2,7 @@
 
 Laboratório interativo de Computação Gráfica que roda no navegador.
 
-- **Modo 3D** (`index.html`): cena em Three.js com materiais, luzes, câmera, animações, gizmo de transformação e um editor com o código JavaScript equivalente à cena.
+- **Modo 3D** (`index-3d.html`): código vivo. A cena é um programa JavaScript com Three.js, e o código é a única fonte da verdade: clicar num objeto destaca as linhas que o criam, e arrastar o gizmo, mexer no painel de propriedades ou arrastar um número no código reescreve o próprio código. O que dá para editar pela cena está em [docs/codigo-vivo.md](docs/codigo-vivo.md).
 - **Modo 2D** (`index-2d.html`): sistema de coordenadas e transformações (com a matriz 3×3 em coordenadas homogêneas), sistemas de cores, modelo de iluminação Phong / Blinn–Phong e curvas de Bézier (De Casteljau).
 
 Todas as bibliotecas vêm do npm e são empacotadas pelo Vite: o site funciona sem CDN e pode ser publicado em qualquer subpasta (por exemplo, no GitHub Pages).
@@ -22,26 +22,29 @@ npm run preview    # serve o conteúdo de dist/ em http://localhost:4173
 
 ```bash
 npm run lint       # ESLint
-npm test           # testes unitários (Vitest) das funções puras de src/lib
+npm test           # testes unitários (Vitest) de src/lib e do motor de src/live/engine
 npm run test:e2e   # testes de ponta a ponta (Playwright) no build de produção
 npm run check      # tudo acima, na ordem
 ```
 
 Antes do primeiro `npm run test:e2e`, instale o navegador do Playwright com `npx playwright install chromium`.
 
-Os testes de ponta a ponta servem o build numa subpasta (`/visugraph3d/`), para garantir que ele funciona em qualquer endereço, e falham se a página registrar erro no console, pedir arquivo fora do site ou não encontrar algum arquivo. Entre outras coisas, eles conferem que a cor de um pixel do visor Phong é a que a fórmula do painel calcula.
+Os testes de ponta a ponta servem o build numa subpasta (`/visugraph3d/`), para garantir que ele funciona em qualquer endereço, e falham se a página registrar erro no console, pedir arquivo fora do site ou não encontrar algum arquivo. Entre outras coisas, eles conferem que a cor de um pixel do visor Phong é a que a fórmula do painel calcula e que, no modo 3D, arrastar o gizmo e mexer no painel reescrevem o código.
 
 ## Estrutura
 
 ```
-index.html, index-2d.html   páginas (menu + modo 3D, modo 2D)
-src/js/                     código de cada página e seção
-src/classes/                classes da cena 3D (câmera, luzes, editor, gerador de código…)
-src/lib/                    funções puras com testes: transformações 2D, modelo de Phong e o shader que o implementa
-src/css/                    estilos (camadas: tokens, base, componentes, overrides)
-public/                     imagens e a fonte da logo (licença em public/fonts)
-tests/unit/                 testes do Vitest
-tests/e2e/                  testes do Playwright
+index.html                    menu
+index-2d.html                 modo 2D
+index-3d.html, viewport.html  modo 3D (código vivo) e o visor, que roda a cena num iframe
+src/js/                       código do menu e das seções do modo 2D
+src/lib/                      funções puras com testes: transformações 2D, modelo de Phong e o shader que o implementa
+src/live/                     modo 3D: motor (análise do código e edições), editor, visor e painel
+src/css/                      estilos (camadas: tokens, base, componentes, overrides)
+public/                       imagens e a fonte da logo (licença em public/fonts)
+docs/                         documentação (o subconjunto do Three.js que o modo 3D entende)
+tests/unit/                   testes do Vitest
+tests/e2e/                    testes do Playwright
 ```
 
 Convenções usadas no modo 2D:

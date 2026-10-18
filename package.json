@@ -28,7 +28,6 @@
     "@lezer/highlight": "^1.2.5",
     "acorn": "^8.19.0",
     "codemirror": "^6.0.2",
-    "codemirror5": "npm:codemirror@^5.65.21",
     "p5": "^1.11.13",
     "three": "^0.186.1"
   },

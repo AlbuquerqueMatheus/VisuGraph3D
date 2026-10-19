@@ -31,6 +31,21 @@ test("página 2D abre as quatro seções sem depender de CDN", async ({ page }) 
   }
 });
 
+test("os laboratórios de coordenadas e de Phong continuam nas trilhas de desafios do modo 3D", async ({ page }) => {
+  await page.goto("index-2d.html");
+  await page.click('.coord-tab[data-tab="measure"]');
+  await expect(page.locator("#tab-measure a.lab-next")).toBeVisible();
+  await expect(page.locator("#tab-measure a.lab-next")).toHaveAttribute("href", "./index-3d.html?trilha=matriz");
+
+  await page.click("#btn-phong");
+  const next = page.locator("#phong-section a.lab-next");
+  await expect(next).toHaveAttribute("href", "./index-3d.html?trilha=phong");
+  await next.click();
+  await expect(page.locator("#lv-status-text")).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(page.locator(".lv-ch__title")).toHaveText("Luz pela esquerda");
+  await expect(page.locator(".lv-ch__kicker")).toHaveText("Luz e cor (Phong) · 1 de 3");
+});
+
 test.describe("Sistema de coordenadas", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("index-2d.html");

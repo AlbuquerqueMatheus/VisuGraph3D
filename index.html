@@ -3,40 +3,126 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VisuGraph</title>
-
-    <!-- CSS modular (agregador único) -->
-    <link rel="stylesheet" href="src/css/styles-2d.css" />
-
+    <meta
+      name="description"
+      content="Laboratório de Computação Gráfica no navegador: a matemática, o código Three.js e a imagem ligados nos dois sentidos."
+    />
+    <title>VisuGraph · Computação Gráfica com código vivo</title>
+    <link rel="stylesheet" href="src/css/home.css" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
 
-  <!-- page-home ativa o papel de parede do menu -->
   <body class="page-home">
-    <!-- Tela de menu -->
-    <div
-      id="menu-screen"
-      class="screen"
-      role="region"
-      aria-labelledby="menu-title"
-    >
-      <div id="logo-container" aria-hidden="true">
-        <canvas id="logo-canvas"></canvas>
-      </div>
-      <h1 id="menu-title" class="sr-only">VisuGraph — escolha o modo</h1>
-      <p>Escolha o modo de visualização:</p>
-      <div class="menu" role="group" aria-label="Seleção de modo">
-        <a href="./index-3d.html"
-          ><button id="btn-3d" type="button">Modo 3D</button></a
-        >
-        <a href="./index-2d.html"
-          ><button id="btn-2d" type="button">Modo 2D</button></a
-        >
-      </div>
-    </div>
+    <header class="home-top">
+      <a class="home-brand" href="./index.html" aria-label="VisuGraph, início">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>VisuGraph</span>
+      </a>
+      <nav class="home-nav" aria-label="Atalhos">
+        <a href="#temas">Temas</a>
+        <a href="./index-3d.html?livre">Editor livre</a>
+        <a href="https://github.com/AlbuquerqueMatheus/VisuGraph3D" rel="noopener">Código-fonte</a>
+      </nav>
+    </header>
 
-    <!-- Scripts -->
-    <script type="module" src="src/js/navigation.js"></script>
-    <script type="module" src="src/js/logo.js"></script>
+    <main>
+      <section class="home-hero" aria-labelledby="home-title">
+        <div class="home-hero__text">
+          <p class="home-kicker">Laboratório de Computação Gráfica no navegador</p>
+          <h1 id="home-title">Aprenda Computação Gráfica vendo a matemática, o código e a imagem ao mesmo tempo.</h1>
+          <p class="home-lead">
+            Mexa em qualquer um dos três e veja os outros dois mudarem: arraste um objeto e o código se reescreve,
+            troque um número e a cena e as matrizes acompanham.
+          </p>
+          <div class="home-cta">
+            <a class="home-btn home-btn--primary" id="home-start" href="./index-3d.html">Abrir o código vivo</a>
+            <a class="home-btn" href="#temas">Escolher um tema</a>
+          </div>
+        </div>
+        <figure class="home-shot">
+          <img
+            src="./src/img/codigo-vivo.webp"
+            width="1366"
+            height="768"
+            alt="O código vivo do VisuGraph: à esquerda o código Three.js com as linhas do cubo acesas, no meio a cena com o cubo selecionado e o gizmo, à direita a lista de objetos e as propriedades do cubo."
+          />
+          <figcaption>Clique num objeto e as linhas que o criam se acendem; arraste o gizmo e os números do código mudam.</figcaption>
+        </figure>
+      </section>
+
+      <section class="home-how" aria-labelledby="how-title">
+        <h2 id="how-title">Como funciona</h2>
+        <ol class="home-steps">
+          <li>
+            <h3>Explore</h3>
+            <p>Cada tema começa num laboratório: controles deslizantes, a fórmula à vista e nenhuma linha de código.</p>
+          </li>
+          <li>
+            <h3>Programe</h3>
+            <p>A cena é um programa Three.js. Clique num objeto para ver as linhas que o criam; arraste-o e o código muda junto.</p>
+          </li>
+          <li>
+            <h3>Confira a conta</h3>
+            <p>A aba Matemática mostra as matrizes e o caminho de cada vértice, e os desafios são corrigidos pela própria cena.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="home-topics" id="temas" aria-labelledby="topics-title">
+        <h2 id="topics-title">Temas</h2>
+        <ul class="topic-grid">
+          <li class="topic" data-trail="matriz">
+            <h3>Transformações</h3>
+            <p>Translação, rotação e escala, da matriz 3×3 no plano à 4×4 da cena, e por que a ordem importa.</p>
+            <dl class="topic__steps">
+              <dt>Explorar</dt>
+              <dd><a href="./index-2d.html#coordenadas">Coordenadas</a></dd>
+              <dt>Programar</dt>
+              <dd><a href="./index-3d.html?trilha=matriz">Transformações e matrizes</a> <span class="topic__progress"></span></dd>
+            </dl>
+          </li>
+          <li class="topic" data-trail="camera">
+            <h3>Câmera e projeção</h3>
+            <p>Para onde a câmera olha e quanto ela abrange: lookAt, campo de visão e o caminho do vértice até o pixel.</p>
+            <dl class="topic__steps">
+              <dt>Explorar</dt>
+              <dd class="topic__missing">Ainda sem laboratório</dd>
+              <dt>Programar</dt>
+              <dd><a href="./index-3d.html?trilha=camera">Câmera e projeção</a> <span class="topic__progress"></span></dd>
+            </dl>
+          </li>
+          <li class="topic" data-trail="phong">
+            <h3>Luz e cor</h3>
+            <p>Ambiente, difusa e especular, termo a termo no modelo de Phong, e a cor como três canais.</p>
+            <dl class="topic__steps">
+              <dt>Explorar</dt>
+              <dd><a href="./index-2d.html#phong">Modelo Phong</a> · <a href="./index-2d.html#cores">Sistemas de cores</a></dd>
+              <dt>Programar</dt>
+              <dd><a href="./index-3d.html?trilha=phong">Luz e cor</a> <span class="topic__progress"></span></dd>
+            </dl>
+          </li>
+          <li class="topic">
+            <h3>Curvas</h3>
+            <p>Curvas de Bézier de grau 2 a 4 e o algoritmo de De Casteljau, passo a passo.</p>
+            <dl class="topic__steps">
+              <dt>Explorar</dt>
+              <dd><a href="./index-2d.html#curvas">Curvas de Bézier</a></dd>
+              <dt>Programar</dt>
+              <dd class="topic__missing">Ainda sem desafios</dd>
+            </dl>
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="home-foot">
+      <p>
+        VisuGraph é código aberto, no
+        <a href="https://github.com/AlbuquerqueMatheus/VisuGraph3D" rel="noopener">GitHub</a>. Feito com Three.js,
+        CodeMirror e p5.js.
+      </p>
+    </footer>
+
+    <script type="module" src="src/js/home.js"></script>
   </body>
 </html>

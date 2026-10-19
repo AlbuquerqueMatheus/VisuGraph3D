@@ -1,11 +1,11 @@
 @layer components {
 /* ====== Página do resumo do estudo: uma coluna de texto, os arquivos e as tabelas ====== */
 .page-study {
-  --st-bg: #121318;
-  --st-panel: #1a1c23;
-  --st-panel-2: #20232c;
-  --st-line: #2c303b;
-  --st-text-2: #a3abbc;
+  --st-bg: var(--surface-0);
+  --st-panel: var(--surface-1);
+  --st-panel-2: var(--surface-2);
+  --st-line: var(--surface-line);
+  --st-text-2: var(--text-2);
   --st-warn: #ffb74d;
   display: block;
   background: var(--st-bg);

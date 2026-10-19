@@ -5,7 +5,8 @@
 
 
 /* Components genéricos */
-@import url("components.sidebar.css") layer(components);
+@import url("components.topicbar.css") layer(components);
+@import url("components.layout-2d.css") layer(components);
 @import url("components.modal.css") layer(components);
 
 
@@ -14,7 +15,6 @@
 @import url("modules.colors.css") layer(components);
 @import url("modules.phong.css") layer(components);
 @import url("modules.curves.css") layer(components);
-@import url("modules.home.css")   layer(components);
 
 /* Ajustes finais responsivos/perf */
 @import url("overrides.css") layer(overrides);

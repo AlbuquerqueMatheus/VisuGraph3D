@@ -19,6 +19,9 @@ async function exportLog(page) {
 test("estudo: no grupo controle o código roda, mas a cena não escreve nele nem acende nada", async ({ page }) => {
   const code = await openStudy(page, "controle");
   expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  // a barra fica só com o nome, sem temas e sem volta ao início: a sessão não sai do código vivo
+  await expect(page.locator("#vg-nav")).toBeHidden();
+  await expect(page.locator(".vg-brand")).not.toHaveAttribute("href");
   await expect(page.locator("#lv-add")).toBeHidden();
   await expect(page.locator(".cm-vg-number")).toHaveCount(0); // números não se arrastam
 
@@ -101,5 +104,7 @@ test("sem ?estudo na URL não há faixa nem registro", async ({ page }) => {
   await page.goto("index-3d.html");
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
   await expect(page.locator(".lv-study")).toHaveCount(0);
+  await expect(page.locator("#vg-nav")).toBeVisible();
+  await expect(page.locator(".vg-brand")).toHaveAttribute("href", "./index.html");
   expect(await page.evaluate(() => localStorage.getItem("visugraph.estudo.v1"))).toBeNull();
 });

@@ -1,4 +1,6 @@
-// navigation.js — unifica navegação entre seções e abertura de modais (robusto)
+// navigation.js — os laboratórios da página (um por vez, pelo endereço), a barra comum e os modais
+import { labById, topicOfLab } from "./topics.js";
+import { mountTopicBar } from "./topicbar.js";
 
 // ============================== Utils ==============================
 (() => {
@@ -10,44 +12,48 @@
   const show = (el) => el && el.classList.remove("hidden");
   const hide = (el) => el && el.classList.add("hidden");
 
-  // ======================= Troca de Seções (Sidebar) =======================
+  // ======================= Laboratórios =======================
+  // Cada laboratório tem endereço próprio (index-2d.html#cores): a tela inicial, a barra comum
+  // e as trilhas do código vivo apontam direto para ele. Trocar o endereço troca o laboratório.
   const sections = {
-    coords: $("#coords-section"),
-    colors: $("#color-system-section"),
+    coordenadas: $("#coords-section"),
+    cores: $("#color-system-section"),
     phong: $("#phong-section"),
-    curves: $("#curves-section"),
+    curvas: $("#curves-section"),
   };
+  const bar = mountTopicBar($("#vg-nav"));
 
-  function showSection(key) {
+  function showSection(lab) {
     Object.values(sections).forEach(hide);
-    show(sections[key]);
-    // marca botão ativo (opcional)
-    const mapBtn = {
-      coords: "#btn-coordenadas",
-      colors: "#color-system-btn",
-      phong: "#btn-phong",
-      curves: "#btn-curvas",
-    };
-    $$(".nav-btn").forEach((b) => b.classList.remove("is-active"));
-    const activeBtn = $(mapBtn[key]);
-    if (activeBtn) activeBtn.classList.add("is-active");
+    show(sections[lab]);
+    if (location.hash !== `#${lab}`) history.replaceState(history.state, "", `#${lab}`);
+    document.title = `${labById(lab).name} · VisuGraph`;
+    bar.update({ step: "explorar", topic: topicOfLab(lab), lab });
   }
 
-  $("#btn-coordenadas")?.addEventListener("click", () => showSection("coords"));
-  $("#color-system-btn")?.addEventListener("click", () => showSection("colors"));
-  $("#btn-phong")?.addEventListener("click", () => showSection("phong"));
-  $("#btn-curvas")?.addEventListener("click", () => showSection("curves"));
-
-  // Caminho relativo: funciona no servidor local e quando o site está em subpasta
-  $("#back-to-menu-2d")?.addEventListener("click", () => {
-    location.href = "./index.html";
+  const fromHash = () => {
+    const lab = decodeURIComponent(location.hash.slice(1));
+    return sections[lab] ? lab : null;
+  };
+  window.addEventListener("hashchange", () => {
+    const lab = fromHash();
+    if (lab) showSection(lab);
   });
+  showSection(fromHash() ?? "coordenadas");
 
-  // Se nenhuma seção estiver visível (por HTML/CSS), mostra a primeira existente
-  if (!Object.values(sections).some((el) => el && !el.classList.contains("hidden"))) {
-    const first = Object.keys(sections).find((k) => sections[k]);
-    if (first) showSection(first);
-  }
+  // Um link para outro laboratório desta página (a barra comum) só troca o endereço, sem
+  // recarregar: cada laboratório guarda o que o aluno fez nele. Vale também onde o servidor
+  // tira o ".html" do endereço (index-2d em vez de index-2d.html).
+  const samePage = (url) => url.origin === location.origin && url.pathname.replace(/\.html$/, "") === location.pathname.replace(/\.html$/, "");
+  document.addEventListener("click", (e) => {
+    const link = e.target.closest?.("a[href]");
+    if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const url = new URL(link.href);
+    const lab = decodeURIComponent(url.hash.slice(1));
+    if (!sections[lab] || !samePage(url)) return;
+    e.preventDefault();
+    location.hash = lab;
+  });
 
   // ======================= Sistema de Modais =======================
   let openModals = 0;

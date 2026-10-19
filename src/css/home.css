@@ -1,0 +1,5 @@
+/* home.css — tela inicial: agregador com as mesmas camadas das outras páginas */
+@import url("base.reset.css") layer(reset);
+@import url("base.tokens.css") layer(tokens);
+@import url("base.global.css") layer(base);
+@import url("modules.home.css") layer(components);

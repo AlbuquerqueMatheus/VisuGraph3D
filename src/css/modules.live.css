@@ -1,15 +1,15 @@
 @layer components {
 /* ====== Página: barra no topo, três colunas (código | visor | painel) e status ====== */
 .page-live {
-  --lv-bg: #121318;
-  --lv-panel: #1a1c23;
-  --lv-panel-2: #20232c;
-  --lv-line: #2c303b;
-  --lv-text-2: #a3abbc;
+  --lv-bg: var(--surface-0);
+  --lv-panel: var(--surface-1);
+  --lv-panel-2: var(--surface-2);
+  --lv-line: var(--surface-line);
+  --lv-text-2: var(--text-2);
   --lv-select: #ffc94d;
   --lv-warn: #ffb74d;
   --lv-error: #ff6b6b;
-  --lv-ok: #5fd39a;
+  --lv-ok: var(--ok-color);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100vh;
@@ -23,19 +23,12 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-height: 48px; /* a mesma altura da barra dos laboratórios */
   padding: var(--space-2) var(--space-3);
   background: var(--lv-panel);
   border-bottom: 1px solid var(--lv-line);
   flex-wrap: wrap;
 }
-.lv-back {
-  color: var(--lv-text-2);
-  padding: 4px 8px;
-  border-radius: var(--radius-1);
-}
-.lv-back:hover { color: var(--text-color); background: var(--lv-panel-2); }
-.lv-title { font-size: 1rem; font-weight: 600; white-space: nowrap; }
-.lv-title span { color: var(--accent-color); font-weight: 500; margin-left: 4px; }
 
 .lv-tools { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-left: auto; }
 .lv-tools button, .lv-menu summary {
@@ -352,6 +345,23 @@
 
 /* Arrastando um número do código: o cursor fica de arraste em toda a página */
 body.vg-scrubbing, body.vg-scrubbing * { cursor: ew-resize !important; user-select: none !important; }
+
+/* ====== Barra numa linha só até 1366 px: o nome vira só o ícone e os botões apertam ====== */
+@media (max-width: 1520px) {
+  .lv-top { gap: 10px; }
+  .lv-tools { gap: 6px; }
+  .lv-tools button, .lv-menu summary { padding-inline: 8px; }
+  body:not([data-study]) .lv-top .vg-brand { gap: 0; padding-right: 4px; }
+  body:not([data-study]) .lv-top .vg-brand span,
+  .lv-top .vg-topic__kicker {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 
 /* ====== Telas estreitas: visor em cima, código e painel embaixo, com rolagem ====== */
 @media (max-width: 900px) {

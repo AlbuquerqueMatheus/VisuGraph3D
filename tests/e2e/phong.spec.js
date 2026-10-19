@@ -55,7 +55,7 @@ test.describe("Modelo Phong", () => {
       document.getElementById("auto-light").checked = false;
       document.getElementById("show-vectors").checked = false;
     });
-    await page.click("#btn-phong");
+    await page.evaluate(() => (location.hash = "#phong"));
     await expect(page.locator(VIEWER_CANVAS).first()).toBeVisible();
   });
 

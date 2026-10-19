@@ -1,21 +1,5 @@
 @layer overrides {
   @media (max-width: 800px) {
-    .app-container {
-      flex-direction: column;
-    }
-    .sidebar {
-      width: 200px;
-      background: #222;
-      padding: 10px;
-    }
-    .sidebar-title {
-      display: none;
-    }
-    .nav-btn {
-      flex: 1;
-      white-space: nowrap;
-    }
-
     /* Fallback de grids grandes para coluna */
     .phong-main,
     .color-main {
@@ -29,21 +13,4 @@
     content-visibility: auto;
     contain-intrinsic-size: 1000px 800px;
   }
-}
-/* ========= Fixes visuais finais ========= */
-
-/* Tela inicial: papel de parede correto (assets em /public/images) */
-.page-home {
-  background-image: url("/images/6193220.jpg"); /* ou 6193220.jpg se preferir */
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-}
-.page-home::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4); /* leve escurecido p/ contraste */
-  z-index: -1;
 }

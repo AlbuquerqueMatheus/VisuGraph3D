@@ -16,13 +16,15 @@ import { isObject3DKind } from "./engine/catalog.js";
 import { Inspector } from "./inspector.js";
 import { MathPanel } from "./mathPanel.js";
 import { CHALLENGES, challengeById, firstOpen, grade, nextChallenge, trailById, trailOf } from "./challenges.js";
+import { PROGRESS_KEY, readProgress } from "./progress.js";
+import { topicOfTrail } from "../js/topics.js";
+import { mountTopicBar } from "../js/topicbar.js";
 import { ChallengesPanel } from "./challengesPanel.js";
 import { NO_STUDY, StudyLog, studyGroup } from "./study.js";
 import { ViewportBridge } from "./bridge.js";
 import { exportHtml } from "./export.js";
 
 const STORAGE_KEY = "visugraph.codigo.v1";
-const PROGRESS_KEY = "visugraph.desafios.v1"; // { feitos: [ids], atual: id }
 const challengeKey = (id) => `visugraph.desafio.${id}.v1`; // o código de cada desafio
 const RUNNING_KEY = "visugraph.rodando"; // presente enquanto um código roda: se a página travar, fica lá
 const NEW_SESSION_KEY = "visugraph.estudo.nova"; // sessionStorage: "Nova sessão" recarregou a página
@@ -60,23 +62,22 @@ function forgetStudent() {
   }
 }
 
-// Desafios: o que já foi feito e o desafio aberto. ?trilha=matriz|camera|phong (os links dos
-// laboratórios 2D) abre o primeiro desafio ainda não feito da trilha.
+// Desafios: o que já foi feito e o desafio aberto. ?trilha=matriz|camera|phong (a tela inicial,
+// a barra e os laboratórios) abre o primeiro desafio ainda não feito da trilha, e ?livre abre o
+// editor sem desafio.
 function loadProgress() {
-  try {
-    const data = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "null");
-    const done = Array.isArray(data?.feitos) ? data.feitos.filter((id) => challengeById(id)) : [];
-    return { done: new Set(done), current: challengeById(data?.atual) };
-  } catch {
-    return { done: new Set(), current: null };
-  }
+  const { done, current } = readProgress();
+  return { done: new Set(done.filter((id) => challengeById(id))), current: challengeById(current) };
 }
 const progress = loadProgress();
-const trailAsked = trailById(new URLSearchParams(location.search).get("trilha"));
-if (trailAsked) {
+const asked = new URLSearchParams(location.search);
+const trailAsked = trailById(asked.get("trilha"));
+const freeAsked = !trailAsked && asked.has("livre");
+if (trailAsked || freeAsked) {
   // ao recarregar, vale o desafio que estava aberto, não o começo da trilha
   const url = new URL(location.href);
   url.searchParams.delete("trilha");
+  url.searchParams.delete("livre");
   history.replaceState(history.state, "", url);
 }
 
@@ -103,13 +104,29 @@ const state = {
   glass: null, // caixa de vidro: null, "phong" ou "blinn"
   vertex: 0, // vértice que o painel Matemática acompanha
   probeSeq: null,
-  challenge: trailAsked ? firstOpen(trailAsked, progress.done) : progress.current, // desafio aberto: o editor tem o código dele
+  challenge: trailAsked ? firstOpen(trailAsked, progress.done) : freeAsked ? null : progress.current, // desafio aberto: o editor tem o código dele
   challengeOpenedAt: Date.now(),
   hints: 0, // dicas mostradas no desafio aberto
   gradeKey: null, // verificações que passaram na última correção (o registro guarda só as mudanças)
   factsSeq: 0,
   liveApplied: false, // o visor tem valores que o código ainda não rodou (arraste no painel ou num número)
 };
+
+// Barra comum: o tema é a trilha do desafio aberto, e trocar de tema abre a trilha sem
+// recarregar. No modo de estudo ela some, para a sessão registrada não sair do código vivo.
+const topicBar = group
+  ? null
+  : mountTopicBar($("#vg-nav"), {
+      onTopic: (topic) => {
+        const trail = trailById(topic.trail);
+        if (!trail) return false; // tema sem desafios: o link leva ao laboratório
+        openChallenge(firstOpen(trail, progress.done), "barra");
+        setTab("challenges");
+      },
+      onFree: () => openChallenge(null, "barra"),
+    });
+const showTopic = () => topicBar?.update({ step: "programar", topic: topicOfTrail(trailOf(state.challenge?.id)?.id) });
+showTopic();
 
 // ---------------------------------------------------------------------------
 // Identidade dos objetos entre análises: ids são a ordem no código e mudam quando
@@ -752,6 +769,7 @@ function showChallenge() {
   state.gradeKey = null;
   challengesPanel.show(c);
   updateChallengeBar(null);
+  showTopic();
   sendGhosts();
   if (!c) return;
   setView(c.view);
@@ -941,6 +959,10 @@ function setStatus(kind, text, pos = null) {
 
 if (group) {
   document.body.dataset.study = group;
+  // a barra fica só com o nome, sem os temas e sem a volta ao início
+  $("#vg-nav").hidden = true;
+  $(".vg-brand").removeAttribute("href");
+  $(".vg-brand").removeAttribute("title");
   if (!sync) {
     // sem gizmo e sem inserir código pela cena
     $("#lv-add").hidden = true;
@@ -993,7 +1015,7 @@ if (state.challenge) {
   saveProgress();
   showChallenge();
   setTab("challenges");
-}
+} else if (freeAsked) saveProgress(); // ao recarregar, continua sem desafio
 
 queueMicrotask(refreshEditor);
 if (hasBlockingError(state.analysis)) showBlockingError();

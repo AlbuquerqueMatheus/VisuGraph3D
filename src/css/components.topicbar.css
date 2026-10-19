@@ -1,0 +1,98 @@
+@layer components {
+/* ====== Barra comum: VisuGraph volta ao início, o tema troca de tema, Explorar | Programar ====== */
+.vg-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-height: 48px; /* altura inteira: o que vem embaixo não começa no meio de um pixel */
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--surface-line);
+  font-size: 14px;
+}
+.vg-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px 3px 4px;
+  border-radius: var(--radius-2);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vg-brand img { display: block; }
+.vg-brand[href]:hover { background: var(--surface-2); }
+
+.vg-nav { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.vg-nav[hidden] { display: none; }
+
+/* Tema: um menu com os quatro temas (e, no código vivo, o editor livre) */
+.vg-topic { position: relative; }
+.vg-topic summary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+.vg-topic summary::-webkit-details-marker { display: none; }
+.vg-topic summary::after { content: "▾"; color: var(--text-2); font-size: 11px; }
+.vg-topic summary:hover, .vg-topic[open] summary { border-color: var(--accent-color); }
+.vg-topic__kicker { color: var(--text-2); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.vg-topic__name { font-weight: 600; }
+.vg-topic__list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 230px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-1);
+}
+.vg-topic__list a { display: block; padding: 6px 10px; border-radius: var(--radius-1); font-size: 13px; }
+.vg-topic__list a:hover { background: color-mix(in oklab, var(--accent-color) 18%, transparent); }
+.vg-topic__list a[aria-current] { color: var(--accent-color); font-weight: 600; }
+.vg-topic__free { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--surface-line); }
+
+/* Passos do tema: o aberto em destaque, o que ainda não existe apagado */
+.vg-steps { display: inline-flex; }
+.vg-step {
+  position: relative;
+  margin-left: -1px;
+  padding: 4px 12px;
+  border: 1px solid var(--surface-line);
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.vg-step:first-child { margin-left: 0; border-radius: var(--radius-2) 0 0 var(--radius-2); }
+.vg-step:last-child { border-radius: 0 var(--radius-2) var(--radius-2) 0; }
+a.vg-step:hover { z-index: 1; border-color: var(--accent-color); }
+.vg-step[aria-current] { z-index: 1; border-color: var(--accent-color); background: color-mix(in oklab, var(--accent-color) 22%, var(--surface-2)); font-weight: 600; }
+.vg-step[aria-disabled="true"] { color: var(--text-2); opacity: 0.55; cursor: not-allowed; }
+
+/* Laboratórios de um tema que tem mais de um */
+.vg-labs { display: inline-flex; gap: 2px; padding-left: var(--space-2); border-left: 1px solid var(--surface-line); }
+.vg-labs > * { padding: 4px 10px; border-radius: var(--radius-2); color: var(--text-2); font-size: 13px; line-height: 1.6; white-space: nowrap; }
+.vg-labs a:hover { color: var(--text-color); background: var(--surface-2); }
+.vg-labs [aria-current] { color: var(--text-color); background: var(--surface-2); font-weight: 600; }
+
+/* No celular a barra quebra em linhas: as abas dos laboratórios começam uma linha nova */
+@media (max-width: 640px) {
+  .vg-labs { padding-left: 0; border-left: 0; }
+}
+}

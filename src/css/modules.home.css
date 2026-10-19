@@ -1,64 +1,134 @@
 @layer components {
-/* ====== Fundo com imagem e overlay só no MENU ====== */
+/* ====== Tela inicial: barra, apresentação, como funciona, temas e rodapé ====== */
 .page-home {
-  /* a imagem de fundo vem de overrides.css (arquivo em public/images) */
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-  position: relative;
-  overflow: hidden;
+  display: block; /* o body das outras páginas é flex */
+  background: var(--surface-0);
 }
-.page-home::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  z-index: -1;
+.page-home main,
+.home-top,
+.home-foot {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-inline: 24px;
 }
+.page-home h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 20px; }
 
-/* ====== Container de tela do menu ====== */
-.page-home #menu-screen {
+.home-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-block: 16px;
+}
+.home-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 1.15rem; font-weight: 700; }
+.home-brand img { display: block; }
+.home-nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.home-nav a { color: var(--text-2); padding: 6px 10px; border-radius: var(--radius-2); }
+.home-nav a:hover { color: var(--text-color); background: var(--surface-2); }
+
+/* ====== Apresentação: a proposta e uma imagem do código vivo ====== */
+.home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 48px;
+  align-items: center;
+  padding-block: 40px 56px;
+}
+.home-kicker { color: var(--accent-color); font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; }
+.home-hero h1 {
+  font-size: clamp(1.9rem, 1.2rem + 2vw, 2.7rem);
+  line-height: 1.15;
+  font-weight: 700;
+  text-wrap: balance;
+}
+.home-lead { color: var(--text-2); font-size: 1.08rem; margin-top: 16px; max-width: 34rem; }
+.home-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.home-btn {
+  display: inline-block;
+  padding: 10px 18px;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-3);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.home-btn:hover { border-color: var(--accent-color); }
+.home-btn--primary { background: var(--accent-color); border-color: var(--accent-color); color: #06202c; }
+.home-btn--primary:hover { background: color-mix(in oklab, var(--accent-color), white 18%); }
+
+.home-shot img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--surface-line);
+  border-radius: 10px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 45%);
+}
+.home-shot figcaption { color: var(--text-2); font-size: 0.9rem; margin-top: 12px; }
+
+/* ====== Como funciona: os três passos ====== */
+.home-how,
+.home-topics { padding-block: 40px; border-top: 1px solid var(--surface-line); }
+.home-steps { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: passo; }
+.home-steps li {
+  padding: 20px;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-3);
+  background: var(--surface-1);
+  counter-increment: passo;
+}
+.home-steps h3 { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; margin-bottom: 8px; }
+.home-steps h3::before {
+  content: counter(passo);
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--accent-color) 22%, var(--surface-2));
+  color: var(--accent-color);
+  font-size: 0.85rem;
+}
+.home-steps p { color: var(--text-2); }
+
+/* ====== Temas: explorar no laboratório, programar na trilha ====== */
+.topic-grid { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.topic {
   display: flex;
   flex-direction: column;
-  align-items: center;      /* centraliza horizontalmente */
-  justify-content: center;  /* centraliza verticalmente */
-  width: 100%;
-  height: 100vh;
-  text-align: center;
-  padding-bottom: 10%;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-3);
+  background: var(--surface-1);
 }
+.topic h3 { font-size: 1.15rem; }
+.topic > p { color: var(--text-2); }
+.topic__steps {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--surface-line);
+}
+.topic__steps dt { color: var(--text-2); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.topic__steps a { color: var(--accent-color); font-weight: 600; }
+.topic__steps a:hover { text-decoration: underline; }
+.topic__missing { color: var(--text-2); font-style: italic; }
+.topic__progress { color: var(--text-2); font-size: 0.9rem; margin-left: 4px; }
+.topic__progress[data-state="started"] { color: var(--text-color); }
+.topic__progress[data-state="done"] { color: var(--ok-color); }
 
-/* Tipografia da home (escopada) */
-.page-home h1 {
-  font-size: 2rem;
-  margin-bottom: 20px;
-}
+.home-foot { padding-bottom: 32px; color: var(--text-2); font-size: 0.9rem; }
+.home-foot p { padding-top: 24px; border-top: 1px solid var(--surface-line); } /* a linha na largura do conteúdo, como nas seções */
+.home-foot a { color: var(--accent-color); }
 
-/* Logo/canvas 3D do menu (proporção 1:1) */
-.page-home #logo-container {
-  width: 60vw;
-  max-width: 500px;
-  height: 60vw;
-  max-height: 500px;
-  margin-bottom: 20px;
-  background: transparent;
-  display: flex; align-items: center; justify-content: center;
+@media (max-width: 900px) {
+  .home-hero { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-top: 16px; }
+  .home-steps, .topic-grid { grid-template-columns: minmax(0, 1fr); }
 }
-.page-home #logo-canvas {
-  background: transparent;
-  width: 100%; height: 100%;
-  display: block;
+@media (max-width: 520px) {
+  .page-home main, .home-top, .home-foot { padding-inline: 16px; }
 }
-
-/* Botões do menu */
-.page-home .menu {
-  display: flex; gap: 20px; margin-top: 10px;
-}
-.page-home .menu button {
-  padding: 10px 20px; font-size: 16px;
-  background-color: #61dafb; border: none; border-radius: 4px;
-  cursor: pointer; transition: background-color .3s;
-}
-.page-home .menu button:hover { background-color: #21a1f1; }
 }

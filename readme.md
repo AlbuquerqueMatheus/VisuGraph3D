@@ -1,9 +1,9 @@
-# VisuGraph 3D
+# VisuGraph
 
-Laboratório interativo de Computação Gráfica que roda no navegador.
+Laboratório interativo de Computação Gráfica que roda no navegador, em quatro temas: transformações, câmera e projeção, luz e cor, e curvas. Cada tema tem dois passos: **Explorar**, num laboratório 2D, e **Programar**, no código vivo, com desafios corrigidos pela própria cena. A barra do alto, a mesma nos laboratórios e no código vivo, mostra o tema aberto, troca de tema e alterna os dois passos.
 
 - **Modo 3D** (`index-3d.html`): código vivo. A cena é um programa JavaScript com Three.js, e o código é a única fonte da verdade: clicar num objeto destaca as linhas que o criam, e arrastar o gizmo, mexer no painel de propriedades ou arrastar um número no código reescreve o próprio código. A aba **Matemática** mostra as matrizes e o caminho de um vértice até o pixel, e a "caixa de vidro" desenha a cena com a fórmula de Phong à mostra. A aba **Desafios** tem 10 desafios corrigidos pela própria cena, e o modo de estudo (`?estudo=controle` ou `?estudo=experimental`) compara o app com e sem a ligação entre cena e código, com um registro de uso anônimo que a página `estudo.html` junta à planilha dos testes numa linha por aluno. Tudo isso está em [docs/codigo-vivo.md](docs/codigo-vivo.md).
-- **Modo 2D** (`index-2d.html`): sistema de coordenadas e transformações (com a matriz 3×3 em coordenadas homogêneas), sistemas de cores, modelo de iluminação Phong / Blinn–Phong e curvas de Bézier (De Casteljau). Os laboratórios de coordenadas e de Phong terminam com um link para a trilha de desafios correspondente no modo 3D.
+- **Modo 2D** (`index-2d.html`): sistema de coordenadas e transformações (com a matriz 3×3 em coordenadas homogêneas), sistemas de cores, modelo de iluminação Phong / Blinn–Phong e curvas de Bézier (De Casteljau). Cada laboratório tem endereço próprio (`index-2d.html#coordenadas`, `#cores`, `#phong` e `#curvas`), e os de coordenadas e de Phong terminam com um link para a trilha de desafios correspondente no modo 3D.
 
 Todas as bibliotecas vêm do npm e são empacotadas pelo Vite: o site funciona sem CDN e pode ser publicado em qualquer subpasta (por exemplo, no GitHub Pages).
 
@@ -34,15 +34,16 @@ Os testes de ponta a ponta servem o build numa subpasta (`/visugraph3d/`), para 
 ## Estrutura
 
 ```
-index.html                    menu
+index.html                    tela inicial: os temas, cada um com o laboratório e a trilha de desafios
 index-2d.html                 modo 2D
 index-3d.html, viewport.html  modo 3D (código vivo) e o visor, que roda a cena num iframe
 estudo.html                   resumo do estudo: junta os registros de uso e a planilha dos testes
-src/js/                       código do menu e das seções do modo 2D
+src/js/                       código da tela inicial, da barra comum (a lista de temas fica em topics.js) e das seções do modo 2D
 src/lib/                      funções puras com testes: transformações 2D e 3D, modelo de Phong (2D e 3D) e o shader do visor Phong
 src/live/                     modo 3D: motor (análise do código e edições), editor, visor, painel, desafios e modo de estudo
 src/css/                      estilos (camadas: tokens, base, componentes, overrides)
-public/                       imagens e a fonte da logo (licença em public/fonts)
+src/img/                      a imagem do código vivo na tela inicial
+public/                       o ícone do site
 docs/                         documentação do modo 3D: o subconjunto do Three.js, a aba Matemática, os desafios e o modo de estudo
 tests/unit/                   testes do Vitest
 tests/e2e/                    testes do Playwright

@@ -2,20 +2,12 @@ import { readFile } from "node:fs/promises";
 import { test, expect } from "./fixtures.js";
 import { code, inPage, objectId, openLive, pasteCode, sceneValue, status, viewport } from "./live.js";
 
-test("menu carrega a logo 3D com a fonte do próprio site", async ({ page }) => {
-  const font = page.waitForResponse((res) => res.url().endsWith("fonts/helvetiker_regular.typeface.json"));
-  await page.goto("index.html");
-  expect((await font).ok()).toBe(true);
-  await expect(page.locator("#logo-canvas")).toBeVisible();
-  await expect(page.locator("#btn-3d")).toBeVisible();
-});
-
 // ---------------------------------------------------------------------------
 // Modo 3D (código vivo): o código é a fonte da verdade e a cena escreve nele.
 
-test("modo 3D: o menu abre o código vivo e a cena roda", async ({ page }) => {
+test("modo 3D: a tela inicial abre o código vivo e a cena roda", async ({ page }) => {
   await page.goto("index.html");
-  await page.click("#btn-3d");
+  await page.click("#home-start");
   await expect(page).toHaveURL(/index-3d\.html$/);
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
   await expect(status(page)).toContainText("animar() rodando");

@@ -1333,6 +1333,8 @@ window.__vgDebug = {
     obj.updateWorldMatrix(true, false);
     return toScreen(new THREE.Vector3(...vertexOf(obj, index).local).applyMatrix4(obj.matrixWorld));
   },
+  /** Onde o Three.js projeta um ponto do mundo, em coordenadas da janela do iframe. */
+  toScreen: (point) => toScreen(new THREE.Vector3(...point)),
   marker() {
     if (markerEl.style.display === "none") return null;
     const r = markerEl.getBoundingClientRect();

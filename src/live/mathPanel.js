@@ -161,7 +161,7 @@ export class MathPanel {
           "header",
           { class: "lv-props__head" },
           el("h2", { text: ctx.name || "(sem nome)" }),
-          el("p", {}, `THREE.${ctx.className} · `, this.text(() => (this.data?.camera.source === "code" ? `vista pela câmera ${this.data.camera.name || "do código"}` : "vista pela câmera do editor"))),
+          el("p", {}, `THREE.${ctx.className} · `, this.text(() => (this.data?.camera.source === "code" ? `vista pela câmera ${this.codeName(this.data.camera) || "do código"}` : "vista pela câmera do editor"))),
         ),
       );
       if (this.data) sections.push(...this.buildMatrices());
@@ -315,7 +315,13 @@ export class MathPanel {
   parentName() {
     const chain = this.data?.chain || [];
     const parent = chain[chain.length - 2];
-    return parent ? parent.name || `um ${parent.type}` : "outro objeto";
+    return parent ? this.codeName(parent) || `um ${parent.type}` : "outro objeto";
+  }
+
+  /** Nome do objeto no código (a variável), ou o name dele no Three.js. */
+  codeName(link) {
+    const id = link?.id != null ? this.context?.ids(link.id) : null;
+    return (id != null ? this.context?.nameOf?.(id) : null) || link?.name || null;
   }
 
   projectionText() {

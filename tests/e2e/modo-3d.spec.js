@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { test, expect } from "./fixtures.js";
+import { code, inPage, objectId, openLive, pasteCode, sceneValue, status, viewport } from "./live.js";
 
 test("menu carrega a logo 3D com a fonte do próprio site", async ({ page }) => {
   const font = page.waitForResponse((res) => res.url().endsWith("fonts/helvetiker_regular.typeface.json"));
@@ -11,39 +12,6 @@ test("menu carrega a logo 3D com a fonte do próprio site", async ({ page }) => 
 
 // ---------------------------------------------------------------------------
 // Modo 3D (código vivo): o código é a fonte da verdade e a cena escreve nele.
-
-const status = (page) => page.locator("#lv-status-text");
-const viewport = (page) => page.frame({ url: /viewport\.html/ });
-const code = (page) => page.locator(".cm-content").innerText();
-
-/** Abre o modo 3D e espera o código inicial rodar no visor. */
-async function openLive(page) {
-  await page.goto("index-3d.html");
-  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
-}
-
-/** Troca todo o código do editor, como se o aluno colasse um texto. */
-async function pasteCode(page, text) {
-  await page.locator(".cm-content").click();
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.locator(".cm-content").evaluate((el, value) => {
-    const data = new DataTransfer();
-    data.setData("text/plain", value);
-    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
-  }, text);
-}
-
-/** Id do objeto `name` no visor (na página recém-aberta, igual à ordem no código). */
-const objectId = async (page, name) =>
-  Number(await page.locator(".lv-object", { has: page.locator(".lv-object__name", { hasText: new RegExp(`^${name}$`) }) }).getAttribute("data-id"));
-
-const sceneValue = (page, id, path) => viewport(page).evaluate(([i, p]) => window.__vgDebug.value(i, p), [id, path]);
-
-/** Converte um ponto do iframe em coordenadas da página. */
-async function inPage(page, point) {
-  const box = await page.locator("#lv-viewport").boundingBox();
-  return { x: box.x + point.x, y: box.y + point.y };
-}
 
 test("modo 3D: o menu abre o código vivo e a cena roda", async ({ page }) => {
   await page.goto("index.html");

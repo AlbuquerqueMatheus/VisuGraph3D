@@ -187,6 +187,28 @@ O registro fica no navegador (`localStorage`) até ser exportado. Ele guarda só
 | `adicionar`, `restaurar`, `copiar`, `baixar` | usou esses botões | `tipo`, `desafio` |
 | `visibilidade` | a aba do navegador ficou visível ou escondida | `visivel` |
 
+### Resumo do estudo
+
+A página `estudo.html` junta os registros exportados e a planilha dos testes e questionários numa linha por código de sessão, pronta para o JASP, o R ou a própria planilha. Os arquivos são lidos no navegador, e nada é enviado.
+
+- **Registros de uso**: todos os `visugraph-estudo-*.json` de uma vez. A página avisa quando um arquivo não é um registro, quando o começo de um registro se perdeu (ele guarda no máximo 5000 eventos) e quando o mesmo código aparece em dois arquivos (fica o exportado por último).
+- **Planilha**, opcional: um CSV com vírgula, ou com ponto e vírgula e vírgula decimal, como o Excel em português salva. A coluna `codigo` liga cada linha ao registro, e maiúsculas, espaços e o hífen não importam. Com as notas de cada questão (`pre_1` a `pre_10` e `pos_1` a `pos_10`, de 0 a 10), as respostas do SUS (`sus_1` a `sus_10`, de 1 a 5) e as seis escalas do TLX (`tlx_mental`, `tlx_fisica`, `tlx_temporal`, `tlx_desempenho`, `tlx_esforco` e `tlx_frustracao`, de 0 a 100), a página calcula o pré e o pós (de 0 a 100), o ganho normalizado `g = (pós − pré) / (100 − pré)`, o SUS (de 0 a 100) e o TLX bruto, a média das seis escalas. Uma planilha só com os totais `pre`, `pos`, `sus` e `tlx` também serve, e `ordem` (AB ou BA) diz qual versão do teste veio antes. Respostas que faltam ou fogem da escala, códigos que estão só na planilha ou só nos registros e grupos que não batem (vale o do registro) aparecem nos avisos.
+- A página mostra a média, o desvio padrão e o número de participantes de cada medida por grupo, e as colunas principais de cada sessão. **Baixar CSV** traz todas as colunas, com vírgula e ponto decimal; **Baixar CSV para o Excel** usa ponto e vírgula e vírgula decimal.
+
+| Coluna | O que é |
+| --- | --- |
+| `codigo`, `grupo` | o código da sessão e o grupo do registro |
+| `ordem`, `pre`, `pos`, `g`, `sus`, `tlx` | da planilha, quando houver |
+| `minutos` | a duração da sessão, até o último evento |
+| `desafios`, `dicas` | os desafios feitos e a soma das dicas abertas antes de concluir cada um |
+| `tempo_<desafio>` | os segundos com o desafio aberto e a página à vista, somados até concluir (vazio se não fez) |
+| `dicas_<desafio>` | a dica mais adiantada aberta antes de concluir, de 0 a 3 |
+| `execucoes`, `erros`, `digitacao` | quantas vezes o código rodou e deu erro, e quanto o aluno digitou (as rajadas contam pelo `n`) |
+| `selecao`, `gizmo`, `painel`, `arraste_numero`, `adicionar` | quantas vezes o aluno selecionou um objeto e mudou a cena por cada caminho |
+| `aba_math`, `math_hover`, `vidro`, `sonda` | o uso da aba Matemática e da caixa de vidro |
+| `saidas` | quantas vezes a aba do navegador ficou escondida |
+| `eventos`, `inicio`, `exportado` | para conferir o arquivo |
+
 ## Avisos no editor
 
 O editor marca na própria linha o que foge do subconjunto:
@@ -240,10 +262,11 @@ src/live/runtime/  o visor (roda dentro do iframe): execução, gizmo, seleção
 src/live/app.js    liga editor, visor (bridge.js, via postMessage) e as abas do painel: Propriedades
                    (inspector.js), Matemática (mathPanel.js, com as contas de mathModel.js) e
                    Desafios (challengesPanel.js, com os desafios e a correção de challenges.js)
-src/live/study.js  o modo de estudo e o registro de uso
+src/live/study.js  o modo de estudo e o registro de uso; studySummary.js e studyPage.js, o resumo
+                   do estudo (estudo.html)
 src/lib/           as contas 3D da aba Matemática e da caixa de vidro (transform3d.js e phong3d.js)
 ```
 
 A cada mudança no texto, `analyze()` lê o código e gera um id para cada `new THREE.X(...)`, com os trechos que o criam e alteram e, para cada propriedade, o literal que a define ou o motivo de não ser editável. `instrument()` acrescenta ao código, sem mudar as linhas, o registro de cada objeto criado e a verificação de tempo em cada laço. Uma edição pela cena vira `planEdit()` ou `planTransform()`, que devolvem as trocas de texto aplicadas no editor como uma transação comum (por isso `Ctrl+Z` desfaz). Durante um arraste, o visor muda a propriedade direto e o código é atualizado sem rodar; ao soltar, o código roda uma vez para confirmar que a cena é o que ele diz.
 
-Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node, e o dos desafios resolve cada um com a cena de verdade), e os da página em `tests/e2e/modo-3d.spec.js`, `matematica.spec.js` (as contas do painel contra o Three.js e contra os pixels da tela), `desafios.spec.js` e `estudo.spec.js`.
+Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node, e o dos desafios resolve cada um com a cena de verdade), e os da página em `tests/e2e/modo-3d.spec.js`, `matematica.spec.js` (as contas do painel contra o Three.js e contra os pixels da tela), `desafios.spec.js`, `estudo.spec.js` e `resumo-estudo.spec.js`.

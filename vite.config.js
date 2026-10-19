@@ -29,6 +29,7 @@ export default defineConfig({
         twoD: page("./index-2d.html"),
         threeD: page("./index-3d.html"),
         viewport: page("./viewport.html"),
+        study: page("./estudo.html"),
       },
       output: {
         codeSplitting: {

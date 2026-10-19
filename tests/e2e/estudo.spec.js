@@ -58,14 +58,17 @@ test("estudo: no grupo experimental tudo continua ligado, e cada sessão tem o s
   await expect(page.locator(".cm-line.cm-vg-selected").first()).toContainText("const cubo = new THREE.Mesh(");
   await expect.poll(async () => (await viewport(page).evaluate(() => window.__vgDebug.info())).gizmo).toBe("translate");
 
-  // recarregar continua a mesma sessão; "Nova sessão" começa outra
+  // recarregar continua a mesma sessão; "Nova sessão" começa outra, com o código inicial
   await page.reload();
   await expect(page.locator(".lv-study strong")).toHaveText(first);
+  const runId = (await viewport(page).evaluate(() => window.__vgDebug.info())).runId;
   await page.click(".lv-study button:has-text('Nova sessão')");
   await expect(page.locator(".lv-study strong")).not.toHaveText(first);
+  await expect.poll(async () => (await viewport(page).evaluate(() => window.__vgDebug.info())).runId).toBeGreaterThan(runId);
+  await expect(status(page), "o aviso com o código da sessão fica na tela").toContainText("Nova sessão:");
   const log = await exportLog(page);
   expect(log.grupo).toBe("experimental");
-  expect(log.eventos.map((e) => e.evento)).toEqual(["inicio"]);
+  expect(log.eventos.map((e) => e.evento)).toEqual(["inicio", "execucao"]);
 });
 
 test("sem ?estudo na URL não há faixa nem registro", async ({ page }) => {

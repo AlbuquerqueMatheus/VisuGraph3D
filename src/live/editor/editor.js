@@ -295,6 +295,8 @@ function completions(host) {
 
 // ---------------------------------------------------------------------------
 
+const extensionsOf = new WeakMap(); // editor → extensões, para trocar de documento
+
 /**
  * Cria o editor. `host` fornece analysis() (análise do texto atual) e recebe os eventos:
  * onChange(update), onCursor(pos), onHoverPos(pos), onScrub(number, value), onScrubEnd(), onRun().
@@ -304,54 +306,58 @@ export function createEditor(parent, doc, host) {
     host.onRun?.();
     return true;
   };
-  const view = new EditorView({
-    parent,
-    state: EditorState.create({
-      doc,
-      extensions: [
-        basicSetup,
-        javascript(),
-        javascriptLanguage.data.of({ autocomplete: completions(host) }),
-        theme,
-        EditorView.lineWrapping,
-        syntaxHighlighting(highlight),
-        lintGutter(),
-        highlightField,
-        numbersField,
-        mathField,
-        scrubPlugin(host),
-        hoverPlugin(host),
-        hoverTooltip((view, pos) => {
-          const analysis = host.analysis();
-          const info = analysis && analysis.code.length === view.state.doc.length ? explain(analysis, pos) : null;
-          if (!info) return null;
-          return {
-            pos: info.from,
-            end: info.to,
-            above: true,
-            create() {
-              const dom = document.createElement("div");
-              const title = dom.appendChild(document.createElement("div"));
-              title.className = "cm-vg-tip-title";
-              title.textContent = info.title;
-              dom.appendChild(document.createElement("div")).textContent = info.text;
-              return { dom };
-            },
-          };
-        }),
-        keymap.of([
-          { key: "Mod-Enter", run: runKey },
-          { key: "Mod-s", run: runKey, preventDefault: true },
-        ]),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) host.onChange?.(update);
-          if (update.selectionSet && !update.docChanged) host.onCursor?.(update.state.selection.main.head);
-        }),
-        EditorView.contentAttributes.of({ "aria-label": "Código da cena", spellcheck: "false" }),
-      ],
+  const extensions = [
+    basicSetup,
+    javascript(),
+    javascriptLanguage.data.of({ autocomplete: completions(host) }),
+    theme,
+    EditorView.lineWrapping,
+    syntaxHighlighting(highlight),
+    lintGutter(),
+    highlightField,
+    numbersField,
+    mathField,
+    scrubPlugin(host),
+    hoverPlugin(host),
+    hoverTooltip((view, pos) => {
+      const analysis = host.analysis();
+      const info = analysis && analysis.code.length === view.state.doc.length ? explain(analysis, pos) : null;
+      if (!info) return null;
+      return {
+        pos: info.from,
+        end: info.to,
+        above: true,
+        create() {
+          const dom = document.createElement("div");
+          const title = dom.appendChild(document.createElement("div"));
+          title.className = "cm-vg-tip-title";
+          title.textContent = info.title;
+          dom.appendChild(document.createElement("div")).textContent = info.text;
+          return { dom };
+        },
+      };
     }),
-  });
+    keymap.of([
+      { key: "Mod-Enter", run: runKey },
+      { key: "Mod-s", run: runKey, preventDefault: true },
+    ]),
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged) host.onChange?.(update);
+      if (update.selectionSet && !update.docChanged) host.onCursor?.(update.state.selection.main.head);
+    }),
+    EditorView.contentAttributes.of({ "aria-label": "Código da cena", spellcheck: "false" }),
+  ];
+  const view = new EditorView({ parent, state: EditorState.create({ doc, extensions }) });
+  extensionsOf.set(view, extensions);
   return view;
+}
+
+/**
+ * Troca o texto inteiro por outro documento (o código de outro desafio), com o histórico de
+ * desfazer zerado. Não passa por `onChange`: quem troca analisa e roda o código novo.
+ */
+export function resetDoc(view, doc) {
+  view.setState(EditorState.create({ doc, extensions: extensionsOf.get(view) }));
 }
 
 /** Destaca as linhas do objeto selecionado e as do objeto sob o mouse. */

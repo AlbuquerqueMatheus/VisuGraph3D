@@ -84,8 +84,8 @@
   min-height: 0;
 }
 .lv-code, .lv-view, .lv-inspector { min-width: 0; min-height: 0; }
-.lv-code { border-right: 1px solid var(--lv-line); }
-#lv-editor { height: 100%; }
+.lv-code { border-right: 1px solid var(--lv-line); display: flex; flex-direction: column; }
+#lv-editor { flex: 1 1 0; min-height: 0; }
 #lv-editor .cm-editor { height: 100%; }
 
 .lv-view { position: relative; background: #15171c; }
@@ -268,6 +268,69 @@
 .lv-terms dd { font-family: ui-monospace, monospace; text-align: right; white-space: nowrap; border-radius: 3px; padding: 0 2px; }
 .lv-terms--sum { border-top: 1px solid var(--lv-line); padding-top: 4px; }
 .lv-terms--sum dd { color: var(--text-color); font-weight: 600; }
+
+/* ====== Aba Desafios e a faixa sobre o código ====== */
+.lv-codebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--lv-line);
+  background: color-mix(in oklab, var(--accent-color) 12%, var(--lv-panel));
+  font-size: 12px;
+  color: var(--lv-text-2);
+}
+.lv-codebar strong { color: var(--text-color); font-weight: 600; }
+.lv-codebar .lv-link { margin-left: auto; }
+.lv-codebar[data-ok="true"] { background: color-mix(in oklab, var(--lv-ok) 16%, var(--lv-panel)); }
+.lv-codebar[data-ok="true"] span { color: var(--lv-ok); }
+.lv-challenges code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; padding: 0 3px; border-radius: 3px; background: #ffffff12; white-space: pre-wrap; }
+.lv-trail { display: grid; gap: 4px; border-top: 1px solid var(--lv-line); padding-top: var(--space-2); }
+.lv-trail h3, .lv-ch__sub { font-size: 13px; font-weight: 600; }
+.lv-trail__list { list-style: none; display: grid; gap: 2px; }
+.lv-trail__item {
+  display: grid;
+  grid-template-columns: 1.2em minmax(0, 1fr);
+  column-gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+}
+.lv-trail__item:hover { background: var(--lv-panel-2); border-color: var(--lv-line); }
+.lv-trail__mark { grid-row: span 2; color: var(--lv-text-2); }
+.lv-trail__item[data-done="true"] .lv-trail__mark { color: var(--lv-ok); }
+.lv-trail__title { font-size: 13px; }
+.lv-trail__topic { font-size: 11px; color: var(--lv-text-2); }
+.lv-ch__nav { font-size: 12px; }
+.lv-ch__head { display: grid; gap: 2px; }
+.lv-ch__kicker { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--lv-text-2); }
+.lv-challenges .lv-ch__title { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: 0; text-transform: none; color: var(--text-color); }
+.lv-ch__topic { font-size: 12px; color: var(--accent-color); }
+.lv-ch__statement { line-height: 1.5; }
+.lv-results { list-style: none; display: grid; gap: 4px; }
+.lv-result { display: grid; grid-template-columns: 1.2em minmax(0, 1fr); gap: 6px; font-size: 13px; }
+.lv-result__mark { color: var(--lv-text-2); font-weight: 700; }
+.lv-result[data-ok="true"] .lv-result__mark { color: var(--lv-ok); }
+.lv-result[data-ok="false"] .lv-result__mark { color: var(--lv-error); }
+.lv-result__seen { color: var(--lv-text-2); }
+.lv-ch__done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in oklab, var(--lv-ok) 50%, transparent);
+  border-radius: var(--radius-2);
+  background: color-mix(in oklab, var(--lv-ok) 12%, var(--lv-panel-2));
+}
+.lv-ch__done strong { color: var(--lv-ok); }
+.lv-hints { display: grid; gap: 6px; justify-items: start; }
+.lv-hints__list { display: grid; gap: 6px; padding-left: 18px; font-size: 13px; line-height: 1.45; }
 
 /* ====== Status ====== */
 .lv-status {

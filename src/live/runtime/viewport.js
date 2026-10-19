@@ -16,6 +16,7 @@ import { normalize, dot } from "../../lib/phong.js";
 import { shadePoint } from "../../lib/phong3d.js";
 import { localMatrix, objectMath, projectionMatrix, viewOf, worldMatrix } from "../mathModel.js";
 import { collectLights, createGlassMaterial, glassTerms, setLightUniforms, syncGlass } from "./glass.js";
+import { sceneFacts } from "./facts.js";
 
 const LOOP_LIMIT_MS = { run: 2000, frame: 1000 };
 // O navegador aceita uns 16 contextos WebGL por página e derruba o mais antigo (o do visor)
@@ -89,6 +90,11 @@ for (const box of [selectBox, hoverBox]) {
   overlay.add(box);
 }
 hoverBox.material.opacity = 0.7;
+
+// Contornos tracejados do alvo de um desafio, por cima de tudo: aparecem mesmo com o objeto
+// dentro deles.
+const ghosts = new THREE.Group();
+overlay.add(ghosts);
 
 const gizmo = new TransformControls(editorCamera, canvas);
 gizmo.setTranslationSnap(0.1);
@@ -1153,6 +1159,49 @@ function showArrows(point, result) {
 }
 
 // ---------------------------------------------------------------------------
+// Desafios: os fatos que a correção confere e o contorno do alvo
+
+/** Fatos dos objetos da execução na tela, da câmera do código e das luzes acesas. */
+function factsInfo(msg) {
+  const run = state.current;
+  if (!run) return { type: "facts", seq: msg.seq, runId: null };
+  const entries = [...run.registry].map(([id, list]) => [id, list[0]]);
+  return { type: "facts", seq: msg.seq, runId: run.id, ...sceneFacts({ scene: run.scene, camera: run.camera, entries, idOf: (obj) => run.idOf.get(obj) }) };
+}
+
+function setGhosts(shapes) {
+  for (const line of [...ghosts.children]) {
+    line.geometry.dispose();
+    line.material.dispose();
+    ghosts.remove(line);
+  }
+  for (const shape of shapes || []) {
+    let geometry = null;
+    if (shape.kind === "box") {
+      const box = new THREE.BoxGeometry(...shape.size);
+      geometry = new THREE.EdgesGeometry(box);
+      box.dispose();
+    } else if (shape.kind === "ring") {
+      const points = [];
+      for (let i = 0; i <= 96; i++) {
+        const a = (i / 96) * Math.PI * 2;
+        points.push(new THREE.Vector3(Math.cos(a) * shape.radius, 0, Math.sin(a) * shape.radius));
+      }
+      geometry = new THREE.BufferGeometry().setFromPoints(points);
+    }
+    if (!geometry) continue;
+    const material = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.12, gapSize: 0.08, transparent: true, opacity: 0.85, depthTest: false });
+    const line = shape.kind === "box" ? new THREE.LineSegments(geometry, material) : new THREE.Line(geometry, material);
+    line.computeLineDistances();
+    line.matrixAutoUpdate = false;
+    if (shape.matrix) line.matrix.fromArray(columnMajor(shape.matrix));
+    else if (shape.center) line.matrix.makeTranslation(...shape.center);
+    line.renderOrder = 3;
+    ghosts.add(line);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Desenho
 
 function activeCamera() {
@@ -1290,6 +1339,12 @@ window.addEventListener("message", (event) => {
       if (msg.clear) clearProbe();
       else if (msg.x != null) setProbeAt(msg.x, msg.y);
       break;
+    case "facts":
+      post(factsInfo(msg));
+      break;
+    case "ghost":
+      setGhosts(msg.shapes);
+      break;
   }
 });
 
@@ -1344,6 +1399,8 @@ window.__vgDebug = {
   },
   probe: () => lastProbe,
   glass: () => state.glass,
+  /** Os contornos de alvo na tela: tipo e matriz de mundo (linha a linha) de cada um. */
+  ghosts: () => ghosts.children.map((g) => ({ kind: g.isLineSegments ? "box" : "ring", matrix: fromColumnMajor(g.matrixWorld.elements) })),
 };
 
 function toScreen(p) {

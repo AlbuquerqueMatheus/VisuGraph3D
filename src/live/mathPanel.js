@@ -12,7 +12,7 @@ import { toBytes } from "../lib/phong3d.js";
 const AXES = ["x", "y", "z"];
 const AXIS_INDEX = { X: 0, Y: 1, Z: 2 };
 
-const el = (tag, attrs = {}, ...children) => {
+export const el = (tag, attrs = {}, ...children) => {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (v == null || v === false) continue;
@@ -36,7 +36,7 @@ const maxDiff = (a, b) => Math.max(...a.flat().map((x, i) => Math.abs(x - b.flat
 const LIGHT_LABEL = { ambient: "Ambiente", hemisphere: "Hemisfério", directional: "Direcional", point: "Pontual", spot: "Holofote" };
 
 /** Uma matriz 4×4 cujos números são atualizados no lugar (o mouse não perde o destaque). */
-class MatrixView {
+export class MatrixView {
   constructor(label) {
     this.cells = [];
     const grid = el("div", { class: "lv-mat__grid", role: "table", "aria-label": label });

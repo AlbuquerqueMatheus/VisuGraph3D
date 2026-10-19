@@ -144,7 +144,8 @@ export function createGlassMaterial() {
 }
 
 const srgb = (color) => (color && color.isColor ? color.getRGB({ r: 0, g: 0, b: 0 }, THREE.SRGBColorSpace) : null);
-const rgbArray = (color) => {
+/** Cor do Three.js como [r, g, b] em sRGB (os números escritos no código), ou undefined. */
+export const rgbArray = (color) => {
   const c = srgb(color);
   return c ? [c.r, c.g, c.b] : undefined;
 };

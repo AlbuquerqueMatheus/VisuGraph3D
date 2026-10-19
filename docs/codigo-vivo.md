@@ -2,13 +2,13 @@
 
 No modo 3D (`index-3d.html`) a cena é um programa JavaScript com Three.js, e o código é a única fonte da verdade: o que aparece no visor é exatamente o que o código diz. Tudo o que se faz pela cena (arrastar o gizmo, mexer no painel, arrastar um número) vira uma edição no próprio texto, e cada edição no texto aparece na cena.
 
-Esta página descreve o subconjunto do Three.js que o VisuGraph entende, o que pode ser editado pela cena e o que só pode ser editado pelo código.
+Esta página descreve o subconjunto do Three.js que o VisuGraph entende, o que pode ser editado pela cena e o que só pode ser editado pelo código, e também a aba Matemática, os desafios e o modo de estudo.
 
 ## A página
 
 - **Código** (à esquerda): editor com destaque de sintaxe, autocompletar (`Ctrl+Espaço`) e explicações ao passar o mouse sobre uma palavra (`THREE.Mesh`, `roughness`, `animar`…).
 - **Visor** (no centro): a cena rodando. Clique num objeto para selecioná-lo; as linhas que o criam e alteram ficam destacadas no código. No sentido contrário, o objeto da linha onde está o cursor (ou o mouse) fica destacado no visor.
-- **Painel** (à direita): a lista de objetos e as propriedades do objeto selecionado.
+- **Painel** (à direita), em três abas: **Propriedades** (a lista de objetos e as propriedades do objeto selecionado), **Matemática** (as contas que põem o objeto selecionado na tela) e **Desafios**.
 - **Barra de status** (embaixo): o resultado da última execução ou o erro, com um link para a linha.
 
 O código roda sozinho 300 ms depois que você para de digitar. `Ctrl+Enter` (ou `Ctrl+S`) roda na hora, e **↻ Rodar** roda de novo e zera o tempo da animação. Se o código tiver um erro, a cena anterior continua no visor até o erro ser corrigido.
@@ -103,6 +103,90 @@ Quando o valor de uma propriedade depende de algo que a cena não consegue reesc
 | O objeto é criado dentro de um laço, função, `if` ou de `animar()` | `for (…) { cena.add(new THREE.Mesh(…)) }` |
 | O objeto não está numa variável | `cena.add(new THREE.Mesh(…))` |
 
+## A aba Matemática
+
+Com um objeto selecionado, a aba **Matemática** mostra as contas que levam esse objeto até a tela, com os números da cena como ela está agora:
+
+- **Matriz de modelo** `M = T · R · S`, que leva o objeto do espaço dele para o lugar na cena. **Ver T, R e S separadas** mostra os três fatores, e **R eixo por eixo** mostra a rotação como o produto das rotações em torno de x, y e z, na ordem de `rotation.order`.
+- **Matriz de mundo** `Mundo = M_pai · M`, quando o objeto está dentro de outro (num `Group`, por exemplo).
+- **Visão** `V = (mundo da câmera)⁻¹` e **Projeção** `P` (perspectiva ou ortográfica), da câmera que o visor está usando.
+- **Do vértice ao pixel**: um vértice da geometria (◀ e ▶ trocam de vértice) passando por `M`, `V` e `P`, pela divisão por `w` e até o pixel. O visor marca esse vértice, e a última linha diz se o Three.js chega nas mesmas matrizes e no mesmo pixel.
+
+Cada número sabe de quais literais do código ele depende: passar o mouse num número marca esses literais no editor, e passar o mouse num literal do código acende os números que dependem dele.
+
+**Caixa de vidro.** Em **Iluminação**, os botões **Phong** e **Blinn-Phong** trocam o desenho de todas as malhas por um shader que faz só estas contas, pixel a pixel:
+
+```
+I = Ke + Σ Kd ⊙ L_ambiente + Σⱼ [ Kd ⊙ Lⱼ · max(0, n·lⱼ) + Ks ⊙ Lⱼ · max(0, rⱼ·v)ⁿ ]
+```
+
+com `r = 2(n·l)n − l` (no Blinn-Phong, `max(0, n·h)ⁿ` com `h = (l + v) / |l + v|`) e `Lⱼ = cor × intensidade ÷ π` (o Three.js divide por π para a intensidade ser física). Clicar num ponto de um objeto mostra a conta daquele pixel, luz por luz, até a cor final. As cores entram como estão no código, sem correção de gama nem tone mapping, então o pixel na tela é o número da conta; os testes de ponta a ponta conferem isso. `MeshStandardMaterial` e `MeshPhysicalMaterial` entram como um Phong aproximado, `MeshBasicMaterial` não é iluminado e as texturas ficam de fora. **Desligada** volta ao desenho do Three.js.
+
+## Desafios
+
+A aba **Desafios** tem 10 desafios em três trilhas. Cada desafio troca o código do editor por uma cena pronta e pede uma mudança nela.
+
+| Trilha | Desafios | Continua o laboratório 2D |
+| --- | --- | --- |
+| Transformações e matrizes | translação, rotação em radianos, escala e centro, hierarquia (pai e filho), matriz de modelo | Coordenadas |
+| Câmera e projeção | `lookAt`, campo de visão | |
+| Luz e cor (Phong) | luz difusa (`n·l`), especular (o expoente `n`), cor canal a canal | Modelo Phong (a trilha liga a caixa de vidro) |
+
+- **A correção olha a cena, não o texto.** A cada execução, o visor conta à correção como a cena está (posições de mundo, caixas, matrizes, câmera, luzes e materiais), e cada verificação aparece com o que a cena tem, como "(está em (0,00; 0,50; 0,00))". Vale qualquer caminho até o resultado: o código, o gizmo ou o painel. A faixa acima do código mostra o desafio aberto e quantas verificações já passaram.
+- **Contornos tracejados** mostram no visor onde um objeto tem de ficar, nos desafios em que isso ajuda. Os desafios de câmera e de luz abrem pela **Câmera do código**.
+- **Dicas**: três por desafio, uma de cada vez. A última é a resposta.
+- **Código e progresso**: cada desafio guarda o próprio código no navegador, e **Restaurar exemplo** volta ao código inicial dele (`Ctrl+Z` desfaz). **← Sair do desafio** volta ao código livre, que fica guardado à parte. Os desafios feitos ficam marcados, e **Próximo** segue a trilha e depois as outras.
+- **Links**: `index-3d.html?trilha=matriz`, `?trilha=camera` e `?trilha=phong` abrem o primeiro desafio ainda não feito da trilha. Os laboratórios de coordenadas e de Phong do modo 2D terminam com esses links. O parâmetro sai da URL ao abrir, então recarregar a página volta ao desafio que estava aberto.
+
+## Modo de estudo
+
+Para comparar o código vivo com um editor comum numa pesquisa, a página tem dois grupos, escolhidos pela URL:
+
+- `index-3d.html?estudo=experimental`: tudo ligado, como no uso normal.
+- `index-3d.html?estudo=controle`: o mesmo app, e o código continua rodando a cada mudança, mas sem a ligação entre a cena e o código. Não há gizmo nem **+ Adicionar**, o painel de propriedades só mostra os valores, os números do código não se arrastam e nada se acende entre o código, o visor e a aba Matemática. A aba Matemática, a caixa de vidro e os desafios são os mesmos.
+
+Os parâmetros se combinam: `index-3d.html?estudo=controle&trilha=matriz` abre o grupo controle já no primeiro desafio da trilha.
+
+No modo de estudo, uma faixa no topo mostra o grupo e o **código da sessão** (como `K7QM-2XPA`), que liga o registro ao questionário do aluno sem identificar ninguém. **Exportar registro** baixa `visugraph-estudo-<código>.json`. **Nova sessão**, para o próximo aluno no mesmo computador, começa um registro com outro código e apaga o progresso e o código guardados; se havia um desafio aberto, a página volta ao primeiro desafio da mesma trilha. Exporte antes: o registro anterior sai do navegador.
+
+O registro fica no navegador (`localStorage`) até ser exportado. Ele guarda só o tipo de cada evento, alguns detalhes e o tempo `t` em milissegundos desde o início da sessão: nunca o código, nomes ou dados pessoais. Eventos em rajada (digitar, passar o mouse na aba Matemática, erros seguidos) viram um só, com a contagem em `n` e o tempo do último em `ate`.
+
+```json
+{
+ "formato": "visugraph-estudo/1",
+ "sessao": "K7QM-2XPA",
+ "grupo": "controle",
+ "inicio": "2026-10-20T13:00:00.000Z",
+ "eventos": [
+  { "t": 0, "evento": "inicio" },
+  { "t": 1840, "evento": "execucao", "ok": true, "objetos": 3, "animar": false },
+  { "t": 52310, "evento": "desafio.concluir", "id": "posicao", "segundos": 48.2, "dicas": 1 }
+ ],
+ "exportado": "2026-10-20T14:35:00.000Z"
+}
+```
+
+| Evento | Quando | Detalhes |
+| --- | --- | --- |
+| `inicio` | a sessão começa | |
+| `execucao` | o código rodou | `ok`, `objetos`, `animar` |
+| `erro` | o código não rodou | `origem` (`execucao`, `sintaxe`, `subconjunto`), `fase`, `tipo`, `laco` |
+| `digitacao` | o aluno digitou no editor | `n`, `ate` |
+| `rodar` | rodou na mão, pelo botão ou pelo atalho | `atalho` |
+| `arraste_numero` | arrastou um número no código | `chave` |
+| `gizmo`, `painel` | mudou a cena pelo gizmo ou pelo painel | `prop`, `chave` |
+| `selecao` | selecionou um objeto | `origem` (`visor` ou `lista`), `tipo` |
+| `aba`, `vista`, `animar` | trocou de aba ou de câmera, pausou ou tocou a animação | `aba`, `vista`, `tocando` |
+| `vidro`, `sonda` | ligou a caixa de vidro, mediu um pixel | `modelo`, `suportado`, `material` |
+| `math.hover`, `math.factors`, `math.vertex` | usou a aba Matemática | `keys`, `on`, `index` |
+| `desafio.abrir` | abriu um desafio | `id`, `origem` (`trilha`, `lista`, `proximo`, `retomar`, `nova_sessao`) |
+| `desafio.dica` | pediu uma dica | `id`, `n` |
+| `desafio.conferir` | o resultado da correção mudou | `id`, `ok`, `passou`, `total` |
+| `desafio.concluir` | fez o desafio pela primeira vez | `id`, `segundos`, `dicas` |
+| `desafio.sair` | saiu de um desafio | `id`, `feito` |
+| `adicionar`, `restaurar`, `copiar`, `baixar` | usou esses botões | `tipo`, `desafio` |
+| `visibilidade` | a aba do navegador ficou visível ou escondida | `visivel` |
+
 ## Avisos no editor
 
 O editor marca na própria linha o que foge do subconjunto:
@@ -151,10 +235,15 @@ O gizmo anda em passos de 0,1 (mover e escalar) e de 5° (girar).
 src/live/engine/   motor sem DOM, com testes: análise do código (Acorn), mapa objeto↔código,
                    planos de edição (patches), instrumentação e trechos prontos
 src/live/editor/   editor CodeMirror 6: destaque das linhas, números arrastáveis, explicações
-src/live/runtime/  o visor (roda dentro do iframe): execução, gizmo, seleção e proteção contra laços
-src/live/app.js    liga editor, visor (bridge.js, via postMessage) e painel (inspector.js)
+src/live/runtime/  o visor (roda dentro do iframe): execução, gizmo, seleção, proteção contra laços,
+                   o shader caixa de vidro (glass.js) e os fatos da cena para a correção (facts.js)
+src/live/app.js    liga editor, visor (bridge.js, via postMessage) e as abas do painel: Propriedades
+                   (inspector.js), Matemática (mathPanel.js, com as contas de mathModel.js) e
+                   Desafios (challengesPanel.js, com os desafios e a correção de challenges.js)
+src/live/study.js  o modo de estudo e o registro de uso
+src/lib/           as contas 3D da aba Matemática e da caixa de vidro (transform3d.js e phong3d.js)
 ```
 
 A cada mudança no texto, `analyze()` lê o código e gera um id para cada `new THREE.X(...)`, com os trechos que o criam e alteram e, para cada propriedade, o literal que a define ou o motivo de não ser editável. `instrument()` acrescenta ao código, sem mudar as linhas, o registro de cada objeto criado e a verificação de tempo em cada laço. Uma edição pela cena vira `planEdit()` ou `planTransform()`, que devolvem as trocas de texto aplicadas no editor como uma transação comum (por isso `Ctrl+Z` desfaz). Durante um arraste, o visor muda a propriedade direto e o código é atualizado sem rodar; ao soltar, o código roda uma vez para confirmar que a cena é o que ele diz.
 
-Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node), e os da página em `tests/e2e/modo-3d.spec.js`.
+Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node, e o dos desafios resolve cada um com a cena de verdade), e os da página em `tests/e2e/modo-3d.spec.js`, `matematica.spec.js` (as contas do painel contra o Three.js e contra os pixels da tela), `desafios.spec.js` e `estudo.spec.js`.

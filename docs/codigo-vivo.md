@@ -147,7 +147,7 @@ Para comparar o código vivo com um editor comum numa pesquisa, a página tem do
 
 Os parâmetros se combinam: `index-3d.html?estudo=controle&trilha=matriz` abre o grupo controle já no primeiro desafio da trilha.
 
-No modo de estudo, uma faixa no topo mostra o grupo e o **código da sessão** (como `K7QM-2XPA`), que liga o registro ao questionário do aluno sem identificar ninguém. **Exportar registro** baixa `visugraph-estudo-<código>.json`. **Nova sessão**, para o próximo aluno no mesmo computador, começa um registro com outro código e apaga o progresso e o código guardados; se havia um desafio aberto, a página volta ao primeiro desafio da mesma trilha. Exporte antes: o registro anterior sai do navegador.
+No modo de estudo, uma faixa no topo mostra o grupo e o **código da sessão** (como `K7QM-2XPA`), que liga o registro ao questionário do aluno sem identificar ninguém. **Exportar registro** baixa `visugraph-estudo-<código>.json`. **Nova sessão**, para o próximo aluno no mesmo computador, começa um registro com outro código, apaga o progresso e o código guardados e recarrega a página, que volta como recém-aberta: sem desafio aberto, pela câmera do editor e sem a caixa de vidro. Exporte antes: o registro anterior sai do navegador. A primeira sessão num navegador também começa sem o progresso e o código de quem usou o VisuGraph nele antes.
 
 O registro fica no navegador (`localStorage`) até ser exportado. Ele guarda só o tipo de cada evento, alguns detalhes e o tempo `t` em milissegundos desde o início da sessão: nunca o código, nomes ou dados pessoais. Eventos em rajada (digitar, passar o mouse na aba Matemática, erros seguidos) viram um só, com a contagem em `n` e o tempo do último em `ate`.
 
@@ -179,7 +179,7 @@ O registro fica no navegador (`localStorage`) até ser exportado. Ele guarda só
 | `aba`, `vista`, `animar` | trocou de aba ou de câmera, pausou ou tocou a animação | `aba`, `vista`, `tocando` |
 | `vidro`, `sonda` | ligou a caixa de vidro, mediu um pixel | `modelo`, `suportado`, `material` |
 | `math.hover`, `math.factors`, `math.vertex` | usou a aba Matemática | `keys`, `on`, `index` |
-| `desafio.abrir` | abriu um desafio | `id`, `origem` (`trilha`, `lista`, `proximo`, `retomar`, `nova_sessao`) |
+| `desafio.abrir` | abriu um desafio | `id`, `origem` (`trilha`, `lista`, `proximo`, `retomar`) |
 | `desafio.dica` | pediu uma dica | `id`, `n` |
 | `desafio.conferir` | o resultado da correção mudou | `id`, `ok`, `passou`, `total` |
 | `desafio.concluir` | fez o desafio pela primeira vez | `id`, `segundos`, `dicas` |

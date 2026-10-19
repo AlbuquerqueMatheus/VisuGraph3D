@@ -1,7 +1,7 @@
 // Modo de estudo: o grupo controle perde só a ligação entre a cena e o código.
 import { readFile } from "node:fs/promises";
 import { test, expect } from "./fixtures.js";
-import { objectId, pasteCode, status, viewport } from "./live.js";
+import { code, objectId, openLive, pasteCode, status, viewport } from "./live.js";
 
 async function openStudy(page, group) {
   await page.goto(`index-3d.html?estudo=${group}`);
@@ -63,16 +63,38 @@ test("estudo: no grupo experimental tudo continua ligado, e cada sessão tem o s
   await expect.poll(async () => (await viewport(page).evaluate(() => window.__vgDebug.info())).gizmo).toBe("translate");
 
   // recarregar continua a mesma sessão; "Nova sessão" começa outra, com o código inicial
+  await pasteCode(page, "const cena = new THREE.Scene();\nconst bola = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshNormalMaterial());\ncena.add(bola);");
+  await expect(status(page)).toContainText("Cena atualizada · 1 objeto");
   await page.reload();
   await expect(page.locator(".lv-study strong")).toHaveText(first);
-  const runId = (await viewport(page).evaluate(() => window.__vgDebug.info())).runId;
+  expect(await code(page)).toContain("const bola");
   await page.click(".lv-study button:has-text('Nova sessão')");
-  await expect(page.locator(".lv-study strong")).not.toHaveText(first);
-  await expect.poll(async () => (await viewport(page).evaluate(() => window.__vgDebug.info())).runId).toBeGreaterThan(runId);
-  await expect(status(page), "o aviso com o código da sessão fica na tela").toContainText("Nova sessão:");
+  await expect(status(page), "o aviso com o código da sessão fica na tela").toContainText("Nova sessão:", { timeout: 30_000 });
+  const second = (await page.locator(".lv-study strong").innerText()).trim();
+  expect(second).not.toBe(first);
+  await expect(status(page)).toContainText(second);
+  expect(await code(page)).toContain("Tudo o que aparece no visor vem deste código");
+  await expect.poll(async () => (await viewport(page).evaluate(() => window.__vgDebug.info()))?.runId ?? 0).toBeGreaterThan(0);
   const log = await exportLog(page);
-  expect(log.grupo).toBe("experimental");
+  expect(log).toMatchObject({ grupo: "experimental", sessao: second });
   expect(log.eventos.map((e) => e.evento)).toEqual(["inicio", "execucao"]);
+});
+
+test("estudo: a primeira sessão num navegador já usado começa sem o progresso e o código de antes", async ({ page }) => {
+  await openLive(page);
+  await pasteCode(page, "// de quem usou antes\nconst cena = new THREE.Scene();");
+  await expect(status(page)).toContainText("Cena atualizada · 0 objetos");
+  await page.evaluate(() => {
+    localStorage.setItem("visugraph.desafio.posicao.v1", "// de quem usou antes");
+    localStorage.setItem("visugraph.desafios.v1", JSON.stringify({ feitos: ["posicao"], atual: "rotacao" }));
+  });
+  await openStudy(page, "controle");
+  expect(await code(page)).toContain("Tudo o que aparece no visor vem deste código");
+  await expect(page.locator("#lv-codebar")).toBeHidden();
+  await page.click("#lv-tab-challenges");
+  await expect(page.locator("#lv-challenges")).toContainText("0 de 10 feitos");
+  await page.click('[data-challenge="posicao"]');
+  await expect.poll(() => code(page)).toContain("cubo.position.set(0, 0.5, 0);");
 });
 
 test("sem ?estudo na URL não há faixa nem registro", async ({ page }) => {

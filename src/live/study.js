@@ -50,7 +50,9 @@ export class StudyLog {
     this.saveDelay = saveDelay;
     this.saveTimer = null;
     this.session = this.load();
-    if (!this.session || this.session.grupo !== group) this.start();
+    // sem sessão guardada, ou com a de outro grupo: é outro aluno, e a sessão começa agora
+    this.fresh = !this.session || this.session.grupo !== group;
+    if (this.fresh) this.start();
   }
 
   load() {
@@ -117,7 +119,7 @@ export class StudyLog {
 }
 
 /** Sem modo de estudo, nada é registrado. */
-export const NO_STUDY = { group: null, code: null, log() {}, export: () => "", start() {}, save() {} };
+export const NO_STUDY = { group: null, code: null, fresh: false, log() {}, export: () => "", start() {}, save() {} };
 
 function safeStorage() {
   try {

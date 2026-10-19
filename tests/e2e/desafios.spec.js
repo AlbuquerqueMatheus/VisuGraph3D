@@ -159,11 +159,14 @@ test("desafios: a trilha de Phong liga a caixa de vidro, e o registro do estudo 
   expect(log.eventos.some((e) => e.evento === "vidro" && e.modelo === "phong")).toBe(true);
   expect(JSON.stringify(log), "o registro não leva o código").not.toContain("MeshPhongMaterial");
 
-  // a sessão nova é de outro aluno: progresso e código voltam ao começo
+  // a sessão nova é de outro aluno: a página volta como recém-aberta, sem desafio, vidro nem progresso
   await page.click(".lv-study button:has-text('Nova sessão')");
-  await expect(page.locator(".lv-ch__title")).toHaveText("Luz pela esquerda");
-  await expect.poll(() => code(page)).toContain("sol.position.set(5, 2, 1);");
-  await page.click('[data-action="leave"]');
+  await expect(status(page)).toContainText("Nova sessão:", { timeout: 30_000 });
+  expect(await code(page)).toContain("Tudo o que aparece no visor vem deste código");
+  await expect(page.locator("#lv-codebar")).toBeHidden();
+  await expect.poll(() => viewport(page).evaluate(() => window.__vgDebug.glass())).toBeNull();
+  await page.click("#lv-tab-challenges");
   await expect(page.locator("#lv-challenges")).toContainText("0 de 10 feitos");
-  await expect.poll(() => code(page)).toContain("Tudo o que aparece no visor vem deste código");
+  await page.click('[data-challenge="difusa"]');
+  await expect.poll(() => code(page)).toContain("sol.position.set(5, 2, 1);");
 });

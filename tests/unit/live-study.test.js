@@ -66,11 +66,14 @@ describe("modo de estudo", () => {
     const storage = memoryStorage();
     const first = makeLog("controle", storage).log;
     first.log("aba", { aba: "props" });
+    expect(first.fresh, "a primeira sessão começa agora").toBe(true);
     const again = makeLog("controle", storage).log;
     expect(again.code).toBe(first.code);
+    expect(again.fresh).toBe(false);
     expect(JSON.parse(again.export()).eventos).toHaveLength(2);
     const other = new StudyLog("experimental", { storage, random: (n) => new Uint8Array(n).fill(3), saveDelay: 0 });
     expect(other.code).not.toBe(first.code);
+    expect(other.fresh).toBe(true);
     expect(JSON.parse(other.export()).eventos.map((e) => e.evento)).toEqual(["inicio"]);
   });
 

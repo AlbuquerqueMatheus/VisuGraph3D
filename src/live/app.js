@@ -25,6 +25,7 @@ const STORAGE_KEY = "visugraph.codigo.v1";
 const PROGRESS_KEY = "visugraph.desafios.v1"; // { feitos: [ids], atual: id }
 const challengeKey = (id) => `visugraph.desafio.${id}.v1`; // o código de cada desafio
 const RUNNING_KEY = "visugraph.rodando"; // presente enquanto um código roda: se a página travar, fica lá
+const NEW_SESSION_KEY = "visugraph.estudo.nova"; // sessionStorage: "Nova sessão" recarregou a página
 const TYPING_DELAY_MS = 300;
 const LIVE_RUN_MS = 80;
 
@@ -36,6 +37,27 @@ const group = studyGroup(location.search);
 const study = group ? new StudyLog(group) : NO_STUDY;
 const sync = group !== "controle";
 const READ_ONLY = "No grupo controle do estudo, as mudanças são feitas pelo código.";
+// uma sessão que começa agora é de outro aluno: sem o progresso e o código de quem usou antes
+if (study.fresh) forgetStudent();
+// "Nova sessão" recarrega a página, que volta com o aviso do código novo na barra de status
+let newSession = false;
+try {
+  newSession = group != null && sessionStorage.getItem(NEW_SESSION_KEY) === study.code;
+  sessionStorage.removeItem(NEW_SESSION_KEY);
+} catch {
+  // sem sessionStorage: a faixa mostra o código mesmo assim
+}
+
+/** Apaga o progresso nos desafios e o código guardado (o livre e o de cada desafio). */
+function forgetStudent() {
+  try {
+    for (const c of CHALLENGES) localStorage.removeItem(challengeKey(c.id));
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PROGRESS_KEY);
+  } catch {
+    // sem armazenamento: não há o que apagar
+  }
+}
 
 // Desafios: o que já foi feito e o desafio aberto. ?trilha=matriz|camera|phong (os links dos
 // laboratórios 2D) abre o primeiro desafio ainda não feito da trilha.
@@ -171,12 +193,16 @@ function save(code, key = codeKey()) {
     // modo privado ou armazenamento cheio: o código continua no editor
   }
 }
+let restarting = false; // "Nova sessão" já guardou o registro novo e apagou o código do aluno anterior
 window.addEventListener("pagehide", () => {
   clearTimeout(saveTimer);
+  if (restarting) return;
   save(view.state.doc.toString());
   study.save();
 });
-document.addEventListener("visibilitychange", () => study.log("visibilidade", { visivel: document.visibilityState === "visible" }));
+document.addEventListener("visibilitychange", () => {
+  if (!restarting) study.log("visibilidade", { visivel: document.visibilityState === "visible" });
+});
 
 // ---------------------------------------------------------------------------
 // Editor
@@ -319,7 +345,7 @@ function onMessage(msg) {
         if (startedAfterCrash) {
           state.stuckCode = state.analysis.code;
           setStatus("error", "Da última vez, este código travou a página e por isso não foi rodado. Confira os laços e clique em ↻ Rodar.");
-        } else runNow();
+        } else runNow({ quiet: newSession });
       } else if (state.screen) {
         // o visor foi reiniciado: mostra de novo a última cena que funcionou
         sendRun(state.screen);
@@ -736,24 +762,6 @@ function sendGhosts() {
   bridge.send({ type: "ghost", shapes: state.challenge?.ghosts ?? [] });
 }
 
-/** Começa de novo para o próximo aluno: sem progresso e com o código inicial de tudo. */
-function resetChallenges() {
-  clearTimeout(saveTimer);
-  try {
-    for (const c of CHALLENGES) localStorage.removeItem(challengeKey(c.id));
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(PROGRESS_KEY);
-  } catch {
-    // idem
-  }
-  progress.done.clear();
-  challengesPanel.setDone(progress.done);
-  const trail = state.challenge ? trailOf(state.challenge.id) : null;
-  state.challenge = null; // o aluno anterior saiu: nada de "desafio.sair" na sessão nova
-  // a barra de status continua com o código da sessão nova, para o aluno anotar
-  openChallenge(trail ? challengeById(trail.challenges[0]) : null, "nova_sessao", { keepCode: false, quiet: true });
-}
-
 function requestFacts() {
   if (state.challenge) bridge.send({ type: "facts", seq: ++state.factsSeq });
 }
@@ -957,10 +965,19 @@ if (group) {
   newButton.textContent = "Nova sessão";
   newButton.title = "Para o próximo aluno neste computador (exporte o registro antes)";
   newButton.addEventListener("click", () => {
+    // o próximo aluno começa como numa página recém-aberta: mesma vista, sem desafio aberto,
+    // sem caixa de vidro e com o código inicial
+    restarting = true;
+    clearTimeout(saveTimer);
     study.start();
-    code.textContent = study.code;
-    resetChallenges();
-    setStatus("ok", `Nova sessão: ${study.code}. Anote este código no questionário.`);
+    study.save();
+    forgetStudent();
+    try {
+      sessionStorage.setItem(NEW_SESSION_KEY, study.code);
+    } catch {
+      // idem
+    }
+    location.reload();
   });
   code.textContent = study.code;
   const banner = document.createElement("div");
@@ -979,4 +996,5 @@ if (state.challenge) {
 
 queueMicrotask(refreshEditor);
 if (hasBlockingError(state.analysis)) showBlockingError();
+else if (newSession) setStatus("ok", `Nova sessão: ${study.code}. Anote este código no questionário.`);
 else setStatus("info", "Carregando o visor…");

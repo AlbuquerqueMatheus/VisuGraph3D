@@ -7,6 +7,7 @@ import {
   invert,
   modelMatrix,
   multiply,
+  normalMatrix,
   orthographic,
   perspective,
   pipeline,
@@ -180,5 +181,19 @@ describe("as mesmas contas do Three.js", () => {
     const projection = perspective({ fov: 50, aspect: 1, near: 0.1, far: 100 });
     expect(pipeline([0, 0, 10], { model: identity(), view, projection, width: 100, height: 100 }).visible).toBe(false);
     expect(pipeline([0, 0, 0], { model: identity(), view, projection, width: 100, height: 100 }).visible).toBe(true);
+  });
+});
+
+describe("matriz das normais", () => {
+  it("é a de Matrix3.getNormalMatrix, também com escala não uniforme", () => {
+    const M = modelMatrix({ position: [1, 2, 3], rotation: [0.4, -0.9, 0.2], order: "ZXY", scale: [3, 0.5, 1.2] });
+    const expected = new THREE.Matrix3().getNormalMatrix(new THREE.Matrix4().fromArray(columnMajor(M)));
+    const N = normalMatrix(M);
+    // Matrix3.elements também está em ordem de coluna
+    closeMatrix(N, [0, 1, 2].map((i) => [0, 1, 2].map((j) => expected.elements[j * 3 + i])));
+    // a normal continua perpendicular à superfície depois da escala
+    const tangent = transform(M, [1, -1, 0, 0]).slice(0, 3);
+    const normal = [0, 1, 2].map((i) => N[i][0] * 1 + N[i][1] * 1 + N[i][2] * 0);
+    expect(tangent[0] * normal[0] + tangent[1] * normal[1] + tangent[2] * normal[2]).toBeCloseTo(0, 10);
   });
 });

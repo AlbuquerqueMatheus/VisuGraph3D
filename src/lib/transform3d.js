@@ -131,6 +131,16 @@ export function invert(m) {
   return [0, 1, 2, 3].map((i) => [0, 1, 2, 3].map((j) => inv[i * 4 + j] / det));
 }
 
+/**
+ * Matriz das normais: a inversa transposta da parte 3×3 de M. Com escala não uniforme, girar
+ * a normal com M a entortaria; esta matriz a mantém perpendicular à superfície.
+ */
+export function normalMatrix(m) {
+  const inv = invert([[...m[0].slice(0, 3), 0], [...m[1].slice(0, 3), 0], [...m[2].slice(0, 3), 0], [0, 0, 0, 1]]);
+  if (!inv) return null;
+  return [0, 1, 2].map((i) => [0, 1, 2].map((j) => inv[j][i]));
+}
+
 /** Matriz de visão: leva o mundo para o espaço da câmera, V = (matriz de mundo da câmera)⁻¹. */
 export const viewMatrix = (cameraWorld) => invert(cameraWorld);
 

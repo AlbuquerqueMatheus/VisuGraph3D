@@ -54,6 +54,7 @@ function forgetStudent() {
     for (const c of CHALLENGES) localStorage.removeItem(challengeKey(c.id));
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(RUNNING_KEY); // o código que travou também foi embora
   } catch {
     // sem armazenamento: não há o que apagar
   }

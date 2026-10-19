@@ -3,15 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VisuGraph 3D · código vivo</title>
+    <title>Código vivo · VisuGraph</title>
     <link rel="stylesheet" href="src/css/live.css" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
 
   <body class="page-live">
     <header class="lv-top">
-      <a class="lv-back" href="./index.html" title="Voltar à tela inicial">← Início</a>
-      <h1 class="lv-title">VisuGraph 3D <span>código vivo</span></h1>
+      <a class="vg-brand" href="./index.html" title="Voltar à tela inicial">
+        <img src="/favicon.svg" alt="" width="22" height="22" />
+        <span>VisuGraph</span>
+      </a>
+      <h1 class="sr-only">Código vivo</h1>
+      <!-- Barra comum: o tema aberto e Explorar | Programar (src/js/topicbar.js); some no modo de estudo -->
+      <nav class="vg-nav" id="vg-nav" aria-label="Temas"></nav>
 
       <div class="lv-tools" role="toolbar" aria-label="Ferramentas da cena">
         <details class="lv-menu" id="lv-add">

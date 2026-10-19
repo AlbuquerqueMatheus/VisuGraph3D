@@ -8,28 +8,28 @@
     />
     <meta
       name="description"
-      content="VisuGraph 2D — coordenadas, sistemas de cores, modelo Phong e curvas Bézier."
+      content="Laboratórios do VisuGraph: coordenadas, sistemas de cores, modelo Phong e curvas de Bézier."
     />
-    <title>VisuGraph - Modo 2D</title>
+    <title>Laboratórios · VisuGraph</title>
 
     <!-- Estilos -->
     <link rel="stylesheet" href="src/css/styles-2d.css" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
 
-  <body>
-    <div class="app-container">
-      <!-- Sidebar -->
-      <nav class="sidebar">
-        <h1 class="sidebar-title">VisuGraph 2D</h1>
-        <button id="btn-coordenadas" class="nav-btn">Coordenadas</button>
-        <button id="color-system-btn" class="nav-btn">Sistemas de Cores</button>
-        <button id="btn-phong" class="nav-btn">Modelo Phong</button>
-        <button id="btn-curvas" class="nav-btn">Curvas</button>
-        <button id="back-to-menu-2d" class="nav-btn">Voltar ao início</button>
-      </nav>
+  <body class="page-2d">
+    <!-- Barra comum: o tema aberto e Explorar | Programar (src/js/topicbar.js) -->
+    <header class="vg-bar">
+      <a class="vg-brand" href="./index.html" title="Voltar à tela inicial">
+        <img src="/favicon.svg" alt="" width="22" height="22" />
+        <span>VisuGraph</span>
+      </a>
+      <nav class="vg-nav" id="vg-nav" aria-label="Temas"></nav>
+    </header>
+    <h1 class="sr-only">Laboratórios do VisuGraph</h1>
 
-      <!-- Conteúdo principal -->
+    <div class="app-container">
+      <!-- Um laboratório por vez, pelo endereço: #coordenadas, #cores, #phong ou #curvas -->
       <div class="content">
         <!-- ========================= COORDENADAS ========================= -->
         <section id="coords-section" class="section coords-section hidden">

@@ -1,21 +1,5 @@
 @layer overrides {
   @media (max-width: 800px) {
-    .app-container {
-      flex-direction: column;
-    }
-    .sidebar {
-      width: 200px;
-      background: #222;
-      padding: 10px;
-    }
-    .sidebar-title {
-      display: none;
-    }
-    .nav-btn {
-      flex: 1;
-      white-space: nowrap;
-    }
-
     /* Fallback de grids grandes para coluna */
     .phong-main,
     .color-main {

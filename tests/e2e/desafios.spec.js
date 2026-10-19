@@ -170,3 +170,52 @@ test("desafios: a trilha de Phong liga a caixa de vidro, e o registro do estudo 
   await page.click('[data-challenge="difusa"]');
   await expect.poll(() => code(page)).toContain("sol.position.set(5, 2, 1);");
 });
+
+test("desafios: a barra mostra o tema do desafio aberto e troca de trilha sem recarregar a página", async ({ page }) => {
+  await openTrail(page, "trilha=matriz");
+  const bar = page.locator("#vg-nav");
+  const pickTopic = async (name) => {
+    await bar.locator(".vg-topic summary").click();
+    await bar.locator(".vg-topic__list").getByRole("link", { name, exact: true }).click();
+  };
+  await expect(page).toHaveTitle("Código vivo · VisuGraph");
+  await expect(bar.locator(".vg-topic__name")).toHaveText("Transformações");
+  await expect(bar.locator('.vg-step[aria-current="page"]')).toHaveText("Programar");
+  await expect(bar.getByRole("link", { name: "Explorar" })).toHaveAttribute("href", "./index-2d.html#coordenadas");
+
+  // outro tema abre o primeiro desafio não feito da trilha dele, na mesma página
+  await page.evaluate(() => (window.samePage = true));
+  await pickTopic("Luz e cor");
+  await expect(page.locator(".lv-ch__title")).toHaveText("Luz pela esquerda");
+  await expect(page.locator("#lv-tab-challenges")).toHaveAttribute("aria-selected", "true");
+  await expect(bar.locator(".vg-topic__name")).toHaveText("Luz e cor");
+  await expect(bar.getByRole("link", { name: "Explorar" })).toHaveAttribute("href", "./index-2d.html#phong");
+  await expect(bar.locator(".vg-topic")).not.toHaveAttribute("open");
+  expect(await page.evaluate(() => window.samePage), "sem recarregar").toBe(true);
+
+  // o editor livre sai do desafio
+  await pickTopic("Editor livre, sem desafio");
+  await expect(page.locator("#lv-codebar")).toBeHidden();
+  await expect.poll(() => code(page)).toContain("Tudo o que aparece no visor vem deste código");
+  await expect(bar.locator(".vg-topic__name")).toHaveText("Editor livre");
+  await expect(bar.locator(".vg-steps")).toHaveCount(0);
+
+  // Curvas ainda não tem desafios: o tema leva ao laboratório
+  await pickTopic("Curvas");
+  await expect(page).toHaveURL(/index-2d\.html#curvas$/);
+  await expect(page.locator("#curves-section")).toBeVisible();
+});
+
+test("desafios: ?livre abre o editor sem o desafio guardado, e o recarregar continua sem ele", async ({ page }) => {
+  await openTrail(page, "trilha=camera");
+  await expect(page.locator(".lv-ch__title")).toHaveText("Enquadre a esfera");
+
+  await openTrail(page, "livre");
+  expect(new URL(page.url()).search).toBe("");
+  await expect(page.locator("#lv-codebar")).toBeHidden();
+  await expect(page.locator("#vg-nav .vg-topic__name")).toHaveText("Editor livre");
+  await page.reload();
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(page.locator("#lv-codebar")).toBeHidden();
+  expect(await code(page)).toContain("Tudo o que aparece no visor vem deste código");
+});

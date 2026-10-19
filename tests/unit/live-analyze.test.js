@@ -113,6 +113,16 @@ for (let i = 0; i < 3; i++) {
     expect(a.diagnostics.some((d) => d.severity === "info" && /laço/.test(d.message))).toBe(true);
   });
 
+  it("avisa quando um objeto com nome nunca é adicionado à cena (a câmera não precisa)", () => {
+    const a = analyze(`const cena = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera();
+const cubo = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+const luz = new THREE.PointLight();
+cena.add(luz);`);
+    const warnings = a.diagnostics.filter((d) => d.severity === "warning").map((d) => d.message);
+    expect(warnings).toEqual(["cubo ainda não está na cena: escreva cena.add(cubo); para ele aparecer."]);
+  });
+
   it("objeto criado dentro de animar() gera aviso", () => {
     const a = analyze(`const cena = new THREE.Scene();
 function animar(tempo) {

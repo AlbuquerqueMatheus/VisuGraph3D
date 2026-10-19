@@ -71,6 +71,7 @@ class Analysis {
     this.loops = [];
     this.statements = []; // ExpressionStatements com contexto
     this.addCalls = []; // chamadas x.add(...)
+    this.passedNames = new Set(); // variáveis passadas como argumento de alguma chamada
     this.topNames = new Set();
     this.topDecls = new Map(); // nome → nó onde ele é declarado no topo
     this.animarFn = null;
@@ -196,6 +197,7 @@ class Analysis {
       } else if (isNumberLiteral(node) && !skipLiterals.has(node)) {
         this.pushNumber(node, node.value, parent);
       } else if (node.type === "CallExpression") {
+        for (const arg of node.arguments) if (arg.type === "Identifier") this.passedNames.add(arg.name);
         const chain = memberChain(node.callee);
         if (chain && chain.path.length >= 1 && chain.path[chain.path.length - 1] === "add") {
           this.addCalls.push({ node, chain, topStmt: top });
@@ -220,7 +222,7 @@ class Analysis {
       raw,
       decimals: digits ? digits[1].length : 0,
       hex: /^[-+]?0[xX]/.test(raw),
-      afterOperator: !!parent && parent.type === "BinaryExpression" && parent.right === node,
+      operand: !!parent && parent.type === "BinaryExpression", // operando de uma conta (+ - * / ** …)
       slot: null,
     });
   }
@@ -555,6 +557,10 @@ class Analysis {
         info(head, `Objeto ${CONTEXT_REASONS[obj.context]}: ele aparece na cena, mas só pode ser editado pelo código.`);
       } else if (!obj.name && obj.kind !== "scene") {
         info(head, "Guarde o objeto numa variável (const nome = new THREE.…) para poder movê-lo pela cena.");
+      } else if (obj.name && obj.kind !== "scene" && obj.kind !== "camera" && !this.passedNames.has(obj.name)) {
+        // a câmera não precisa estar na cena; o resto só aparece (ou ilumina) se for adicionado
+        const scene = this.objects.find((o) => o.kind === "scene" && o.name)?.name ?? "cena";
+        warn(head, `${obj.name} ainda não está na cena: escreva ${scene}.add(${obj.name}); para ele aparecer.`);
       }
     }
     for (const name of RUNTIME_NAMES) {

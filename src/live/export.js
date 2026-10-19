@@ -12,8 +12,9 @@ export function exportHtml(analysis, title = "Cena feita no VisuGraph 3D") {
   if (!analysis.scene || !analysis.scene.name) return { error: "Guarde a cena numa variável (const cena = new THREE.Scene();) para exportar." };
   const scene = analysis.scene.name;
   const camera = analysis.camera && analysis.camera.name;
-  // "</script" dentro do código fecharia a tag antes da hora
-  const code = analysis.code.replace(/<\/script/gi, "<\\/script").replace(/\s+$/, "");
+  // "</script" dentro do código fecharia a tag antes da hora, e "<!--" mudaria o jeito
+  // como o navegador procura o fim dela; a barra invertida não muda o texto de uma string.
+  const code = analysis.code.replace(/<\/script/gi, "<\\/script").replace(/<!--/g, "<\\!--").replace(/\s+$/, "");
   const html = `<!doctype html>
 <html lang="pt-BR">
 <head>

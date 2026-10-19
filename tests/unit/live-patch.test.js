@@ -187,6 +187,22 @@ const d = new THREE.Mesh(
     expect(edit(code, "e", "visible", false)).toMatch(/ {2}const e = new THREE\.Mesh\(\);\n {2}e\.visible = false;$/);
   });
 
+  it("argumento novo entra depois dos parênteses do último argumento e respeita a vírgula final", () => {
+    let code = edit(HEAD + "const camera = new THREE.PerspectiveCamera(75, (16 / 9));", "camera", "near", 0.2);
+    expect(code).toContain("new THREE.PerspectiveCamera(75, (16 / 9), 0.2);");
+    code = edit(code, "camera", "near", 0.3); // o mesmo campo passa a trocar o literal novo
+    expect(code).toContain("new THREE.PerspectiveCamera(75, (16 / 9), 0.3);");
+    expect(edit(HEAD + "const luz = new THREE.PointLight(0xffffff, (2));", "luz", "distance", 5)).toContain("new THREE.PointLight(0xffffff, (2), 5);");
+    expect(edit(HEAD + 'const luz = new THREE.PointLight(\n  "#fff",\n  2,\n);', "luz", "distance", 5)).toContain("  2, 5,\n);");
+  });
+
+  it("com o lookAt na mesma linha, a posição entra logo antes dele", () => {
+    const code = HEAD + "const cam = new THREE.PerspectiveCamera(); cam.lookAt(0, 0, 0);";
+    expect(edit(code, "cam", "position.x", 1)).toContain(
+      "const cam = new THREE.PerspectiveCamera(); cam.position.set(1, 0, 0); cam.lookAt(0, 0, 0);",
+    );
+  });
+
   it("depois de inserir, o mesmo campo passa a trocar o literal novo (arraste contínuo)", () => {
     let code = STARTER_CODE;
     for (const deg of [10, 20, 35]) code = roundTrip(code, "cubo", "rotation.x", (deg * Math.PI) / 180);
@@ -226,6 +242,14 @@ describe("arraste do gizmo", () => {
     expect(changes).toHaveLength(1);
     expect(applyChanges(STARTER_CODE, changes)).toContain("cubo.position.set(1.5, 0.5, 0);");
     expect(planTransform(a, cubo.id, "position", [0.001, 0.5, 0], [0, 0.5, 0]).changes).toEqual([]);
+  });
+
+  it("eixos que o arraste não mexeu ficam como o código diz, mesmo com a cena desatualizada", () => {
+    // o código já diz x = 2, mas a cena na tela ainda mostra x = 0 (a última execução deu erro)
+    const code = STARTER_CODE.replace("cubo.position.set(0, 0.5, 0);", "cubo.position.set(2, 0.5, 0);");
+    const a = analyze(code);
+    const { changes } = planTransform(a, find(a, "cubo").id, "position", [0, 1.2, 0], [0, 0.5, 0], [false, true, false]);
+    expect(applyChanges(code, changes)).toContain("cubo.position.set(2, 1.2, 0);");
   });
 
   it("escala nova completa com 1 os eixos que não mudaram", () => {
@@ -283,6 +307,16 @@ describe("números arrastáveis no editor", () => {
     expect(scrubInfo(a, at("16 / 9"))).toEqual({ step: 1, decimals: 0 });
   });
 
+  it("número negativo dentro de uma conta ganha parênteses", () => {
+    const code = HEAD + "const x = 10 -2*3;\nconst y = 2 ** 3;";
+    const a = analyze(code);
+    for (const text of ["2*3", "2 ** 3"]) {
+      const change = planNumber(a.numbers.find((n) => n.from === code.indexOf(text)), -1, 0);
+      expect(change.insert).toBe("(-1)");
+      expect(analyze(applyChanges(code, [change])).ok).toBe(true);
+    }
+  });
+
   it("número negativo depois de um operador ganha parênteses", () => {
     const a = analyze(HEAD + "const x = 2-1;");
     const one = a.numbers.find((n) => n.raw === "1");
@@ -292,6 +326,13 @@ describe("números arrastáveis no editor", () => {
 });
 
 describe("menu Adicionar", () => {
+  it("com animar() antes da cena, o objeto novo vai para o fim do código", () => {
+    const code = "function animar(tempo) {}\n" + HEAD;
+    const next = applyChanges(code, planAddObject(analyze(code), "caixa").changes);
+    expect(next.indexOf("cena.add(caixa);")).toBeGreaterThan(next.indexOf("const cena"));
+    expect(analyze(next).diagnostics).toEqual([]);
+  });
+
   it("cria o objeto antes de animar() e dos comentários dela, com nome livre", () => {
     const a = analyze(STARTER_CODE);
     const first = planAddObject(a, "caixa");

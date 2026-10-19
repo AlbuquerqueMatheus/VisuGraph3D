@@ -132,16 +132,19 @@ export function planEdit(analysis, id, key, value, opts) {
 
 /**
  * Edições para um arraste do gizmo: `values` são os três eixos de `prop` no fim do
- * arraste (rotação em radianos) e `start`, os valores quando o arraste começou.
- * Só escreve os eixos cujo valor mostrado mudou.
+ * arraste (rotação em radianos), `start`, os valores quando o arraste começou, e
+ * `touched`, os eixos que o arraste mexeu em algum momento. Só esses eixos são escritos,
+ * e só se o valor mostrado mudar: os outros ficam como o código diz, mesmo que a cena
+ * na tela esteja desatualizada (código que ainda não rodou ou que deu erro).
  */
-export function planTransform(analysis, id, prop, values, start) {
+export function planTransform(analysis, id, prop, values, start, touched = [true, true, true]) {
   const obj = analysis.objects[id];
   if (!obj) return { changes: [], errors: [{ id, key: prop, message: "Objeto não encontrado no código." }] };
   const def = TRANSFORMS[prop];
   const shown = (v) => formatNumber(prop === "rotation" ? radToDeg(v) : v, def.decimals);
   const edits = [];
   AXES.forEach((axis, i) => {
+    if (!touched[i]) return;
     const key = `${prop}.${axis}`;
     const state = obj.props[key];
     const before = state && state.status === "slot" ? state.slot.value : start[i];
@@ -213,9 +216,20 @@ function argsChange(code, obj, wanted) {
     else parts.push(info.argText?.[i] ?? "undefined");
   }
   const text = parts.join(", ");
-  if (args.length) return insertAt(args[args.length - 1].end, `, ${text}`);
+  if (args.length) return insertAt(argumentsEnd(code, node), `, ${text}`);
   if (hasArgParens(code, node)) return insertAt(node.end - 1, text);
   return insertAt(node.end, `(${text})`);
+}
+
+/** Fim do último argumento, incluindo os parênteses em volta dele, como em `(16 / 9)`. */
+function argumentsEnd(code, node) {
+  const close = node.end - 1; // o ")" da chamada
+  let pos = node.arguments[node.arguments.length - 1].end;
+  for (;;) {
+    const next = skipTrivia(code, pos, close);
+    if (next >= close || code[next] !== ")") return pos;
+    pos = next + 1;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -290,19 +304,22 @@ function statementsChange(analysis, obj, items, current) {
   const anchorObj = items[0].anchorObj;
   // Mexer na posição depois de um lookAt() mudaria para onde o objeto olha: escrever antes dele.
   const beforeLookAt = items.some((it) => it.def.transform === "position");
-  const anchor = anchorStatement(analysis, anchorObj, beforeLookAt);
+  const { anchor, limit } = anchorStatement(analysis, anchorObj, beforeLookAt);
+  const at = insertionPoint(analysis, anchor);
+  // lookAt() na mesma linha da âncora: a linha nova não cabe entre os dois, vai na própria linha
+  if (limit < at) return insertAt(limit, lines.map((l) => `${l} `).join(""));
   const indent = lineIndent(analysis.code, anchor.start);
-  return insertAt(insertionPoint(analysis, anchor), lines.map((l) => `\n${indent}${l}`).join(""));
+  return insertAt(at, lines.map((l) => `\n${indent}${l}`).join(""));
 }
 
-/** A última instrução do topo que declara ou altera o objeto. */
+/** A última instrução do topo que declara ou altera o objeto (antes de `limit`, o primeiro lookAt). */
 function anchorStatement(analysis, obj, beforeLookAt) {
   const records = analysis.records.filter((r) => r.rootId === obj.id && r.context === "top" && !r.ctor);
   let limit = Infinity;
   if (beforeLookAt) for (const r of records) if (r.method === "lookAt") limit = Math.min(limit, r.stmt.start);
   let anchor = obj.declStmt;
   for (const r of records) if (r.stmt.end <= limit && r.stmt.end > anchor.end) anchor = r.stmt;
-  return anchor;
+  return { anchor, limit };
 }
 
 /** Fim da última linha da instrução (depois de outras instruções ou comentários na mesma linha). */
@@ -399,9 +416,10 @@ export function scrubInfo(analysis, number) {
   return { step: 10 ** -decimals, decimals };
 }
 
-/** Mudança que troca o número por `value` (com parênteses se ficar negativo depois de um operador). */
+/** Mudança que troca o número por `value` (entre parênteses se ficar negativo dentro de uma conta). */
 export function planNumber(number, value, decimals) {
   let text = formatNumber(value, decimals);
-  if (number.afterOperator && text.startsWith("-")) text = `(${text})`;
+  // 10 -2*3 → 10 -(-1)*3, e não 10 --1*3; 2 ** 3 → (-1) ** 3
+  if (number.operand && text.startsWith("-")) text = `(${text})`;
   return { from: number.from, to: number.to, insert: text };
 }

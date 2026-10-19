@@ -58,8 +58,8 @@ export const ADD_ITEMS = [
 
 /**
  * Trecho que cria um objeto novo, com um nome que ainda não existe no código.
- * Vai antes de animar() (e dos comentários logo acima dela) ou no fim do código.
- * Retorna { changes, name } ou { error }.
+ * Vai antes de animar() (e dos comentários logo acima dela), se animar() vier depois
+ * da cena, ou no fim do código. Retorna { changes, name } ou { error }.
  */
 export function planAddObject(analysis, kind) {
   const item = ADD_ITEMS.find((i) => i.kind === kind);
@@ -92,7 +92,9 @@ export function planAddObject(analysis, kind) {
 
   const { code } = analysis;
   const at = beforeAnimar(analysis);
-  if (at != null) return { name, changes: [{ from: at, to: at, insert: `${snippet}\n\n` }] };
+  // o trecho usa a cena: não pode vir antes da linha que a cria
+  const sceneEnd = analysis.objects[analysis.scene.id].declStmt?.end ?? 0;
+  if (at != null && at >= sceneEnd) return { name, changes: [{ from: at, to: at, insert: `${snippet}\n\n` }] };
   const trimmed = code.replace(/\s+$/, "");
   return { name, changes: [{ from: trimmed.length, to: code.length, insert: `${trimmed ? "\n\n" : ""}${snippet}\n` }] };
 }

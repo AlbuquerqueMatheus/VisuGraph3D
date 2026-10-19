@@ -69,6 +69,10 @@ describe("exportHtml", () => {
     const { html } = exportHtml(analyze(code));
     expect(html.match(/<\/script>/g)).toHaveLength(2); // só o importmap e o módulo
     expect(html).toContain('"<\\/script><b>oi</b>"');
+    // "<!--" seguido de "<script>" faria o navegador ignorar o fim da tag
+    const comment = exportHtml(analyze('const cena = new THREE.Scene();\nconst t = "<!--<script>";')).html;
+    expect(comment).toContain('const t = "<\\!--<script>";');
+    expect(comment).not.toContain("<!--");
   });
 
   it("sem câmera usa a padrão; sem cena com nome ou com erro, explica o motivo", () => {

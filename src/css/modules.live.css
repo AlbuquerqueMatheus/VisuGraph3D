@@ -172,6 +172,32 @@
 
 .lv-link { background: none; border: none; padding: 0; color: var(--accent-color); cursor: pointer; text-decoration: underline; font-size: inherit; }
 
+/* ====== Faixa do modo de estudo ====== */
+.lv-study {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-basis: 100%;
+  padding: 3px 10px;
+  border-radius: var(--radius-2);
+  background: color-mix(in oklab, var(--lv-warn) 14%, var(--lv-panel-2));
+  border: 1px solid color-mix(in oklab, var(--lv-warn) 45%, transparent);
+  font-size: 12px;
+  color: var(--text-color);
+}
+.lv-study strong { font-family: ui-monospace, monospace; letter-spacing: 0.05em; }
+.lv-study button {
+  background: var(--lv-panel-2);
+  border: 1px solid var(--lv-line);
+  border-radius: var(--radius-1);
+  padding: 1px 8px;
+  color: var(--text-color);
+  font-size: 12px;
+  cursor: pointer;
+}
+.lv-study button:first-of-type { margin-left: auto; }
+.lv-study button:hover { border-color: var(--accent-color); }
+
 /* ====== Abas do painel: Propriedades | Matemática | Desafios ====== */
 .lv-tabs { display: flex; border-bottom: 1px solid var(--lv-line); padding: 0 var(--space-2); gap: 2px; position: sticky; top: 0; z-index: 2; background: var(--lv-panel); }
 .lv-tabs [role="tab"] {
@@ -186,8 +212,8 @@
 }
 .lv-tabs [role="tab"]:hover { color: var(--text-color); }
 .lv-tabs [role="tab"][aria-selected="true"] { color: var(--text-color); border-bottom-color: var(--accent-color); }
-.lv-tabs [role="tab"][hidden] { display: none; }
-.lv-props[hidden], .lv-math[hidden], .lv-challenges[hidden] { display: none; }
+/* o atributo hidden vale mesmo onde o CSS define display */
+.page-live [hidden] { display: none !important; }
 
 /* ====== Aba Matemática ====== */
 .lv-math, .lv-challenges { padding: var(--space-3); display: grid; gap: var(--space-3); align-content: start; }

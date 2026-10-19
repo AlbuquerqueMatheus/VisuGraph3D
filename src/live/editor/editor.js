@@ -165,6 +165,7 @@ function scrubPlugin(host) {
         if (event.button !== 0 || event.ctrlKey || event.metaKey) return false;
         const analysis = host.analysis();
         if (!analysis || !analysis.ok || analysis.code.length !== view.state.doc.length) return false;
+        if (host.canScrub && !host.canScrub()) return false;
         const number = numberAt(view, analysis, event.clientX, event.clientY);
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
         const info = number && scrubInfo(analysis, number);
@@ -365,14 +366,14 @@ export function showMathLinks(view, ranges, scroll = false) {
   view.dispatch({ effects });
 }
 
-/** Atualiza sublinhado dos números editáveis e a lista de erros. */
-export function showAnalysis(view, analysis, diagnostics) {
+/** Atualiza sublinhado dos números editáveis (se `numbers`) e a lista de erros. */
+export function showAnalysis(view, analysis, diagnostics, numbers = true) {
   const doc = view.state.doc;
   const valid = diagnostics
     .filter((d) => d.from <= doc.length)
     .map((d) => ({ ...d, to: Math.min(Math.max(d.to, d.from), doc.length) }));
   view.dispatch(setDiagnostics(view.state, valid), {
-    effects: setNumbers.of(analysis.ok && analysis.code.length === doc.length ? numberDecorations(analysis) : Decoration.none),
+    effects: setNumbers.of(numbers && analysis.ok && analysis.code.length === doc.length ? numberDecorations(analysis) : Decoration.none),
   });
 }
 

@@ -358,7 +358,7 @@ export class MathPanel {
 
   /** Literais de que cada número depende, por objeto (ids da análise). */
   keysOf(link, ...props) {
-    const id = link?.id != null ? this.context.ids(link.id) : null;
+    const id = link?.id != null && this.context.links ? this.context.ids(link.id) : null;
     if (id == null) return [];
     return props.map((p) => `${id}:${p}`);
   }
@@ -457,10 +457,11 @@ export class MathPanel {
       return [el("p", { class: "lv-hint", text: `${p.materialType || "Este objeto"} não segue o modelo de Phong: fica com o shader do Three.js.` })];
     }
     const ids = this.context?.ids ?? (() => null);
-    const meshId = p.id != null ? ids(p.id) : null;
+    const links = !!this.context?.links;
+    const meshId = p.id != null && links ? ids(p.id) : null;
     const matKey = (k) => (meshId != null && this.context?.material?.(meshId) != null ? `${this.context.material(meshId)}:${k}` : null);
     const lightKeys = (light, ...keys) => {
-      const id = light.screenId != null ? ids(light.screenId) : null;
+      const id = light.screenId != null && links ? ids(light.screenId) : null;
       return id == null ? null : keys.map((k) => `${id}:${k}`).join(" ");
     };
     // nome da luz no código (a variável), ou o name dela no Three.js

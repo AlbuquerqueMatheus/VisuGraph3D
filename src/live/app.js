@@ -15,6 +15,7 @@ import { createEditor, revealPosition, sceneEdit, showAnalysis, showHighlight, s
 import { isObject3DKind } from "./engine/catalog.js";
 import { Inspector } from "./inspector.js";
 import { MathPanel } from "./mathPanel.js";
+import { NO_STUDY, StudyLog, studyGroup } from "./study.js";
 import { ViewportBridge } from "./bridge.js";
 import { exportHtml } from "./export.js";
 
@@ -24,6 +25,13 @@ const TYPING_DELAY_MS = 300;
 const LIVE_RUN_MS = 80;
 
 const $ = (sel) => document.querySelector(sel);
+
+// Modo de estudo (?estudo=controle|experimental): no grupo controle a cena não escreve no
+// código e nada se acende entre os dois; o código continua rodando a cada mudança.
+const group = studyGroup(location.search);
+const study = group ? new StudyLog(group) : NO_STUDY;
+const sync = group !== "controle";
+const READ_ONLY = "No grupo controle do estudo, as mudanças são feitas pelo código.";
 
 const state = {
   analysis: null, // análise do texto atual do editor
@@ -123,7 +131,9 @@ function save(code) {
 window.addEventListener("pagehide", () => {
   clearTimeout(saveTimer);
   save(view.state.doc.toString());
+  study.save();
 });
+document.addEventListener("visibilitychange", () => study.log("visibilidade", { visivel: document.visibilityState === "visible" }));
 
 // ---------------------------------------------------------------------------
 // Editor
@@ -134,12 +144,19 @@ const view = createEditor($("#lv-editor"), loadCode(), {
   onCursor: (pos) => setCodeHover(objectAt(pos)),
   onHoverPos: (pos) => {
     setCodeHover(pos == null ? objectAt(view.state.selection.main.head) : objectAt(pos));
-    const slot = pos == null ? null : state.analysis.numbers.find((n) => n.from <= pos && pos <= n.to)?.slot;
+    const slot = pos == null || !sync ? null : state.analysis.numbers.find((n) => n.from <= pos && pos <= n.to)?.slot;
     mathPanel.highlightKey(slot ? `${slot.id}:${slot.key}` : null);
   },
   onScrub,
-  onScrubEnd: () => runNow(),
-  onRun: () => runNow({ force: true }),
+  onScrubEnd: (number) => {
+    study.log("arraste_numero", { chave: number?.slot?.key ?? null });
+    runNow();
+  },
+  onRun: () => {
+    study.log("rodar", { atalho: true });
+    runNow({ force: true });
+  },
+  canScrub: () => sync,
 });
 
 state.analysis = analyze(view.state.doc.toString());
@@ -153,6 +170,7 @@ function onChange(update) {
   inspector.update(state.analysis, selectedId(), runtimeForCurrent());
   updateMathContext();
   const kind = update.transactions.map((tr) => tr.annotation(sceneEdit)).find(Boolean);
+  if (!kind && update.transactions.some((tr) => tr.isUserEvent("input") || tr.isUserEvent("delete"))) study.log("digitacao");
   if (kind === "cena") return; // quem editou decide quando rodar
   if (kind === "scrub") return liveRun();
   if (hasBlockingError(state.analysis)) {
@@ -167,7 +185,8 @@ function onChange(update) {
 
 function refreshEditor() {
   const a = state.analysis;
-  showAnalysis(view, a, [...a.diagnostics, ...state.runtimeDiagnostics]);
+  showAnalysis(view, a, [...a.diagnostics, ...state.runtimeDiagnostics], sync);
+  if (!sync) return; // grupo controle: nada se acende no código pela cena
   const sel = selectedId();
   const selected = sel != null ? a.objects[sel].ranges : [];
   const hover = state.hoverId != null && state.hoverId !== sel && a.objects[state.hoverId] ? a.objects[state.hoverId].ranges : [];
@@ -183,7 +202,7 @@ function objectAt(pos) {
 }
 
 function setCodeHover(id) {
-  if (id === state.codeHoverId) return;
+  if (id === state.codeHoverId || !sync) return;
   state.codeHoverId = id;
   bridge.send({ type: "highlight", id: toScreen(id) });
 }
@@ -269,6 +288,7 @@ function onMessage(msg) {
       break;
     case "pick":
       select(fromScreen(msg.id), { reveal: true });
+      study.log("selecao", { origem: "visor", tipo: kindOfSelected() });
       break;
     case "hover":
       state.hoverId = fromScreen(msg.id);
@@ -295,6 +315,10 @@ function onMessage(msg) {
       break;
     case "probe":
       mathPanel.setProbe(msg);
+      if (msg.seq !== state.probeSeq) {
+        state.probeSeq = msg.seq;
+        study.log("sonda", { modelo: msg.model, suportado: !!msg.supported, material: msg.params?.className ?? msg.materialType ?? null });
+      }
       break;
     case "fatal":
       setStatus("error", msg.message);
@@ -332,6 +356,7 @@ function onRan(msg) {
   if (!run.failed && msg.runId === state.runId) {
     const count = run.analysis.objects.filter((o) => o.kind === "mesh" || o.kind === "light").length;
     setStatus("ok", `Cena atualizada · ${count} ${count === 1 ? "objeto" : "objetos"}${msg.hasAnimar ? " · animar() rodando" : ""}`);
+    study.log("execucao", { ok: true, objetos: count, animar: !!msg.hasAnimar });
   }
   sendSelection();
   requestInspect();
@@ -344,6 +369,7 @@ function onRuntimeError(msg) {
   const run = state.runs.get(msg.runId);
   if (!run) return;
   run.failed = true;
+  study.log("erro", { origem: "execucao", fase: msg.phase, tipo: msg.name, laco: !!msg.loop });
   let pos = msg.line != null ? run.toOriginal(msg.line, msg.column ?? 0) : null;
   const where = { animar: "Em animar() (a animação parou): ", timer: "Num temporizador: ", evento: "Num evento: ", async: "Numa função async: " };
   const text = (where[msg.phase] || "") + translateError(msg.name, msg.message);
@@ -365,6 +391,7 @@ function onRuntimeError(msg) {
 function showBlockingError() {
   const d = state.analysis.diagnostics.find((x) => x.severity === "error");
   if (!d) return;
+  study.log("erro", { origem: d.source });
   const line = view.state.doc.lineAt(Math.min(d.from, view.state.doc.length)).number;
   setStatus("error", `Linha ${line}: ${d.message}`, d.from);
 }
@@ -400,7 +427,12 @@ function select(id, { reveal = false } = {}) {
   sendMarker();
   requestMath();
   const obj = id != null ? state.analysis.objects[id] : null;
-  if (reveal && obj) revealPosition(view, obj.ranges[0]?.from ?? obj.from);
+  if (reveal && obj && sync) revealPosition(view, obj.ranges[0]?.from ?? obj.from);
+}
+
+function kindOfSelected() {
+  const id = selectedId();
+  return id != null ? state.analysis.objects[id].kind : null;
 }
 
 function sendSelection() {
@@ -412,7 +444,8 @@ function sendSelection() {
     return;
   }
   const id = selectedId();
-  const axes = id == null ? {} : Object.fromEntries(["position", "rotation", "scale"].map((p) => [p, editableAxes(a, id, p)]));
+  // sem eixos o visor não mostra o gizmo: no grupo controle, a cena não escreve no código
+  const axes = id == null || !sync ? {} : Object.fromEntries(["position", "rotation", "scale"].map((p) => [p, editableAxes(a, id, p)]));
   bridge.send({ type: "select", id: toScreen(id), axes });
 }
 
@@ -450,13 +483,17 @@ function onTransform(msg) {
   // uma execução pendente (de algo digitado antes) esperaria o arraste acabar no visor
   if (!msg.final) clearTimeout(state.runTimer);
   applyPlan(planTransform(state.analysis, id, msg.prop, msg.values, msg.start, msg.touched));
-  if (msg.final) runNow();
+  if (msg.final) {
+    study.log("gizmo", { prop: msg.prop });
+    runNow();
+  }
 }
 
 function onInspectorEdit(id, key, value, phase) {
   const ok = applyPlan(planEdit(state.analysis, id, key, value, { current: (oid, k) => state.runtimeValues[oid]?.[k] }));
   if (!ok) return;
   if (phase === "commit") {
+    study.log("painel", { chave: key });
     runNow();
     return;
   }
@@ -468,10 +505,14 @@ function onInspectorEdit(id, key, value, phase) {
 const inspector = new Inspector(
   { list: $("#lv-objects"), panel: $("#lv-props") },
   {
-    select: (id) => select(id, { reveal: true }),
+    select: (id) => {
+      select(id, { reveal: true });
+      study.log("selecao", { origem: "lista", tipo: kindOfSelected() });
+    },
     edit: onInspectorEdit,
     reveal: (pos) => revealPosition(view, pos, true),
   },
+  { readOnly: sync ? null : READ_ONLY },
 );
 inspector.update(state.analysis, null);
 
@@ -486,7 +527,7 @@ const mathPanel = new MathPanel($("#lv-math"), {
     requestMath();
   },
   glass: (model) => setGlass(model),
-  log: () => {},
+  log: (type, data) => study.log(type, data),
 });
 
 /** Trechos do código dos literais "id:chave" (só os que o painel pode apontar). */
@@ -514,7 +555,7 @@ function updateMathContext() {
         ids: fromScreen,
         material: (meshId) => state.analysis.objects[meshId]?.links.material ?? null,
         nameOf: (objId) => state.analysis.objects[objId]?.name ?? null,
-        links: true,
+        links: sync,
       }
       : null,
   );
@@ -538,10 +579,12 @@ function setGlass(model) {
   state.glass = model;
   bridge.send({ type: "glass", model });
   mathPanel.setGlass(model);
+  study.log("vidro", { modelo: model ?? "desligado" });
 }
 
 const tabs = [...document.querySelectorAll('.lv-tabs [role="tab"]')];
 function setTab(tab) {
+  if (tab !== state.tab) study.log("aba", { aba: tab });
   state.tab = tab;
   for (const t of tabs) {
     const on = t.dataset.tab === tab;
@@ -577,6 +620,7 @@ for (const item of ADD_ITEMS) {
   button.textContent = item.label;
   button.addEventListener("click", () => {
     $("#lv-add").open = false;
+    study.log("adicionar", { tipo: item.kind });
     const plan = planAddObject(state.analysis, item.kind);
     if (plan.error) {
       setStatus("warn", plan.error);
@@ -600,21 +644,27 @@ for (const b of document.querySelectorAll("[data-mode]")) b.addEventListener("cl
 
 $("#lv-view").addEventListener("click", () => {
   state.view = state.view === "editor" ? "camera" : "editor";
+  study.log("vista", { vista: state.view });
   bridge.send({ type: "view", view: state.view });
   updateToolbar();
 });
 
 $("#lv-play").addEventListener("click", () => {
   state.playing = !state.playing;
+  study.log("animar", { tocando: state.playing });
   bridge.send({ type: "play", playing: state.playing });
   updateToolbar();
 });
 
-$("#lv-restart").addEventListener("click", () => runNow({ force: true, resetTime: true }));
+$("#lv-restart").addEventListener("click", () => {
+  study.log("rodar", { atalho: false });
+  runNow({ force: true, resetTime: true });
+});
 
 $("#lv-copy").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(view.state.doc.toString());
+    study.log("copiar");
     setStatus("ok", "Código copiado.");
   } catch {
     setStatus("warn", "O navegador não deixou copiar: selecione o código e use Ctrl+C.");
@@ -633,12 +683,14 @@ $("#lv-download").addEventListener("click", () => {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  study.log("baixar");
   setStatus("ok", "Página baixada: abra cena-visugraph.html no navegador (precisa de internet para carregar o Three.js).");
 });
 
 $("#lv-reset").addEventListener("click", () => {
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: STARTER_CODE }, userEvent: "input.cena" });
   state.selectedKey = null;
+  study.log("restaurar");
   runNow({ force: true, resetTime: true });
   setStatus("ok", "Exemplo restaurado. Ctrl+Z desfaz.");
 });
@@ -673,6 +725,48 @@ function setStatus(kind, text, pos = null) {
     go.addEventListener("click", () => revealPosition(view, pos, true));
     statusText.append(" ", go);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Faixa do modo de estudo
+
+if (group) {
+  document.body.dataset.study = group;
+  if (!sync) {
+    // sem gizmo e sem inserir código pela cena
+    $("#lv-add").hidden = true;
+    $('.lv-seg[aria-label="Ferramenta do gizmo"]').hidden = true;
+    $(".lv-view__hint").textContent = "Clique para selecionar · arraste para girar a vista · F centraliza";
+  }
+  const code = document.createElement("strong");
+  const exportButton = document.createElement("button");
+  exportButton.type = "button";
+  exportButton.textContent = "Exportar registro";
+  exportButton.addEventListener("click", () => {
+    study.save();
+    const url = URL.createObjectURL(new Blob([study.export()], { type: "application/json" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `visugraph-estudo-${study.code}.json` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus("ok", `Registro da sessão ${study.code} baixado. Ele não tem o seu código nem dados pessoais.`);
+  });
+  const newButton = document.createElement("button");
+  newButton.type = "button";
+  newButton.textContent = "Nova sessão";
+  newButton.title = "Para o próximo aluno neste computador (exporte o registro antes)";
+  newButton.addEventListener("click", () => {
+    study.start();
+    code.textContent = study.code;
+    setStatus("ok", `Nova sessão: ${study.code}. Anote este código no questionário.`);
+  });
+  code.textContent = study.code;
+  const banner = document.createElement("div");
+  banner.className = "lv-study";
+  banner.setAttribute("role", "note");
+  banner.append(`Estudo · grupo ${group} · sessão `, code, exportButton, newButton);
+  $(".lv-top").append(banner);
 }
 
 queueMicrotask(refreshEditor);

@@ -35,7 +35,7 @@ test("modo 3D: clicar no cubo destaca as linhas dele no código", async ({ page 
   await page.mouse.click(center.x, center.y);
 
   await expect(page.locator('.lv-object[aria-pressed="true"] .lv-object__name')).toHaveText("cubo");
-  await expect(page.locator(".lv-props__head h2")).toHaveText("cubo");
+  await expect(page.locator("#lv-props .lv-props__head h2")).toHaveText("cubo");
   const selected = page.locator(".cm-line.cm-vg-selected");
   await expect(selected.first()).toContainText("const cubo = new THREE.Mesh(");
   const lines = await selected.allInnerTexts();

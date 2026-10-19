@@ -117,7 +117,7 @@ const state = {
   highlighted: null, // id vindo do cursor no editor
   glass: null, // "phong" ou "blinn": a cena é desenhada pelo shader caixa de vidro
   marker: null, // { id, vertex }: vértice cujo caminho até o pixel o painel mostra
-  probe: null, // { bx, by, at }: pixel (do buffer) onde a sonda mede a iluminação
+  probe: null, // { bx, by, at, seq }: pixel (do buffer) onde a sonda mede a iluminação
 };
 let loopDeadline = Infinity;
 let loopCount = 0;
@@ -1026,12 +1026,13 @@ const probePixel = new Uint8Array(4);
 const probeArrows = new THREE.Group();
 overlay.add(probeArrows);
 let lastProbe = null;
+let probeSeq = 0;
 
 function setProbeAt(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const bx = Math.floor(((clientX - rect.left) / rect.width) * canvas.width);
   const by = Math.floor(((clientY - rect.top) / rect.height) * canvas.height);
-  state.probe = { bx, by, at: 0 };
+  state.probe = { bx, by, at: 0, seq: ++probeSeq }; // seq: cada clique é uma medida nova
 }
 
 function clearProbe() {
@@ -1083,6 +1084,7 @@ function measureProbe(run, camera, glass) {
   gl.readPixels(p.bx, H - 1 - p.by, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, probePixel);
   const msg = {
     type: "probe",
+    seq: p.seq,
     model: state.glass,
     pixel: [probePixel[0], probePixel[1], probePixel[2]],
     screen: [((p.bx + 0.5) * canvas.clientWidth) / W, ((p.by + 0.5) * canvas.clientHeight) / H],

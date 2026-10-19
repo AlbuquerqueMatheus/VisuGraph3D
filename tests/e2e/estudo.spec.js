@@ -35,6 +35,10 @@ test("estudo: no grupo controle o código roda, mas a cena não escreve nele nem
   await expect(page.locator('#lv-math [data-sec="path"] [data-verify]')).toContainText("✓ Conferido");
   await expect(page.locator("#lv-math [data-keys]")).toHaveCount(0);
 
+  // os desafios não falam do gizmo nem do painel, que este grupo não tem
+  await page.click("#lv-tab-challenges");
+  await expect(page.locator("#lv-challenges .lv-ch__head .lv-note")).toHaveText("0 de 10 feitos. A cena é conferida a cada vez que o código roda.");
+
   // escrever código continua mudando a cena
   await pasteCode(page, "const cena = new THREE.Scene();\nconst bola = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshNormalMaterial());\ncena.add(bola);");
   await expect(status(page)).toContainText("Cena atualizada · 1 objeto");

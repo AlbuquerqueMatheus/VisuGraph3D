@@ -669,18 +669,22 @@ for (const t of tabs) {
 // ---------------------------------------------------------------------------
 // Desafios: abrir, corrigir pela cena e guardar o progresso
 
-const challengesPanel = new ChallengesPanel($("#lv-challenges"), {
-  open: (id, origin) => openChallenge(challengeById(id), origin),
-  leave: () => openChallenge(null),
-  hint(id) {
-    const c = state.challenge;
-    if (!c || c.id !== id || state.hints >= c.hints.length) return;
-    state.hints++;
-    study.log("desafio.dica", { id, n: state.hints });
-    challengesPanel.setHints(state.hints);
+const challengesPanel = new ChallengesPanel(
+  $("#lv-challenges"),
+  {
+    open: (id, origin) => openChallenge(challengeById(id), origin),
+    leave: () => openChallenge(null),
+    hint(id) {
+      const c = state.challenge;
+      if (!c || c.id !== id || state.hints >= c.hints.length) return;
+      state.hints++;
+      study.log("desafio.dica", { id, n: state.hints });
+      challengesPanel.setHints(state.hints);
+    },
+    nextOf: (id) => nextChallenge(id, progress.done),
   },
-  nextOf: (id) => nextChallenge(id, progress.done),
-});
+  { sceneEdits: sync },
+);
 challengesPanel.setDone(progress.done);
 
 function saveProgress() {

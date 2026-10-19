@@ -14,11 +14,12 @@ export function richText(text) {
 export class ChallengesPanel {
   /**
    * `handlers`: open(id, origem), leave(), hint(id) e nextOf(id) (o desafio depois deste,
-   * ou null).
+   * ou null). `sceneEdits`: false quando a cena não escreve no código (grupo controle).
    */
-  constructor(root, handlers) {
+  constructor(root, handlers, { sceneEdits = true } = {}) {
     this.root = root;
     this.handlers = handlers;
+    this.sceneEdits = sceneEdits;
     this.done = new Set();
     this.challenge = null;
     this.hints = 0;
@@ -61,12 +62,13 @@ export class ChallengesPanel {
 
   listView() {
     const count = CHALLENGES.filter((c) => this.done.has(c.id)).length;
+    const how = this.sceneEdits ? "A cena é conferida a cada mudança: vale o código, o gizmo ou o painel." : "A cena é conferida a cada vez que o código roda.";
     const nodes = [
       el(
         "div",
         { class: "lv-ch__head" },
         el("h2", { class: "lv-ch__title", text: "Desafios" }),
-        el("p", { class: "lv-note", text: `${count} de ${CHALLENGES.length} feitos. A cena é conferida a cada mudança: vale o código, o gizmo ou o painel.` }),
+        el("p", { class: "lv-note", text: `${count} de ${CHALLENGES.length} feitos. ${how}` }),
       ),
     ];
     for (const trail of TRAILS) {

@@ -55,7 +55,7 @@ export const CHALLENGES = [
     id: "posicao",
     title: "Leve o cubo até o alvo",
     topic: "Translação",
-    statement: "O contorno tracejado mostra onde o cubo deve ficar: x = 2, y = 0,5, z = −1. Mova o cubo até lá, pelo código ou pela seta do gizmo.",
+    statement: "O contorno tracejado mostra onde o cubo deve ficar: x = 2, y = 0,5, z = −1. Mova o cubo até lá.",
     view: "editor",
     needs: ["cubo"],
     ghosts: [{ kind: "box", size: [1, 1, 1], matrix: translation(2, 0.5, -1) }],

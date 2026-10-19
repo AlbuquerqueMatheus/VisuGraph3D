@@ -3,6 +3,7 @@
 // O painel só mostra. Quem abre um desafio, troca o código do editor, corrige a cena e
 // guarda o progresso é src/live/app.js; a correção chega aqui por setResult().
 
+import { labUrl, labsOfTrail } from "../js/topics.js";
 import { CHALLENGES, TRAILS, challengeById, trailOf } from "./challenges.js";
 import { MatrixView, el } from "./mathPanel.js";
 
@@ -11,15 +12,25 @@ export function richText(text) {
   return text.split("`").map((part, i) => (i % 2 ? el("code", { text: part }) : part));
 }
 
+/** "Rever no laboratório: Coordenadas", com um link para cada laboratório da trilha. */
+function reviewLabs(labs) {
+  if (!labs.length) return null;
+  const links = labs.map((lab) => el("a", { class: "lv-link", href: labUrl(lab.id), text: lab.name }));
+  const parts = links.flatMap((link, i) => (i === 0 ? [link] : [i === links.length - 1 ? " e " : ", ", link]));
+  return el("p", { class: "lv-note" }, labs.length > 1 ? "Rever nos laboratórios: " : "Rever no laboratório: ", ...parts);
+}
+
 export class ChallengesPanel {
   /**
    * `handlers`: open(id, origem), leave(), hint(id) e nextOf(id) (o desafio depois deste,
    * ou null). `sceneEdits`: false quando a cena não escreve no código (grupo controle).
+   * `labLinks`: false no modo de estudo, para a sessão registrada não sair do código vivo.
    */
-  constructor(root, handlers, { sceneEdits = true } = {}) {
+  constructor(root, handlers, { sceneEdits = true, labLinks = true } = {}) {
     this.root = root;
     this.handlers = handlers;
     this.sceneEdits = sceneEdits;
+    this.labLinks = labLinks;
     this.done = new Set();
     this.challenge = null;
     this.hints = 0;
@@ -91,7 +102,7 @@ export class ChallengesPanel {
           "section",
           { class: "lv-trail", "data-trail": trail.id },
           el("h3", { text: trail.title }),
-          trail.from ? el("p", { class: "lv-note", text: `Continua o laboratório ${trail.from}.` }) : null,
+          this.labLinks ? reviewLabs(labsOfTrail(trail.id)) : null,
           list,
         ),
       );
@@ -105,8 +116,11 @@ export class ChallengesPanel {
     const trail = trailOf(c.id);
     const leave = el("button", { type: "button", class: "lv-link", "data-action": "leave", text: "← Sair do desafio" });
     leave.addEventListener("click", () => this.handlers.leave());
+    const labs = labsOfTrail(trail.id);
+    const lab = labs.find((l) => l.id === c.lab) ?? labs[0];
+    const review = this.labLinks && lab ? el("a", { class: "lv-link", href: labUrl(lab.id), text: `Rever no laboratório: ${lab.name}` }) : null;
     const nodes = [
-      el("div", { class: "lv-ch__nav" }, leave),
+      el("div", { class: "lv-ch__nav" }, leave, review),
       el(
         "div",
         { class: "lv-ch__head" },

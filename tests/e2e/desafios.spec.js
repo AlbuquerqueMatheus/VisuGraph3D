@@ -219,3 +219,25 @@ test("desafios: ?livre abre o editor sem o desafio guardado, e o recarregar cont
   await expect(page.locator("#lv-codebar")).toBeHidden();
   expect(await code(page)).toContain("Tudo o que aparece no visor vem deste código");
 });
+
+test("desafios: Rever no laboratório leva ao laboratório do desafio, e Programar volta para ele", async ({ page }) => {
+  await openTrail(page, "livre");
+  await page.locator("#lv-tab-challenges").click();
+  await expect(page.locator('.lv-trail[data-trail="matriz"] a')).toHaveAttribute("href", "./index-2d.html#coordenadas");
+  await expect(page.locator('.lv-trail[data-trail="phong"] a')).toHaveText(["Modelo Phong", "Sistemas de cores"]);
+  await expect(page.locator('.lv-trail[data-trail="camera"] a'), "Câmera ainda não tem laboratório").toHaveCount(0);
+
+  // ?desafio= abre aquele desafio, mesmo fora da ordem da trilha
+  await openTrail(page, "desafio=cor");
+  expect(new URL(page.url()).search, "o desafio sai da URL").toBe("");
+  await expect(page.locator(".lv-ch__title")).toHaveText("A esfera verde fica preta");
+  await page.locator(".lv-ch__nav").getByRole("link", { name: "Rever no laboratório: Sistemas de cores" }).click();
+  await expect(page).toHaveURL(/index-2d\.html#cores$/);
+  await expect(page.locator("#color-system-section")).toBeVisible();
+
+  // Programar, na barra do laboratório, volta ao desafio que estava aberto, não ao primeiro da trilha
+  await page.locator("#vg-nav").getByRole("link", { name: "Programar" }).click();
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(page.locator(".lv-ch__title")).toHaveText("A esfera verde fica preta");
+  await expect(page.locator(".lv-ch__kicker")).toHaveText("Luz e cor (Phong) · 3 de 3");
+});

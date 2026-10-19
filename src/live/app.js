@@ -63,7 +63,9 @@ function forgetStudent() {
 }
 
 // Desafios: o que já foi feito e o desafio aberto. ?trilha=matriz|camera|phong (a tela inicial,
-// a barra e os laboratórios) abre o primeiro desafio ainda não feito da trilha, e ?livre abre o
+// a barra e os laboratórios) abre o primeiro desafio ainda não feito da trilha, ou continua no
+// desafio aberto, se ele é dessa trilha e não foi feito: quem foi rever o laboratório volta para
+// ele. ?desafio=<id> abre um desafio (o laboratório de cores leva ao da cor) e ?livre abre o
 // editor sem desafio.
 function loadProgress() {
   const { done, current } = readProgress();
@@ -71,11 +73,14 @@ function loadProgress() {
 }
 const progress = loadProgress();
 const asked = new URLSearchParams(location.search);
-const trailAsked = trailById(asked.get("trilha"));
-const freeAsked = !trailAsked && asked.has("livre");
-if (trailAsked || freeAsked) {
+const challengeAsked = challengeById(asked.get("desafio"));
+const trailAsked = challengeAsked ? null : trailById(asked.get("trilha"));
+const freeAsked = !challengeAsked && !trailAsked && asked.has("livre");
+const resumeAsked = trailAsked && progress.current && trailOf(progress.current.id) === trailAsked && !progress.done.has(progress.current.id);
+if (challengeAsked || trailAsked || freeAsked) {
   // ao recarregar, vale o desafio que estava aberto, não o começo da trilha
   const url = new URL(location.href);
+  url.searchParams.delete("desafio");
   url.searchParams.delete("trilha");
   url.searchParams.delete("livre");
   history.replaceState(history.state, "", url);
@@ -104,7 +109,7 @@ const state = {
   glass: null, // caixa de vidro: null, "phong" ou "blinn"
   vertex: 0, // vértice que o painel Matemática acompanha
   probeSeq: null,
-  challenge: trailAsked ? firstOpen(trailAsked, progress.done) : freeAsked ? null : progress.current, // desafio aberto: o editor tem o código dele
+  challenge: challengeAsked ?? (trailAsked && !resumeAsked ? firstOpen(trailAsked, progress.done) : freeAsked ? null : progress.current), // desafio aberto: o editor tem o código dele
   challengeOpenedAt: Date.now(),
   hints: 0, // dicas mostradas no desafio aberto
   gradeKey: null, // verificações que passaram na última correção (o registro guarda só as mudanças)
@@ -727,7 +732,7 @@ const challengesPanel = new ChallengesPanel(
     },
     nextOf: (id) => nextChallenge(id, progress.done),
   },
-  { sceneEdits: sync },
+  { sceneEdits: sync, labLinks: !group },
 );
 challengesPanel.setDone(progress.done);
 
@@ -1011,7 +1016,7 @@ if (group) {
 }
 
 if (state.challenge) {
-  study.log("desafio.abrir", { id: state.challenge.id, origem: trailAsked ? "trilha" : "retomar" });
+  study.log("desafio.abrir", { id: state.challenge.id, origem: challengeAsked ? "endereco" : trailAsked ? "trilha" : "retomar" });
   saveProgress();
   showChallenge();
   setTab("challenges");

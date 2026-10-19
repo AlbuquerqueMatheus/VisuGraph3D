@@ -83,6 +83,16 @@ test("estudo: no grupo experimental tudo continua ligado, e cada sessão tem o s
   expect(log.eventos.map((e) => e.evento)).toEqual(["inicio", "execucao"]);
 });
 
+test("estudo: as trilhas e os desafios não mandam rever o laboratório, que fica fora da sessão", async ({ page }) => {
+  await openStudy(page, "experimental");
+  await page.click("#lv-tab-challenges");
+  await expect(page.locator('.lv-trail[data-trail="matriz"]')).toBeVisible();
+  await expect(page.locator("#lv-challenges a")).toHaveCount(0);
+  await page.click('[data-challenge="posicao"]');
+  await expect(page.locator(".lv-ch__title")).toHaveText("Leve o cubo até o alvo");
+  await expect(page.locator("#lv-challenges a")).toHaveCount(0);
+});
+
 test("estudo: a primeira sessão num navegador já usado começa sem o progresso e o código de antes", async ({ page }) => {
   await openLive(page);
   await pasteCode(page, "// de quem usou antes\nconst cena = new THREE.Scene();");

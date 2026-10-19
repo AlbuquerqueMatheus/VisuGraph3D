@@ -58,6 +58,10 @@ class CoresApp {
       hsvPreview: this.q("#hsv-preview"),
       hexHsv: this.q("#hex-value-hsv"),
 
+      // A cor no código vivo
+      colorCode: this.q("#color-code"),
+      copyColor: this.q("#btn-copy-color"),
+
       // Imagem / paleta
       fileInput: this.q("#image-upload"),
       img: this.q("#uploaded-image"),
@@ -119,10 +123,11 @@ class CoresApp {
     this.el.sValHsv?.addEventListener("input", () => this.updateFromHSV(true));
     this.el.vValHsv?.addEventListener("input", () => this.updateFromHSV(true));
 
-    // Copiar HEX
+    // Copiar HEX, ou a cor já como código do Three.js
     [this.el.hexRgb, this.el.hexHsl, this.el.hexHsv].forEach((el) => {
-      el?.addEventListener("click", () => this.copyHex(el.textContent));
+      el?.addEventListener("click", () => this.copyText(el.textContent, el));
     });
+    this.el.copyColor?.addEventListener("click", () => this.copyText(this.el.colorCode?.textContent, this.el.colorCode));
 
     // LCH + Daltonismo
     this.el.toggleLCH?.addEventListener("change", () => {
@@ -420,6 +425,8 @@ class CoresApp {
     this.el.hexRgb && (this.el.hexRgb.textContent = hex);
     this.el.hexHsl && (this.el.hexHsl.textContent = hex);
     this.el.hexHsv && (this.el.hexHsv.textContent = hex);
+    // como as cores do código vivo: new THREE.Color("#15171c")
+    this.el.colorCode && (this.el.colorCode.textContent = `new THREE.Color("${hex.toLowerCase()}")`);
 
     this.updateContrastBlock(this.blocks?.rgbContrast, hex, displayHex);
     this.updateContrastBlock(this.blocks?.hslContrast, hex, displayHex);
@@ -912,16 +919,26 @@ class CoresApp {
     return t === "none" || s <= 0 ? hex : this.applyCVD(hex, t, s);
   }
 
-  copyHex(hex) {
-    if (!hex) return;
-    navigator.clipboard?.writeText(hex).then(() => {
-      const toast = document.createElement("div");
-      toast.textContent = `Copiado: ${hex}`;
-      toast.style.cssText =
-        "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;padding:6px 10px;border-radius:6px;z-index:9999;";
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 900);
-    });
+  /** Copia o texto; sem acesso à área de transferência, deixa `source` selecionado para o Ctrl+C. */
+  copyText(text, source) {
+    if (!text) return;
+    const copied = navigator.clipboard?.writeText(text) ?? Promise.reject(new Error("sem área de transferência"));
+    copied.then(
+      () => this.toast(`Copiado: ${text}`),
+      () => {
+        if (source) window.getSelection()?.selectAllChildren(source);
+        this.toast("Não deu para copiar: o texto ficou selecionado, use Ctrl+C", 2500);
+      }
+    );
+  }
+
+  toast(text, ms = 900) {
+    const toast = document.createElement("div");
+    toast.textContent = text;
+    toast.style.cssText =
+      "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;padding:6px 10px;border-radius:6px;z-index:9999;";
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), ms);
   }
 }
 

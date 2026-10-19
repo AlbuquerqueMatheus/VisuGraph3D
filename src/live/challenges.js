@@ -4,6 +4,8 @@
 // verificações olham a cena que está rodando (os "fatos" que o visor lê: posições de mundo,
 // caixas, câmera, luzes, materiais), não o texto do código: qualquer caminho que chegue ao
 // resultado vale, seja pelo código, pelo gizmo ou pelo painel. Nos textos, `assim` é código.
+// Os laboratórios de cada trilha estão no tema dela (src/js/topics.js); `lab` escolhe qual
+// deles o desafio manda rever, quando não é o primeiro.
 
 import { invert, multiply, perspective, rotationY, rotationZ, scaling, toNdc, transform, translation } from "../lib/transform3d.js";
 
@@ -360,6 +362,7 @@ cena.add(esfera);
     id: "cor",
     title: "A esfera verde fica preta",
     topic: "Cor: canal a canal",
+    lab: "cores",
     statement: "A esfera é verde. Sem mudar o material e sem apagar as luzes, faça ela ficar preta mudando só a cor delas (a luz ambiente também conta).",
     view: "camera",
     needs: ["esfera", "luzAmbiente", "sol"],
@@ -435,9 +438,9 @@ cena.add(bloco);
 ];
 
 export const TRAILS = [
-  { id: "matriz", title: "Transformações e matrizes", from: "Coordenadas 2D", challenges: ["posicao", "rotacao", "escala", "hierarquia", "matriz"] },
+  { id: "matriz", title: "Transformações e matrizes", challenges: ["posicao", "rotacao", "escala", "hierarquia", "matriz"] },
   { id: "camera", title: "Câmera e projeção", challenges: ["lookat", "fov"] },
-  { id: "phong", title: "Luz e cor (Phong)", from: "Modelo Phong 2D", glass: "phong", challenges: ["difusa", "especular", "cor"] },
+  { id: "phong", title: "Luz e cor (Phong)", glass: "phong", challenges: ["difusa", "especular", "cor"] },
 ];
 
 export const challengeById = (id) => CHALLENGES.find((c) => c.id === id) ?? null;

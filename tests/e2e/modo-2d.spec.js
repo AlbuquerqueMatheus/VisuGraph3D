@@ -241,6 +241,23 @@ for (const width of [1024, 1280]) {
   });
 }
 
+test("cores: a cor montada sai como código do three.js e leva ao desafio da cor no 3D", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("index-2d.html#cores");
+  const code = page.locator("#color-code");
+  await expect(code).toHaveText('new THREE.Color("#3366cc")');
+  await page.fill("#r-value", "200");
+  await expect(code).toHaveText('new THREE.Color("#c866cc")');
+  await page.click("#btn-copy-color");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('new THREE.Color("#c866cc")');
+
+  const next = page.locator("#color-bridge a.lab-next");
+  await expect(next).toHaveAttribute("href", "./index-3d.html?desafio=cor");
+  await next.click();
+  await expect(page.locator("#lv-status-text")).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(page.locator(".lv-ch__title")).toHaveText("A esfera verde fica preta");
+});
+
 test.describe("Sistema de coordenadas", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("index-2d.html");

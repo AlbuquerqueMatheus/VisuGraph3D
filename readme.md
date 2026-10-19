@@ -29,7 +29,7 @@ npm run check      # tudo acima, na ordem
 
 Antes do primeiro `npm run test:e2e`, instale o navegador do Playwright com `npx playwright install chromium`.
 
-Os testes de ponta a ponta servem o build em `/visugraph3d/`, como no GitHub Pages, e falham se a página registrar erro no console, pedir arquivo fora do site ou não encontrar algum arquivo. Entre outras coisas, eles conferem que a cor de um pixel do visor Phong é a que a fórmula do painel calcula.
+Os testes de ponta a ponta servem o build numa subpasta (`/visugraph3d/`), para garantir que ele funciona em qualquer endereço, e falham se a página registrar erro no console, pedir arquivo fora do site ou não encontrar algum arquivo. Entre outras coisas, eles conferem que a cor de um pixel do visor Phong é a que a fórmula do painel calcula.
 
 ## Estrutura
 
@@ -51,6 +51,6 @@ Convenções usadas no modo 2D:
 
 ## Publicação
 
-O workflow `.github/workflows/ci.yml` roda lint, testes e build em cada pull request. Em cada push na `main`, se tudo passar, ele publica `dist/` no GitHub Pages.
+O site é publicado pelo [Netlify](https://www.netlify.com/), configurado em `netlify.toml`: ele roda `npm run build` com Node 22 e publica `dist/`. Cada push na `main` atualiza o site, e cada pull request ganha um endereço de prévia, que o Netlify comenta no próprio PR.
 
-Para ativar a publicação uma única vez: no GitHub, abra **Settings → Pages** e, em **Source**, escolha **GitHub Actions**.
+O workflow `.github/workflows/ci.yml` roda lint, testes unitários, build e testes de ponta a ponta em cada pull request e em cada push na `main`.

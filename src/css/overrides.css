@@ -1,13 +1,4 @@
 @layer overrides {
-  @media (max-width: 800px) {
-    /* Fallback de grids grandes para coluna */
-    .phong-main,
-    .color-main {
-      display: flex;
-      flex-direction: column;
-    }
-  }
-
   /* Render skipping para seções ocultas (perf) */
   .section.hidden {
     content-visibility: auto;

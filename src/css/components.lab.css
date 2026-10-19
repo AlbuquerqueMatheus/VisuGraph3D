@@ -1,0 +1,37 @@
+@layer components {
+/* ====== Laboratórios: o mesmo visual do código vivo (superfícies, linhas, botões e tipografia) ====== */
+.page-2d { font-size: 14px; }
+.page-2d .content { padding: var(--space-4) 20px 28px; }
+.page-2d .section { gap: var(--space-4); }
+
+/* Botões, listas e campos sem estilo próprio: os do código vivo (painel elevado, linha, destaque ao
+   passar o mouse). Com :where() a especificidade é zero, e qualquer regra de um laboratório vence */
+:where(.page-2d) :where(button, select) { background: var(--surface-2); border: 1px solid var(--surface-line); border-radius: var(--radius-2); padding: 4px 12px; color: var(--text-color); font-size: 13px; line-height: 1.6; cursor: pointer; transition: border-color .2s ease; }
+:where(.page-2d) :where(button:hover, select:focus) { border-color: var(--accent-color); }
+:where(.page-2d) :where(input[type="number"], input[type="text"]) { background: var(--surface-0); border: 1px solid var(--surface-line); border-radius: var(--radius-1); padding: 3px 6px; color: var(--text-color); }
+:where(.page-2d) :where(input[type="range"], input[type="checkbox"], input[type="radio"]) { accent-color: var(--accent-color); }
+
+/* Cabeçalho de cada laboratório: o nome, uma frase do que fazer e a ajuda */
+.lab-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.lab-head h2 { font-size: 20px; font-weight: 600; line-height: 1.3; }
+.lab-hint { margin-top: 2px; max-width: 80ch; color: var(--text-2); line-height: 1.5; }
+.lab-hint strong { color: var(--text-color); font-weight: 600; }
+.lab-head button { flex: none; }
+
+/* Título dentro de um painel: o mesmo das seções do painel do código vivo */
+.lab-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+
+/* Botão principal (Adicionar, Iniciar animação): o pressionado do código vivo */
+.lab-btn--primary { background: color-mix(in oklab, var(--accent-color) 22%, var(--surface-2)); border-color: var(--accent-color); }
+.lab-btn--primary:hover { background: color-mix(in oklab, var(--accent-color) 32%, var(--surface-2)); }
+.page-2d button[aria-pressed="true"] { background: color-mix(in oklab, var(--accent-color) 22%, var(--surface-2)); border-color: var(--accent-color); }
+
+/* Aviso curto no lugar de um alert() */
+.lab-msg { color: #ffb74d; font-size: 13px; }
+.lab-msg:empty { display: none; }
+
+@media (max-width: 640px) {
+  .page-2d .content { padding: var(--space-3) var(--space-3) 24px; }
+  .lab-head { flex-wrap: wrap; }
+}
+}

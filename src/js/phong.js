@@ -172,7 +172,7 @@ class PhongApp {
       <div><span style="background:#00ff00"></span> n̂ — normal</div>
       <div><span style="background:#ffff66"></span> l̂ — direção da luz</div>
       <div><span style="background:#4488ff"></span> v̂ — direção do observador</div>
-      <div><span style="background:#ffee55"></span> r̂ — reflexão</div>
+      <div><span style="background:#ffa64d"></span> r̂ — reflexão</div>
       <div><span style="background:#ff88ff"></span> ĥ — half-vector</div>
     `;
     this.container.appendChild(legend);
@@ -228,13 +228,52 @@ class PhongApp {
     const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.9, colorHex, 0.14, 0.08);
     arrow.name = name;
 
+    // só o símbolo, na cor da seta: a legenda do visor diz o nome de cada um
     const labelEl = document.createElement("div");
     labelEl.className = "phong-label";
     labelEl.textContent = name;
+    labelEl.style.color = `#${colorHex.toString(16).padStart(6, "0")}`;
     const label = new CSS2DObject(labelEl);
 
     this.scene.add(arrow, label);
-    return { arrow, label };
+    return { arrow, label, size: null };
+  }
+
+  /**
+   * Quando as pontas de dois vetores ficam perto, os rótulos se cobriam. Aqui, de cima para
+   * baixo na tela, cada rótulo desce o necessário para não cobrir os que já foram postos.
+   */
+  _spreadLabels() {
+    const w = this.container.clientWidth;
+    const h = this.container.clientHeight;
+    const GAP = 2;
+    const items = [];
+    for (const entry of Object.values(this.inspect.arrows)) {
+      const el = entry.label.element;
+      if (!entry.label.visible) continue;
+      if (!entry.size && el.offsetWidth) entry.size = [el.offsetWidth, el.offsetHeight];
+      if (!entry.size) continue;
+      const p = entry.label.position.clone().project(this.camera);
+      items.push({ el, x: ((p.x + 1) / 2) * w, y: ((1 - p.y) / 2) * h, w: entry.size[0], h: entry.size[1] });
+    }
+    items.sort((a, b) => a.y - b.y);
+    const placed = [];
+    for (const it of items) {
+      let y = it.y;
+      // cada empurrão põe o rótulo logo abaixo de outro, e y só cresce: o laço termina
+      for (let moved = true; moved; ) {
+        moved = false;
+        for (const o of placed) {
+          const dy = (it.h + o.h) / 2 + GAP;
+          if (Math.abs(it.x - o.x) < (it.w + o.w) / 2 + GAP && y > o.y - dy && y < o.y + dy - 0.5) {
+            y = o.y + dy;
+            moved = true;
+          }
+        }
+      }
+      placed.push({ ...it, y });
+      it.el.style.marginTop = `${y - it.y}px`;
+    }
   }
 
   _initInspectPoint() {
@@ -244,11 +283,11 @@ class PhongApp {
     );
     this.scene.add(this.inspect.marker);
 
-    this.inspect.arrows.n = this._makeArrow(0x00ff00, "n̂ (normal)");
-    this.inspect.arrows.l = this._makeArrow(0xffff66, "l̂ (luz)");
-    this.inspect.arrows.v = this._makeArrow(0x4488ff, "v̂ (visor)");
-    this.inspect.arrows.r = this._makeArrow(0xffee55, "r̂ (reflex)");
-    this.inspect.arrows.h = this._makeArrow(0xff88ff, "ĥ (half)");
+    this.inspect.arrows.n = this._makeArrow(0x00ff00, "n̂");
+    this.inspect.arrows.l = this._makeArrow(0xffff66, "l̂");
+    this.inspect.arrows.v = this._makeArrow(0x4488ff, "v̂");
+    this.inspect.arrows.r = this._makeArrow(0xffa64d, "r̂");
+    this.inspect.arrows.h = this._makeArrow(0xff88ff, "ĥ");
   }
 
   /* ================ Eventos & UI ================ */
@@ -483,16 +522,22 @@ class PhongApp {
     const top = 22;
     const step = Math.max(18, (h - top - 10) / 4);
 
+    const formula = `I = La·Ka  +  Ld·Kd·max(0,n·l)  +  Ls·Ks·max(0,${specSymbol})^n`;
+    const hint = "Clique no objeto para escolher o ponto de inspeção.";
+
     ctx.clearRect(0, 0, w, h);
+    // a linha mais longa cabe na largura: numa tela estreita a letra diminui, em vez de a conta ser cortada
     ctx.font = "14px ui-monospace, Menlo, monospace";
+    const widest = Math.max(ctx.measureText(formula).width, ctx.measureText(hint).width);
+    ctx.font = `${Math.max(9, Math.min(14, (14 * (w - 24)) / widest))}px ui-monospace, Menlo, monospace`;
     ctx.fillStyle = "#fff";
-    ctx.fillText(`I = La·Ka  +  Ld·Kd·max(0,n·l)  +  Ls·Ks·max(0,${specSymbol})^n`, 12, top);
+    ctx.fillText(formula, 12, top);
     ctx.fillStyle = "#aaa";
     ctx.fillText("Ambiente  = " + Ia.toFixed(3), 14, top + step);
     ctx.fillText("Difusa    = " + Id.toFixed(3), 14, top + 2 * step);
     ctx.fillText("Especular = " + Is.toFixed(3) + "   (zero quando n·l ≤ 0)", 14, top + 3 * step);
     ctx.fillStyle = "#41c5ff";
-    ctx.fillText("Clique no objeto para escolher o ponto de inspeção.", 12, top + 4 * step);
+    ctx.fillText(hint, 12, top + 4 * step);
   }
 
   /** A luz gira em volta do objeto a 1 rad/s, partindo da posição inicial. */
@@ -513,6 +558,7 @@ class PhongApp {
     this._updateInspection();
     this.renderer.render(this.scene, this.camera);
     this.labelRenderer.render(this.scene, this.camera);
+    this._spreadLabels();
   }
 
   resize() {

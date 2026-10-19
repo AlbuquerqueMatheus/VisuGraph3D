@@ -15,6 +15,22 @@ const pixel2d = (page, selector, x, y) =>
 const COORDS_CANVAS = "#coords-canvas-container canvas";
 const isPointRed = ([r, g, b]) => r > 200 && g < 120 && b < 120;
 
+// Há um ponto de controle da curva em volta de (x, y)? É um disco amarelo, com o centro
+// pintado de ciano pelo De Casteljau: procura o anel amarelo num quadrado de 13 px
+const controlPointAt = (page, x, y) =>
+  page.evaluate(
+    ([px, py]) => {
+      const canvas = document.querySelector("#bezier-canvas");
+      const scale = canvas.width / canvas.getBoundingClientRect().width;
+      const r = Math.round(6 * scale);
+      const box = [Math.round(px * scale) - r, Math.round(py * scale) - r, 2 * r + 1, 2 * r + 1];
+      const { data } = canvas.getContext("2d").getImageData(...box);
+      for (let i = 0; i < data.length; i += 4) if (data[i] > 200 && data[i + 1] > 200 && data[i + 2] < 100 && data[i + 3] > 200) return true;
+      return false;
+    },
+    [x, y]
+  );
+
 /** Troca de tema pelo menu da barra comum e, se o tema tem mais de um laboratório, pela aba. */
 async function openTopic(page, topic, lab) {
   await page.locator(".vg-topic summary").click();
@@ -62,13 +78,13 @@ test("trocar de laboratório pela barra não recarrega a página: cada um guarda
   await expect(page.locator(COORDS_CANVAS)).toBeVisible();
   await page.selectOption("#primitive-select", "point");
   await page.click("#btn-add-point");
-  await expect(page.locator("#coords-modifier .coords-row")).toHaveCount(1);
+  await expect(page.locator("#coords-modifier .coords-row"), "o triângulo do exemplo e o ponto novo").toHaveCount(4);
 
   await openTopic(page, "Luz e cor", "Sistemas de cores");
   await expect(page).toHaveURL(/index-2d#cores$/);
   await openTopic(page, "Transformações");
   await expect(page.locator("#coords-section")).toBeVisible();
-  await expect(page.locator("#coords-modifier .coords-row")).toHaveCount(1);
+  await expect(page.locator("#coords-modifier .coords-row")).toHaveCount(4);
 });
 
 test("a barra comum mostra o tema do laboratório e leva à trilha do mesmo tema", async ({ page }) => {
@@ -129,10 +145,107 @@ test("os laboratórios de coordenadas e de Phong continuam nas trilhas de desafi
   await expect(page.locator(".lv-ch__kicker")).toHaveText("Luz e cor (Phong) · 1 de 3");
 });
 
+test("cada laboratório abre com um exemplo e uma frase do que fazer", async ({ page }) => {
+  await page.goto("index-2d.html");
+  // Coordenadas: um triângulo já unido
+  await expect(page.locator("#coords-section .lab-hint")).toBeVisible();
+  await expect(page.locator("#coords-modifier .coords-row")).toHaveCount(3);
+  await expect(page.locator(".coords-prime").first()).toHaveText("→ A' (0.0, 80.0)");
+  const coords = await page.locator(COORDS_CANVAS).boundingBox();
+  const vertexC = [coords.width / 2 + 80, coords.height / 2 + 80]; // C = (80, −80), com y para cima
+  await expect.poll(async () => isPointRed(await pixel2d(page, COORDS_CANVAS, ...vertexC)), "o vértice C").toBe(true);
+
+  // Cores: o mesmo azul nos três sistemas
+  await openTopic(page, "Luz e cor", "Sistemas de cores");
+  await expect(page.locator("#color-system-section .lab-hint")).toBeVisible();
+  for (const hex of ["#hex-value-rgb", "#hex-value-hsl", "#hex-value-hsv"]) await expect(page.locator(hex)).toHaveText("#3366CC");
+  await expect(page.locator("#rgb-preview")).toHaveCSS("background-color", "rgb(51, 102, 204)");
+
+  await openTopic(page, "Luz e cor", "Modelo Phong");
+  await expect(page.locator("#phong-section .lab-hint")).toBeVisible();
+
+  // Curvas: uma cúbica em S, com t no meio; sem o exemplo, o canvas só teria a grade
+  await openTopic(page, "Curvas");
+  await expect(page.locator("#curves-section .lab-hint")).toBeVisible();
+  await expect(page.locator("#t-value")).toHaveText("0.50");
+  const curve = await page.locator("#bezier-canvas").boundingBox();
+  const p1 = [Math.round(0.34 * Math.floor(curve.width)), Math.round(0.16 * Math.floor(curve.height))];
+  await expect.poll(() => controlPointAt(page, ...p1), "o ponto P1").toBe(true);
+  await page.click("#reset-curve");
+  await expect.poll(() => controlPointAt(page, ...p1), "Limpar tira o exemplo").toBe(false);
+});
+
+test("o botão Ajuda de cada laboratório abre a explicação dele", async ({ page }) => {
+  await page.goto("index-2d.html");
+  const labs = [
+    ["#coordenadas", "#modal-help"],
+    ["#cores", "#modal-cores"],
+    ["#phong", "#modal-phong"],
+    ["#curvas", "#modal-curves"],
+  ];
+  for (const [hash, modal] of labs) {
+    await page.evaluate((h) => (location.hash = h), hash);
+    await page.locator(".section:not(.hidden) .lab-head").getByRole("button", { name: "Ajuda" }).click();
+    await expect(page.locator(modal)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator(modal)).toBeHidden();
+  }
+});
+
+test("coordenadas: Unir pontos com menos de três avisa na própria página, sem janela", async ({ page }) => {
+  const dialogs = [];
+  page.on("dialog", (dialog) => {
+    dialogs.push(dialog.message());
+    dialog.dismiss();
+  });
+  await page.goto("index-2d.html");
+  const msg = page.locator("#coords-msg");
+  await expect(msg).toBeHidden();
+
+  await page.click("#btn-reset");
+  await page.selectOption("#primitive-select", "point");
+  await page.click("#btn-add-point");
+  await page.click("#btn-unir");
+  await expect(msg).toBeVisible();
+  await expect(msg).toHaveText("Para unir, são precisos pelo menos 3 pontos.");
+
+  // com pontos bastantes, o aviso some
+  await page.selectOption("#primitive-select", "triangle");
+  await page.click("#btn-add-point");
+  await expect(msg).toBeHidden();
+  await page.click("#btn-unir");
+  await expect(msg).toBeHidden();
+  expect(dialogs).toEqual([]);
+});
+
+for (const width of [1024, 1280]) {
+  test(`o laboratório de cores cabe numa janela de ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("index-2d.html#cores");
+    await expect(page.locator("#hsv-panel")).toBeVisible();
+    // cada painel cabe na janela, e o que está dentro dele cabe no painel
+    const outside = await page.evaluate(() => {
+      const limit = document.documentElement.clientWidth;
+      const out = [];
+      for (const panel of document.querySelectorAll("#color-main > *")) {
+        const box = panel.getBoundingClientRect();
+        if (box.right > limit + 0.5) out.push(`#${panel.id} passa da janela`);
+        for (const el of panel.querySelectorAll("*")) {
+          const r = el.getBoundingClientRect();
+          if (r.width && r.right > box.right + 0.5) out.push(`${el.id || el.className || el.tagName} sai de #${panel.id}`);
+        }
+      }
+      return out;
+    });
+    expect(outside).toEqual([]);
+  });
+}
+
 test.describe("Sistema de coordenadas", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("index-2d.html");
     await expect(page.locator(COORDS_CANVAS)).toBeVisible();
+    await page.click("#btn-reset"); // tira o triângulo do exemplo: cada teste começa de um ponto só
     await page.selectOption("#primitive-select", "point");
     await page.click("#btn-add-point");
   });

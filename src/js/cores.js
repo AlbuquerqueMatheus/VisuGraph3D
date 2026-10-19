@@ -2,12 +2,13 @@
 
 class CoresApp {
   constructor() {
+    // Exemplo inicial: um azul de verdade (o branco não tem matiz nem saturação para mostrar)
     this.state = {
-      r: 255,
-      g: 255,
-      b: 255,
-      hsl: { h: 0, s: 0, l: 100 },
-      hsv: { h: 0, s: 0, v: 100 },
+      r: 51,
+      g: 102,
+      b: 204,
+      hsl: { h: 220, s: 60, l: 50 },
+      hsv: { h: 220, s: 75, v: 80 },
       useLCH: false,
       cvd: { type: "none", severity: 1.0 },
       updating: false,

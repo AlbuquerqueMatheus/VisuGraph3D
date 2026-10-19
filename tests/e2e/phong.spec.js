@@ -97,3 +97,39 @@ test.describe("Modelo Phong", () => {
     await expect(intensity).not.toHaveText(moving);
   });
 });
+
+// Caixas dos rótulos dos vetores na tela, lidas logo depois de o app desenhar o quadro
+const labelBoxes = (page) =>
+  page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() =>
+          resolve(
+            [...document.querySelectorAll("#phong-viewer .phong-label")]
+              .map((el) => ({ name: el.textContent, ...el.getBoundingClientRect().toJSON() }))
+              .filter((box) => box.width > 0)
+          )
+        );
+      })
+  );
+
+const overlapping = (boxes) =>
+  boxes.flatMap((a, i) =>
+    boxes
+      .slice(i + 1)
+      .filter((b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5)
+      .map((b) => `${a.name} cobre ${b.name}`)
+  );
+
+test("os rótulos dos vetores não se cobrem, com a luz parada ou girando", async ({ page }) => {
+  await page.goto("index-2d.html");
+  await page.evaluate(() => (document.getElementById("auto-light").checked = false));
+  await page.evaluate(() => (location.hash = "#phong"));
+  await expect(page.locator(VIEWER_CANVAS).first()).toBeVisible();
+  await expect.poll(async () => (await labelBoxes(page)).length, "n̂, l̂, v̂, r̂ e ĥ na tela").toBe(5);
+  expect(overlapping(await labelBoxes(page))).toEqual([]);
+
+  // girando, as pontas dos vetores mudam a cada quadro: confere uma sequência deles
+  await page.check("#auto-light");
+  for (let frame = 0; frame < 40; frame++) expect(overlapping(await labelBoxes(page)), `quadro ${frame}`).toEqual([]);
+});

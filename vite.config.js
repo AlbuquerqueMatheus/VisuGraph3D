@@ -27,19 +27,22 @@ export default defineConfig({
       input: {
         main: page("./index.html"),
         twoD: page("./index-2d.html"),
+        threeD: page("./index-3d.html"),
+        viewport: page("./viewport.html"),
       },
       output: {
         codeSplitting: {
           groups: [
             { name: "three", test: /node_modules[\\/]three[\\/]/ },
             { name: "p5", test: /node_modules[\\/]p5[\\/]/ },
-            { name: "codemirror", test: /node_modules[\\/]codemirror5[\\/]/ },
+            { name: "codemirror", test: /node_modules[\\/](@codemirror|@lezer|codemirror|crelt|style-mod|w3c-keyname)[\\/]/ },
+            { name: "acorn", test: /node_modules[\\/]acorn[\\/]/ },
           ],
         },
       },
     },
   },
-  // Vitest: testes unitários das funções puras (src/lib)
+  // Vitest: testes unitários das funções puras (src/lib e o motor de src/live/engine)
   test: {
     include: ["tests/unit/**/*.test.js"],
   },

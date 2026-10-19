@@ -1,0 +1,5 @@
+/* live.css — modo 3D (código vivo): agregador com as mesmas camadas das outras páginas */
+@import url("base.reset.css") layer(reset);
+@import url("base.tokens.css") layer(tokens);
+@import url("base.global.css") layer(base);
+@import url("modules.live.css") layer(components);

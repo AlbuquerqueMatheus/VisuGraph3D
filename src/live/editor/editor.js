@@ -37,6 +37,7 @@ const theme = EditorView.theme(
     ".cm-line.cm-vg-selected": { backgroundColor: "#ffc94d17", boxShadow: "inset 3px 0 #ffc94d" },
     ".cm-line.cm-vg-related": { backgroundColor: "#41c5ff10", boxShadow: "inset 3px 0 #41c5ff99" },
     ".cm-vg-number": { borderBottom: "1px dotted #f78c6c99", cursor: "ew-resize" },
+    ".cm-vg-math": { backgroundColor: "#ff5fd23d", outline: "1px solid #ff5fd2aa", borderRadius: "2px" },
     ".cm-tooltip": { backgroundColor: "#22252e", color: "#e6e9ef", border: "1px solid #343946", borderRadius: "6px" },
     ".cm-tooltip.cm-tooltip-hover": { maxWidth: "380px", padding: "8px 10px", fontFamily: "system-ui, sans-serif", fontSize: "13px" },
     ".cm-vg-tip-title": { fontFamily: MONO, color: "#ffcb6b", marginBottom: "4px", fontSize: "12.5px" },
@@ -95,6 +96,25 @@ function lineDecorations(doc, { selected = [], related = [] }) {
   }
   return builder.finish();
 }
+
+// ---------------------------------------------------------------------------
+// Trechos ligados ao que está sob o mouse no painel "Matemática"
+
+const mathMark = Decoration.mark({ class: "cm-vg-math" });
+const setMathLinks = StateEffect.define();
+const mathField = StateField.define({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) {
+      if (!e.is(setMathLinks)) continue;
+      const ranges = e.value.filter((r) => r.to <= tr.state.doc.length && r.from < r.to).sort((a, b) => a.from - b.from);
+      deco = Decoration.set(ranges.map((r) => mathMark.range(r.from, r.to)));
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
 
 // ---------------------------------------------------------------------------
 // Números editáveis sublinhados e arrastáveis
@@ -297,6 +317,7 @@ export function createEditor(parent, doc, host) {
         lintGutter(),
         highlightField,
         numbersField,
+        mathField,
         scrubPlugin(host),
         hoverPlugin(host),
         hoverTooltip((view, pos) => {
@@ -335,6 +356,13 @@ export function createEditor(parent, doc, host) {
 /** Destaca as linhas do objeto selecionado e as do objeto sob o mouse. */
 export function showHighlight(view, selected, related) {
   view.dispatch({ effects: setHighlight.of({ selected, related }) });
+}
+
+/** Marca os trechos do código ligados ao número sob o mouse no painel (lista vazia limpa). */
+export function showMathLinks(view, ranges, scroll = false) {
+  const effects = [setMathLinks.of(ranges)];
+  if (scroll && ranges.length) effects.push(EditorView.scrollIntoView(ranges[0].from, { y: "nearest" }));
+  view.dispatch({ effects });
 }
 
 /** Atualiza sublinhado dos números editáveis e a lista de erros. */

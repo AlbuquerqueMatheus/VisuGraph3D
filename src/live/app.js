@@ -11,8 +11,10 @@ import { editableAxes, planEdit, planTransform } from "./engine/patch.js";
 import { ADD_ITEMS, STARTER_CODE, planAddObject } from "./engine/snippets.js";
 import { translateError } from "./engine/errors.js";
 import { degToRad } from "./engine/format.js";
-import { createEditor, revealPosition, sceneEdit, showAnalysis, showHighlight } from "./editor/editor.js";
+import { createEditor, revealPosition, sceneEdit, showAnalysis, showHighlight, showMathLinks } from "./editor/editor.js";
+import { isObject3DKind } from "./engine/catalog.js";
 import { Inspector } from "./inspector.js";
+import { MathPanel } from "./mathPanel.js";
 import { ViewportBridge } from "./bridge.js";
 import { exportHtml } from "./export.js";
 
@@ -42,6 +44,10 @@ const state = {
   runTimer: null,
   liveTimer: null,
   liveDirty: false,
+  tab: "props", // aba do painel da direita: props, math ou challenges
+  glass: null, // caixa de vidro: null, "phong" ou "blinn"
+  vertex: 0, // vértice que o painel Matemática acompanha
+  probeSeq: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -126,7 +132,11 @@ const view = createEditor($("#lv-editor"), loadCode(), {
   analysis: () => state.analysis,
   onChange,
   onCursor: (pos) => setCodeHover(objectAt(pos)),
-  onHoverPos: (pos) => setCodeHover(pos == null ? objectAt(view.state.selection.main.head) : objectAt(pos)),
+  onHoverPos: (pos) => {
+    setCodeHover(pos == null ? objectAt(view.state.selection.main.head) : objectAt(pos));
+    const slot = pos == null ? null : state.analysis.numbers.find((n) => n.from <= pos && pos <= n.to)?.slot;
+    mathPanel.highlightKey(slot ? `${slot.id}:${slot.key}` : null);
+  },
   onScrub,
   onScrubEnd: () => runNow(),
   onRun: () => runNow({ force: true }),
@@ -141,6 +151,7 @@ function onChange(update) {
   saveSoon(code);
   queueMicrotask(refreshEditor);
   inspector.update(state.analysis, selectedId(), runtimeForCurrent());
+  updateMathContext();
   const kind = update.transactions.map((tr) => tr.annotation(sceneEdit)).find(Boolean);
   if (kind === "cena") return; // quem editou decide quando rodar
   if (kind === "scrub") return liveRun();
@@ -248,6 +259,7 @@ function onMessage(msg) {
         // o visor foi reiniciado: mostra de novo a última cena que funcionou
         sendRun(state.screen);
       }
+      if (state.glass) bridge.send({ type: "glass", model: state.glass });
       break;
     case "ran":
       onRan(msg);
@@ -277,6 +289,12 @@ function onMessage(msg) {
     }
     case "mode":
       setMode(msg.mode, false);
+      break;
+    case "math":
+      if (msg.id != null && msg.id === toScreen(selectedId())) mathPanel.setData(msg);
+      break;
+    case "probe":
+      mathPanel.setProbe(msg);
       break;
     case "fatal":
       setStatus("error", msg.message);
@@ -317,6 +335,9 @@ function onRan(msg) {
   }
   sendSelection();
   requestInspect();
+  updateMathContext();
+  sendMarker();
+  requestMath();
 }
 
 function onRuntimeError(msg) {
@@ -368,11 +389,16 @@ function clearRunning() {
 // Seleção
 
 function select(id, { reveal = false } = {}) {
-  state.selectedKey = id == null ? null : keysOf(state.analysis).byId.get(id) ?? null;
+  const key = id == null ? null : keysOf(state.analysis).byId.get(id) ?? null;
+  if (key !== state.selectedKey) state.vertex = 0;
+  state.selectedKey = key;
   refreshEditor();
   inspector.update(state.analysis, selectedId(), runtimeForCurrent());
+  updateMathContext();
   sendSelection();
   requestInspect();
+  sendMarker();
+  requestMath();
   const obj = id != null ? state.analysis.objects[id] : null;
   if (reveal && obj) revealPosition(view, obj.ranges[0]?.from ?? obj.from);
 }
@@ -448,6 +474,96 @@ const inspector = new Inspector(
   },
 );
 inspector.update(state.analysis, null);
+
+// ---------------------------------------------------------------------------
+// Abas do painel e a aba Matemática
+
+const mathPanel = new MathPanel($("#lv-math"), {
+  hover: (keys) => showMathLinks(view, keys ? rangesOf(keys) : [], true),
+  vertex(index) {
+    state.vertex = index;
+    sendMarker();
+    requestMath();
+  },
+  glass: (model) => setGlass(model),
+  log: () => {},
+});
+
+/** Trechos do código dos literais "id:chave" (só os que o painel pode apontar). */
+function rangesOf(keys) {
+  const a = state.analysis;
+  if (!a.ok) return [];
+  const out = [];
+  for (const key of keys) {
+    const i = key.indexOf(":");
+    const st = a.objects[Number(key.slice(0, i))]?.props[key.slice(i + 1)];
+    if (st && st.status === "slot") out.push({ from: st.slot.from, to: st.slot.to });
+  }
+  return out;
+}
+
+function updateMathContext() {
+  const id = selectedId();
+  const obj = id != null ? state.analysis.objects[id] : null;
+  mathPanel.setContext(
+    obj && isObject3DKind(obj.kind)
+      ? {
+        id,
+        name: obj.name,
+        className: obj.className,
+        ids: fromScreen,
+        material: (meshId) => state.analysis.objects[meshId]?.links.material ?? null,
+        nameOf: (objId) => state.analysis.objects[objId]?.name ?? null,
+        links: true,
+      }
+      : null,
+  );
+}
+
+function requestMath() {
+  const id = state.tab === "math" ? toScreen(selectedId()) : null;
+  if (id != null) bridge.send({ type: "math", id, vertex: state.vertex });
+}
+// a câmera do editor e a animação mudam as contas sem o código mudar
+setInterval(() => {
+  if (document.visibilityState === "visible") requestMath();
+}, 200);
+
+function sendMarker() {
+  const id = state.tab === "math" ? toScreen(selectedId()) : null;
+  bridge.send({ type: "marker", id, vertex: state.vertex });
+}
+
+function setGlass(model) {
+  state.glass = model;
+  bridge.send({ type: "glass", model });
+  mathPanel.setGlass(model);
+}
+
+const tabs = [...document.querySelectorAll('.lv-tabs [role="tab"]')];
+function setTab(tab) {
+  state.tab = tab;
+  for (const t of tabs) {
+    const on = t.dataset.tab === tab;
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+    document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+  }
+  showMathLinks(view, []);
+  sendMarker();
+  requestMath();
+}
+for (const t of tabs) {
+  t.addEventListener("click", () => setTab(t.dataset.tab));
+  t.addEventListener("keydown", (e) => {
+    const k = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (!k) return;
+    const visible = tabs.filter((x) => !x.hidden);
+    const next = visible[(visible.indexOf(t) + k + visible.length) % visible.length];
+    setTab(next.dataset.tab);
+    next.focus();
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Barra de ferramentas

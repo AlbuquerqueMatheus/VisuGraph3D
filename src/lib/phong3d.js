@@ -72,7 +72,12 @@ export function distanceAttenuation(d, distance, decay) {
 
 /** Fator do cone de um holofote: 0 fora do ângulo, 1 no miolo, suave na penumbra. */
 export function spotFactor(l, spotDir, angle, penumbra) {
-  return smoothstep(Math.cos(angle), Math.cos(angle * (1 - penumbra)), dot(l, spotDir));
+  const outer = Math.cos(angle);
+  const inner = Math.cos(angle * (1 - penumbra));
+  const c = dot(l, spotDir);
+  // sem penumbra, a borda é um degrau (o smoothstep do GLSL não vale com as duas bordas iguais)
+  if (inner - outer < 1e-6) return c >= outer ? 1 : 0;
+  return smoothstep(outer, inner, c);
 }
 
 /**
@@ -127,13 +132,14 @@ export function shadePoint({ point, normal, eye, material, lights, model = "phon
   for (const light of lights) {
     const at = lightAt(light, point, n);
     if (!at) continue;
+    // como no shader: as ambientes se somam numa só, as outras ocupam até MAX_LIGHTS lugares
+    if (at.type !== "ambient" && count++ >= MAX_LIGHTS) continue;
     if (at.type === "ambient" || at.type === "hemisphere") {
       const I = mul(material.Kd, at.L);
       ambient.push({ ...at, light, I });
       sum = add(sum, I);
       continue;
     }
-    if (count++ >= MAX_LIGHTS) continue;
     const nl = dot(n, at.l);
     const r = reflect(at.l, n);
     const h = halfVector(at.l, v);

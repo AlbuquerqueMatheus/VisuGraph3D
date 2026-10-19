@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VisuGraph · resumo do estudo</title>
+    <link rel="stylesheet" href="src/css/study.css" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+
+  <body class="page-study">
+    <header class="st-top">
+      <a class="st-back" href="./index.html" title="Voltar ao menu">← Menu</a>
+      <h1>Resumo do estudo</h1>
+    </header>
+
+    <main class="st-main">
+      <p class="st-lead">
+        Escolha os registros que os alunos exportaram no fim da aula e, se já tiver, a planilha dos testes e questionários em CSV.
+        O resumo junta tudo pelo código da sessão. Os arquivos são lidos neste computador: nada é enviado.
+      </p>
+
+      <div class="st-inputs">
+        <label class="st-file">
+          <span>Registros de uso <small>os arquivos visugraph-estudo-*.json, todos de uma vez</small></span>
+          <input type="file" id="st-logs" accept=".json,application/json" multiple />
+        </label>
+        <label class="st-file">
+          <span>Planilha dos testes e questionários <small>CSV com vírgula ou ponto e vírgula, opcional</small></span>
+          <input type="file" id="st-sheet" accept=".csv,text/csv" />
+        </label>
+      </div>
+
+      <details class="st-columns">
+        <summary>Colunas que o resumo lê na planilha</summary>
+        <p>
+          <code>codigo</code>, <code>grupo</code>, <code>ordem</code> (AB ou BA), as notas <code>pre_1</code> a <code>pre_10</code> e
+          <code>pos_1</code> a <code>pos_10</code> (de 0 a 10), as respostas <code>sus_1</code> a <code>sus_10</code> (de 1 a 5) e
+          <code>tlx_mental</code>, <code>tlx_fisica</code>, <code>tlx_temporal</code>, <code>tlx_desempenho</code>, <code>tlx_esforco</code> e
+          <code>tlx_frustracao</code> (de 0 a 100). Uma planilha só com os totais <code>pre</code>, <code>pos</code>, <code>sus</code> e
+          <code>tlx</code> também serve.
+        </p>
+      </details>
+
+      <p class="st-empty" id="st-empty">Nenhum arquivo escolhido ainda.</p>
+
+      <section class="st-block" id="st-warnings" hidden aria-labelledby="st-warnings-title">
+        <h2 id="st-warnings-title">Avisos</h2>
+        <ul></ul>
+      </section>
+
+      <section class="st-block" id="st-groups" hidden aria-labelledby="st-groups-title">
+        <h2 id="st-groups-title">Por grupo</h2>
+        <p class="st-note">Média ± desvio padrão e o número de participantes com aquela medida. Os testes entre os grupos ficam para o JASP ou o R, com o CSV.</p>
+        <div class="st-scroll"><table></table></div>
+      </section>
+
+      <section class="st-block" id="st-sessions" hidden aria-labelledby="st-sessions-title">
+        <h2 id="st-sessions-title">Por sessão</h2>
+        <p class="st-note">A tabela mostra as colunas principais; o CSV traz todas, com o tempo e as dicas de cada desafio.</p>
+        <div class="st-actions">
+          <button type="button" id="st-csv">Baixar CSV</button>
+          <button type="button" id="st-csv-excel">Baixar CSV para o Excel</button>
+        </div>
+        <div class="st-scroll"><table></table></div>
+      </section>
+    </main>
+
+    <script type="module" src="src/live/studyPage.js"></script>
+  </body>
+</html>

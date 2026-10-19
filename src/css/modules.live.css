@@ -1,15 +1,15 @@
 @layer components {
 /* ====== Página: barra no topo, três colunas (código | visor | painel) e status ====== */
 .page-live {
-  --lv-bg: #121318;
-  --lv-panel: #1a1c23;
-  --lv-panel-2: #20232c;
-  --lv-line: #2c303b;
-  --lv-text-2: #a3abbc;
+  --lv-bg: var(--surface-0);
+  --lv-panel: var(--surface-1);
+  --lv-panel-2: var(--surface-2);
+  --lv-line: var(--surface-line);
+  --lv-text-2: var(--text-2);
   --lv-select: #ffc94d;
   --lv-warn: #ffb74d;
   --lv-error: #ff6b6b;
-  --lv-ok: #5fd39a;
+  --lv-ok: var(--ok-color);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100vh;

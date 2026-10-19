@@ -31,6 +31,20 @@ test("página 2D abre as quatro seções sem depender de CDN", async ({ page }) 
   }
 });
 
+test("cada laboratório 2D tem endereço próprio", async ({ page }) => {
+  await page.goto("index-2d.html#curvas");
+  await expect(page.locator("#curves-section")).toBeVisible();
+  await expect(page.locator("#coords-section")).toBeHidden();
+
+  await page.click("#color-system-btn");
+  await expect(page).toHaveURL(/index-2d\.html#cores$/);
+
+  // trocar o endereço (um link, o botão voltar) troca o laboratório
+  await page.evaluate(() => (location.hash = "#phong"));
+  await expect(page.locator("#phong-section")).toBeVisible();
+  await expect(page.locator("#color-system-section")).toBeHidden();
+});
+
 test("os laboratórios de coordenadas e de Phong continuam nas trilhas de desafios do modo 3D", async ({ page }) => {
   await page.goto("index-2d.html");
   await page.click('.coord-tab[data-tab="measure"]');

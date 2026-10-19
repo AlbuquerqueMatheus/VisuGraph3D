@@ -16,13 +16,13 @@ import { isObject3DKind } from "./engine/catalog.js";
 import { Inspector } from "./inspector.js";
 import { MathPanel } from "./mathPanel.js";
 import { CHALLENGES, challengeById, firstOpen, grade, nextChallenge, trailById, trailOf } from "./challenges.js";
+import { PROGRESS_KEY, readProgress } from "./progress.js";
 import { ChallengesPanel } from "./challengesPanel.js";
 import { NO_STUDY, StudyLog, studyGroup } from "./study.js";
 import { ViewportBridge } from "./bridge.js";
 import { exportHtml } from "./export.js";
 
 const STORAGE_KEY = "visugraph.codigo.v1";
-const PROGRESS_KEY = "visugraph.desafios.v1"; // { feitos: [ids], atual: id }
 const challengeKey = (id) => `visugraph.desafio.${id}.v1`; // o código de cada desafio
 const RUNNING_KEY = "visugraph.rodando"; // presente enquanto um código roda: se a página travar, fica lá
 const NEW_SESSION_KEY = "visugraph.estudo.nova"; // sessionStorage: "Nova sessão" recarregou a página
@@ -63,13 +63,8 @@ function forgetStudent() {
 // Desafios: o que já foi feito e o desafio aberto. ?trilha=matriz|camera|phong (os links dos
 // laboratórios 2D) abre o primeiro desafio ainda não feito da trilha.
 function loadProgress() {
-  try {
-    const data = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "null");
-    const done = Array.isArray(data?.feitos) ? data.feitos.filter((id) => challengeById(id)) : [];
-    return { done: new Set(done), current: challengeById(data?.atual) };
-  } catch {
-    return { done: new Set(), current: null };
-  }
+  const { done, current } = readProgress();
+  return { done: new Set(done.filter((id) => challengeById(id))), current: challengeById(current) };
 }
 const progress = loadProgress();
 const trailAsked = trailById(new URLSearchParams(location.search).get("trilha"));

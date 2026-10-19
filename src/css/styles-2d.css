@@ -14,7 +14,6 @@
 @import url("modules.colors.css") layer(components);
 @import url("modules.phong.css") layer(components);
 @import url("modules.curves.css") layer(components);
-@import url("modules.home.css")   layer(components);
 
 /* Ajustes finais responsivos/perf */
 @import url("overrides.css") layer(overrides);

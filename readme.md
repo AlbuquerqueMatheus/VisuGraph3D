@@ -34,15 +34,16 @@ Os testes de ponta a ponta servem o build numa subpasta (`/visugraph3d/`), para 
 ## Estrutura
 
 ```
-index.html                    menu
+index.html                    tela inicial: os temas, cada um com o laboratório e a trilha de desafios
 index-2d.html                 modo 2D
 index-3d.html, viewport.html  modo 3D (código vivo) e o visor, que roda a cena num iframe
 estudo.html                   resumo do estudo: junta os registros de uso e a planilha dos testes
-src/js/                       código do menu e das seções do modo 2D
+src/js/                       código da tela inicial e das seções do modo 2D
 src/lib/                      funções puras com testes: transformações 2D e 3D, modelo de Phong (2D e 3D) e o shader do visor Phong
 src/live/                     modo 3D: motor (análise do código e edições), editor, visor, painel, desafios e modo de estudo
 src/css/                      estilos (camadas: tokens, base, componentes, overrides)
-public/                       imagens e a fonte da logo (licença em public/fonts)
+src/img/                      a imagem do código vivo na tela inicial
+public/                       o ícone do site
 docs/                         documentação do modo 3D: o subconjunto do Three.js, a aba Matemática, os desafios e o modo de estudo
 tests/unit/                   testes do Vitest
 tests/e2e/                    testes do Playwright

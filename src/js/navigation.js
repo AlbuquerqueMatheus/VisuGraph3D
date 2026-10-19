@@ -18,9 +18,15 @@
     curves: $("#curves-section"),
   };
 
+  // Cada laboratório tem endereço próprio (index-2d.html#cores), para a tela inicial e as
+  // trilhas apontarem direto para ele
+  const hashes = { coords: "coordenadas", colors: "cores", phong: "phong", curves: "curvas" };
+  const fromHash = () => Object.keys(hashes).find((k) => `#${hashes[k]}` === location.hash && sections[k]);
+
   function showSection(key) {
     Object.values(sections).forEach(hide);
     show(sections[key]);
+    if (location.hash !== `#${hashes[key]}`) history.replaceState(history.state, "", `#${hashes[key]}`);
     // marca botão ativo (opcional)
     const mapBtn = {
       coords: "#btn-coordenadas",
@@ -43,8 +49,14 @@
     location.href = "./index.html";
   });
 
-  // Se nenhuma seção estiver visível (por HTML/CSS), mostra a primeira existente
-  if (!Object.values(sections).some((el) => el && !el.classList.contains("hidden"))) {
+  // Abre o laboratório do endereço; sem endereço, o que estiver visível ou o primeiro
+  window.addEventListener("hashchange", () => {
+    const key = fromHash();
+    if (key) showSection(key);
+  });
+  const asked = fromHash();
+  if (asked) showSection(asked);
+  else if (!Object.values(sections).some((el) => el && !el.classList.contains("hidden"))) {
     const first = Object.keys(sections).find((k) => sections[k]);
     if (first) showSection(first);
   }

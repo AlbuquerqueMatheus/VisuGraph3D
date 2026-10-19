@@ -16,15 +16,30 @@ export class ViewportBridge {
       if (event.source !== iframe.contentWindow) return;
       const msg = event.data;
       if (!msg || msg.source !== "visugraph-viewport") return;
-      if (msg.type === "ready") {
-        this.ready = true;
-        const queued = this.queue;
-        this.queue = [];
-        for (const m of queued) m.type === "run" ? this.run(m) : this.send(m);
-      }
-      if (msg.type === "ran" && msg.runId === this.waitingRun) this.clearWatchdog();
-      this.onMessage(msg);
+      this.receive(msg);
     });
+    // O visor pode ter carregado antes deste script, e aí a mensagem dele já passou.
+    queueMicrotask(() => {
+      let early = null;
+      try {
+        early = iframe.contentWindow.__vgEarly ?? null;
+      } catch {
+        // visor de outra origem: só as mensagens valem
+      }
+      if (early) this.receive(early);
+    });
+  }
+
+  receive(msg) {
+    if (msg.type === "ready") {
+      if (this.ready) return; // a mesma notícia, pela mensagem e pela checagem acima
+      this.ready = true;
+      const queued = this.queue;
+      this.queue = [];
+      for (const m of queued) m.type === "run" ? this.run(m) : this.send(m);
+    }
+    if (msg.type === "ran" && msg.runId === this.waitingRun) this.clearWatchdog();
+    this.onMessage(msg);
   }
 
   send(msg) {

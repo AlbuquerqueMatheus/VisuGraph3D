@@ -147,6 +147,7 @@ function onChange(update) {
   if (hasBlockingError(state.analysis)) {
     clearTimeout(state.runTimer);
     showBlockingError();
+    sendSelection();
     return;
   }
   clearTimeout(state.runTimer);
@@ -277,6 +278,27 @@ function onMessage(msg) {
     case "mode":
       setMode(msg.mode, false);
       break;
+    case "fatal":
+      setStatus("error", msg.message);
+      break;
+    case "contextlost": {
+      // Sem o contexto WebGL o visor não desenha mais nada: recomeça do zero. Se o código cria
+      // WebGLRenderer (o motivo mais provável da perda), ele só roda de novo com ↻ Rodar.
+      const last = state.runs.get(state.runId)?.analysis;
+      const suspect = !!last && last.objects.some((o) => o.className === "WebGLRenderer");
+      if (suspect) {
+        state.stuckCode = last.code;
+        state.screen = null;
+      }
+      clearRunning();
+      bridge.reset();
+      setStatus(
+        "error",
+        "O visor perdeu o acesso ao WebGL e foi reiniciado." +
+          (suspect ? " Cada WebGLRenderer do código ocupa um contexto WebGL: apague essa parte (o VisuGraph já desenha a cena) e clique em ↻ Rodar." : ""),
+      );
+      break;
+    }
   }
 }
 
@@ -356,8 +378,14 @@ function select(id, { reveal = false } = {}) {
 }
 
 function sendSelection() {
-  const id = selectedId();
   const a = state.analysis;
+  if (hasBlockingError(a)) {
+    // Com o código quebrado não há onde escrever um arraste: a seleção continua na cena, sem gizmo.
+    const screenId = state.selectedKey != null && state.screen ? keysOf(state.screen).byKey.get(state.selectedKey) ?? null : null;
+    bridge.send({ type: "select", id: screenId, axes: {} });
+    return;
+  }
+  const id = selectedId();
   const axes = id == null ? {} : Object.fromEntries(["position", "rotation", "scale"].map((p) => [p, editableAxes(a, id, p)]));
   bridge.send({ type: "select", id: toScreen(id), axes });
 }
@@ -393,7 +421,9 @@ function applyPlan(plan) {
 function onTransform(msg) {
   const id = fromScreen(msg.id);
   if (id == null) return;
-  applyPlan(planTransform(state.analysis, id, msg.prop, msg.values, msg.start));
+  // uma execução pendente (de algo digitado antes) esperaria o arraste acabar no visor
+  if (!msg.final) clearTimeout(state.runTimer);
+  applyPlan(planTransform(state.analysis, id, msg.prop, msg.values, msg.start, msg.touched));
   if (msg.final) runNow();
 }
 

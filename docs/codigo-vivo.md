@@ -73,6 +73,8 @@ Para cada propriedade, o VisuGraph procura no código o valor que a define e tro
 
 Quando a propriedade ainda não aparece no código, a edição a escreve no lugar mais natural: no argumento do construtor, no objeto de opções do material ou numa linha nova logo depois da última linha que mexe no objeto (a posição entra antes de um `lookAt`, que depende dela).
 
+O gizmo também move objetos que não estão na cena, como a câmera do código, e grava só os eixos que o arraste mudou. Enquanto você arrasta, `animar()` espera, para a cena mudar só pelo gizmo. Com um erro que impede o código de rodar, o objeto continua selecionado, mas o gizmo some até o código ser corrigido.
+
 **Números.** Um valor editável pode ser um número (`1.5`, `-2`) ou uma expressão feita só de números e constantes (`Math.PI / 2`, `THREE.MathUtils.degToRad(45)`); ao editar uma expressão, ela é trocada por um número. A rotação escrita em radianos à mão continua em radianos. Os números sublinhados com pontilhado mexem numa propriedade da cena: arraste-os para os lados (`Shift` acelera 10 vezes, `Alt` dá passos 10 vezes menores). Os outros números também podem ser arrastados, e o código roda de novo a cada passo, o que serve, por exemplo, para mudar quantas vezes um laço repete.
 
 **Cores.** Aceitas como `"#rrggbb"`, `"#rgb"`, `"rgb(r, g, b)"`, nomes em inglês (`"red"`) ou números `0xrrggbb`, sozinhas ou dentro de `new THREE.Color(...)`. A edição mantém o formato (texto ou número) e as aspas.
@@ -106,15 +108,18 @@ Quando o valor de uma propriedade depende de algo que a cena não consegue reesc
 O editor marca na própria linha o que foge do subconjunto:
 
 - **Erros** (o código não roda): erro de sintaxe e redeclaração de um nome reservado.
-- **Avisos**: nenhuma `THREE.Scene` criada, um `WebGLRenderer` (desnecessário: o VisuGraph já desenha a cena) e objetos criados dentro de `animar()`, que criaria um objeto novo a cada quadro.
+- **Avisos**: nenhuma `THREE.Scene` criada, um objeto com nome que nunca é adicionado à cena (falta `cena.add(nome)`), um `WebGLRenderer` (desnecessário: o VisuGraph já desenha a cena) e objetos criados dentro de `animar()`, que criaria um objeto novo a cada quadro.
 - **Dicas**: objetos criados dentro de laços, funções ou `if`, objetos sem variável e o uso de `requestAnimationFrame` ou `setAnimationLoop` no lugar de `animar()`.
 
 ## Erros ao rodar
 
 - As mensagens de erro do navegador são traduzidas para o português e apontam a linha (**ir para o código**).
-- **Laço infinito**: um laço que passa de 2 s sem terminar é interrompido (1 s dentro de `animar()`, de um temporizador ou de um evento), com o erro na linha do laço. Se o visor parar de responder por 3 s, ele é reiniciado e volta a mostrar a última cena que funcionou. Se a página inteira travar, na próxima vez o código não roda sozinho: corrija e clique em **↻ Rodar**.
+- **Laço infinito**: um laço que passa de 2 s sem terminar é interrompido (1 s dentro de `animar()`, de um temporizador ou de um evento), com o erro na linha do laço. O erro aparece mesmo que o código o engula com `try/catch`, e os laços que estão em volta param junto. Num temporizador ou evento, os temporizadores e eventos do código param até ele rodar de novo, senão cada chamada travaria a página por 1 s.
+- **Código que trava fora de um laço** (uma recursão enorme, uma única operação muito lenta): o editor e o visor rodam na mesma thread, então a página fica parada até o código terminar. Se uma execução não responde em 3 s, o visor é reiniciado e volta a mostrar a última cena que funcionou. Se a página inteira travar e for recarregada, o código não roda sozinho: corrija e clique em **↻ Rodar**.
 - **Erro dentro de `animar()`**: a animação para e a cena fica como estava; ao corrigir o código, ela volta.
-- Temporizadores (`setTimeout`, `setInterval`, `requestAnimationFrame`) e eventos (`addEventListener`) criados pelo código são cancelados a cada nova execução, então rodar de novo nunca acumula animações antigas.
+- Temporizadores (`setTimeout`, `setInterval`, `requestAnimationFrame`, também pelo `window`) e eventos (`addEventListener`) criados pelo código são cancelados a cada nova execução, então rodar de novo nunca acumula animações antigas.
+- **`WebGLRenderer` no código**: cada um ocupa um dos poucos contextos WebGL que o navegador dá à página. Os renderizadores do código são liberados a cada execução, e só os 4 mais novos ficam ativos (um renderizador criado a cada quadro em `animar()` esgotaria os contextos). Se mesmo assim o visor perder o WebGL, ele é reiniciado e o código só roda de novo com **↻ Rodar**.
+- Valores globais do Three que o código pode mudar, como `THREE.Object3D.DEFAULT_UP`, `THREE.ColorManagement.enabled` e `THREE.Cache.enabled`, voltam ao padrão a cada execução: apagar a linha desfaz o efeito.
 
 ## O visor isolado
 

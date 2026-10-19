@@ -97,6 +97,26 @@ test("modo 3D: arrastar o gizmo reescreve a posição no código", async ({ page
   await expect.poll(() => sceneValue(page, id, "position.x")).toBeCloseTo(x, 5);
 });
 
+test("modo 3D: a câmera do código, que não está na cena, também se move pelo gizmo", async ({ page }) => {
+  await openLive(page);
+  const id = await objectId(page, "camera");
+  await page.locator(`.lv-object[data-id="${id}"]`).click();
+  await expect.poll(async () => (await viewport(page).evaluate(() => window.__vgDebug.info())).gizmo).toBe("translate");
+
+  const handle = await inPage(page, await viewport(page).evaluate(() => window.__vgDebug.gizmoHandle("x")));
+  await page.mouse.move(handle.x, handle.y);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 120, handle.y + 20, { steps: 12 });
+  await page.mouse.up();
+
+  const codeX = async () => Number(/camera\.position\.set\(([-\d.]+), 3, 6\);/.exec(await code(page))?.[1]);
+  await expect.poll(codeX).toBeGreaterThan(4);
+  const x = await codeX();
+  await expect.poll(() => sceneValue(page, id, "position.x")).toBeCloseTo(x, 5);
+  const text = await code(page);
+  expect(text.indexOf("camera.position.set("), "a posição continua antes do lookAt").toBeLessThan(text.indexOf("camera.lookAt("));
+});
+
 test("modo 3D: o painel de propriedades grava no código", async ({ page }) => {
   await openLive(page);
   const id = await objectId(page, "cubo");
@@ -172,6 +192,62 @@ test("modo 3D: erros aparecem na linha e não derrubam o editor", async ({ page 
 
   // corrigido o código, tudo volta a funcionar
   await pasteCode(page, "const cena = new THREE.Scene();\nconst caixa = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());\ncena.add(caixa);");
+  await expect(status(page)).toContainText("Cena atualizada · 1 objeto");
+});
+
+test("modo 3D: um laço infinito para mesmo quando o código engole o erro com try/catch", async ({ page }) => {
+  await openLive(page);
+
+  // o laço de dentro estoura o prazo; o de fora continuaria para sempre
+  await pasteCode(page, "const cena = new THREE.Scene();\nwhile (true) {\n  try {\n    for (;;) {}\n  } catch (e) {}\n}");
+  await expect(status(page)).toContainText("Linha 4: O laço não terminou a tempo", { timeout: 15_000 });
+
+  // em animar(), o erro engolido também aparece e a animação para
+  await pasteCode(page, "const cena = new THREE.Scene();\nfunction animar() {\n  try {\n    while (true) {}\n  } catch (e) {}\n}");
+  await expect(status(page)).toContainText("Linha 4: Em animar() (a animação parou): O laço não terminou a tempo", { timeout: 15_000 });
+
+  // num temporizador, o laço infinito para os temporizadores: senão cada chamada travaria a página
+  await pasteCode(page, "const cena = new THREE.Scene();\nsetInterval(() => {\n  window.chamadas = (window.chamadas || 0) + 1;\n  while (true) {}\n}, 50);");
+  await expect(status(page)).toContainText("Linha 4: Num temporizador: O laço não terminou a tempo", { timeout: 15_000 });
+  await page.waitForTimeout(1500);
+  expect(await viewport(page).evaluate(() => window.chamadas), "o setInterval não foi chamado de novo").toBe(1);
+
+  await pasteCode(page, "const cena = new THREE.Scene();\nconst caixa = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());\ncena.add(caixa);");
+  await expect(status(page)).toContainText("Cena atualizada · 1 objeto");
+});
+
+test("modo 3D: WebGLRenderer criados pelo código não derrubam o visor", async ({ page }) => {
+  const evicted = [];
+  page.on("console", (msg) => /Too many active WebGL contexts/i.test(msg.text()) && evicted.push(msg.text()));
+  await openLive(page);
+  // um contexto WebGL novo a cada execução e a cada quadro; o navegador só aceita uns 16 por página
+  await pasteCode(
+    page,
+    [
+      "const cena = new THREE.Scene();",
+      "const desenhista = new THREE.WebGLRenderer();",
+      "const caixa = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());",
+      "cena.add(caixa);",
+      "function animar() {",
+      "  const outro = new THREE.WebGLRenderer();",
+      "}",
+    ].join("\n"),
+  );
+  await expect(status(page)).toContainText("Cena atualizada · 1 objeto");
+  await viewport(page).evaluate(() => {
+    window.__lost = 0;
+    document.getElementById("vg-canvas").addEventListener("webglcontextlost", () => window.__lost++);
+  });
+
+  const info = () => viewport(page).evaluate(() => window.__vgDebug.info());
+  for (let i = 0; i < 20; i++) {
+    const before = (await info()).runId;
+    await page.click("#lv-restart");
+    await expect.poll(async () => (await info()).runId).toBeGreaterThan(before);
+  }
+  await expect.poll(async () => (await info()).elapsed).toBeGreaterThan(1); // dezenas de quadros, um renderizador em cada
+  expect(await viewport(page).evaluate(() => window.__lost), "o contexto do visor nunca se perdeu").toBe(0);
+  expect(evicted).toEqual([]);
   await expect(status(page)).toContainText("Cena atualizada · 1 objeto");
 });
 

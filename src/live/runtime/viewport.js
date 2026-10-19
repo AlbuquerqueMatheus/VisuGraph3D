@@ -13,10 +13,43 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { scriptPosition } from "../engine/instrument.js";
 
 const LOOP_LIMIT_MS = { run: 2000, frame: 1000 };
+// O navegador aceita uns 16 contextos WebGL por página e derruba o mais antigo (o do visor)
+// quando passa disso; cada WebGLRenderer criado pelo código ocupa um.
+const MAX_CODE_RENDERERS = 4;
 const MODE_PROP = { translate: "position", rotate: "rotation", scale: "scale" };
 
+const post = (msg) => window.parent.postMessage({ source: "visugraph-viewport", ...msg }, "*");
+/** Primeira notícia do visor (ready ou fatal): fica guardada para o editor que carregar depois. */
+function announce(msg) {
+  window.__vgEarly = msg;
+  post(msg);
+}
+
+// Temporizadores do navegador, guardados antes de o código do aluno ganhar versões rastreadas.
+const nativeTimers = {
+  setTimeout: window.setTimeout.bind(window),
+  setInterval: window.setInterval.bind(window),
+  requestAnimationFrame: window.requestAnimationFrame.bind(window),
+  clearTimeout: window.clearTimeout.bind(window),
+  clearInterval: window.clearInterval.bind(window),
+  cancelAnimationFrame: window.cancelAnimationFrame.bind(window),
+};
+const raf = nativeTimers.requestAnimationFrame;
+
 const canvas = document.getElementById("vg-canvas");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+} catch (err) {
+  announce({
+    type: "fatal",
+    message: "O visor 3D precisa de WebGL, e este navegador não conseguiu ligá-lo. Tente outro navegador ou ative a aceleração por hardware.",
+  });
+  throw err;
+}
+// O contexto do visor pode ser perdido (código que cria muitos WebGLRenderer, falha da GPU):
+// o editor recarrega o visor.
+canvas.addEventListener("webglcontextlost", () => post({ type: "contextlost" }));
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -58,6 +91,11 @@ gizmo.setRotationSnap(THREE.MathUtils.degToRad(5));
 gizmo.setScaleSnap(0.1);
 gizmo.setSize(0.9);
 overlay.add(gizmo.getHelper());
+// O gizmo só move objetos que estão numa cena. Um objeto sem pai (a câmera do código, que
+// não precisa de cena.add, ou um objeto que ainda não foi adicionado) é movido por este
+// substituto, copiado para o objeto a cada mudança.
+const handle = new THREE.Object3D();
+overlay.add(handle);
 
 const raycaster = new THREE.Raycaster();
 const PROXY_GEOMETRY = new THREE.SphereGeometry(0.3, 12, 8);
@@ -75,9 +113,9 @@ const state = {
 };
 let loopDeadline = Infinity;
 let loopCount = 0;
-let userRun = null; // execução cujo código está rodando agora (para rastrear eventos)
-
-const post = (msg) => window.parent.postMessage({ source: "visugraph-viewport", ...msg }, "*");
+let loopTripped = false; // o prazo estourou: todo laço para até a próxima chamada do aluno
+let freeGuard = false; // há um prazo valendo para código fora de um contexto conhecido
+let userRun = null; // execução cujo código está rodando agora (para rastrear eventos e temporizadores)
 
 // ---------------------------------------------------------------------------
 // Execução do código
@@ -90,7 +128,8 @@ class Run {
     this.registry = new Map(); // id → instâncias criadas naquele trecho
     this.counts = new Map();
     this.idOf = new WeakMap();
-    this.timers = new Set();
+    this.timers = new Map(); // "t:id" (setTimeout/setInterval) ou "r:id" (requestAnimationFrame) → tipo
+    this.renderers = []; // WebGLRenderer criados pelo código, do mais antigo ao mais novo
     this.listeners = [];
     this.helpers = [];
     this.proxies = [];
@@ -98,6 +137,8 @@ class Run {
     this.done = false;
     this.error = null;
     this.animError = false;
+    this.halted = false; // um laço infinito num temporizador ou evento: o resto deles para
+    this.loopError = null; // laço interrompido cujo erro o código do aluno pode ter engolido
   }
 
   track(id, obj) {
@@ -106,6 +147,11 @@ class Run {
     if (list.length < 200) list.push(obj);
     this.counts.set(id, (this.counts.get(id) || 0) + 1);
     if (obj && typeof obj === "object") this.idOf.set(obj, id);
+    if (obj && obj.isWebGLRenderer) {
+      // um renderizador criado a cada quadro em animar() esgotaria os contextos em segundos
+      this.renderers.push(obj);
+      while (this.renderers.length > MAX_CODE_RENDERERS) disposeRenderer(this.renderers.shift());
+    }
     return obj;
   }
 
@@ -117,37 +163,61 @@ class Run {
   wrap(fn, phase) {
     const run = this;
     return function (...args) {
-      if (run !== state.current && run !== pending) return undefined;
+      if (run.halted || (run !== state.current && run !== pending)) return undefined;
       const prev = userRun;
       userRun = run;
-      startGuard(LOOP_LIMIT_MS.frame);
+      // Chamada de dentro do próprio código (evento disparado num laço): vale o prazo de fora.
+      if (!prev) startGuard(LOOP_LIMIT_MS.frame);
+      let escaped = false;
       try {
         return fn.apply(this, args);
       } catch (err) {
-        reportError(run, err, phase);
+        escaped = true;
+        reportError(run, loopAware(run, err), phase);
         return undefined;
       } finally {
         userRun = prev;
+        if (!prev && !escaped) reportSwallowedLoop(run, phase);
       }
     };
   }
 
+  /** Agenda `fn` com o temporizador `kind` do navegador; a execução seguinte cancela. */
+  schedule(kind, fn, args) {
+    const run = this;
+    const group = kind === "requestAnimationFrame" ? "r" : "t";
+    const wrapped = run.wrap(fn, "timer");
+    let id;
+    const callback =
+      kind === "setInterval"
+        ? wrapped
+        : function (...a) {
+          run.timers.delete(`${group}:${id}`);
+          return wrapped.apply(this, a);
+        };
+    id = nativeTimers[kind](callback, ...args);
+    run.timers.set(`${group}:${id}`, kind);
+    return id;
+  }
+
+  /** Versões dos temporizadores que o código do aluno recebe no lugar das do navegador. */
   makeTimers() {
     const run = this;
-    const add = (id, clear) => (run.timers.add({ id, clear }), id);
+    const timer = (kind) => (fn, ...args) => (typeof fn === "function" ? run.schedule(kind, fn, args) : nativeTimers[kind](fn, ...args));
     return {
-      setTimeout: (fn, ms, ...a) => add(window.setTimeout(run.wrap(fn, "timer"), ms, ...a), window.clearTimeout),
-      setInterval: (fn, ms, ...a) => add(window.setInterval(run.wrap(fn, "timer"), ms, ...a), window.clearInterval),
-      requestAnimationFrame: (fn) => add(window.requestAnimationFrame(run.wrap(fn, "timer")), window.cancelAnimationFrame),
-      clearTimeout: (id) => window.clearTimeout(id),
-      clearInterval: (id) => window.clearInterval(id),
-      cancelAnimationFrame: (id) => window.cancelAnimationFrame(id),
+      setTimeout: timer("setTimeout"),
+      setInterval: timer("setInterval"),
+      requestAnimationFrame: timer("requestAnimationFrame"),
+      clearTimeout,
+      clearInterval,
+      cancelAnimationFrame,
     };
   }
 
   /** Para tudo o que o código deixou rodando e libera a memória de vídeo. */
   stop(keep = new Set()) {
-    for (const t of this.timers) t.clear(t.id);
+    const clear = { setTimeout: "clearTimeout", setInterval: "clearInterval", requestAnimationFrame: "cancelAnimationFrame" };
+    for (const [key, kind] of this.timers) nativeTimers[clear[kind]](Number(key.slice(2)));
     this.timers.clear();
     for (const l of this.listeners) nativeRemove.call(l.target, l.type, l.wrapped, l.options);
     this.listeners = [];
@@ -172,11 +242,18 @@ class Run {
     };
     for (const list of this.registry.values()) list.forEach(collect);
     collect(this.scene);
+    this.disposeRenderers();
     for (const r of resources) {
       if (keep.has(r)) continue;
       if (r.isMaterial) for (const v of Object.values(r)) if (v && v.isTexture && !keep.has(v)) v.dispose();
       r.dispose();
     }
+  }
+
+  /** Libera os contextos WebGL dos renderizadores criados pelo código (o VisuGraph já desenha a cena). */
+  disposeRenderers() {
+    this.renderers.forEach(disposeRenderer);
+    this.renderers = [];
   }
 
   resources() {
@@ -192,18 +269,93 @@ class Run {
 
 let pending = null;
 
+// O código também chega aos temporizadores por window (window.setTimeout, e o
+// renderer.setAnimationLoop do Three usa self.requestAnimationFrame): enquanto ele roda,
+// passam pelas versões rastreadas.
+for (const kind of ["setTimeout", "setInterval", "requestAnimationFrame"]) {
+  window[kind] = function (fn, ...args) {
+    const run = userRun;
+    return run && typeof fn === "function" ? run.schedule(kind, fn, args) : nativeTimers[kind](fn, ...args);
+  };
+}
+function forgetTimer(group, id) {
+  for (const run of [state.current, pending, userRun]) run?.timers.delete(`${group}:${id}`);
+}
+window.clearTimeout = (id) => (forgetTimer("t", id), nativeTimers.clearTimeout(id));
+window.clearInterval = (id) => (forgetTimer("t", id), nativeTimers.clearInterval(id));
+window.cancelAnimationFrame = (id) => (forgetTimer("r", id), nativeTimers.cancelAnimationFrame(id));
+
+// Valores globais do Three que o código pode mudar (THREE.Object3D.DEFAULT_UP.set(0, 0, 1)):
+// cada execução começa dos originais, senão o efeito de uma linha apagada continuaria valendo.
+const DEFAULTS = {
+  up: THREE.Object3D.DEFAULT_UP.clone(),
+  matrixAutoUpdate: THREE.Object3D.DEFAULT_MATRIX_AUTO_UPDATE,
+  matrixWorldAutoUpdate: THREE.Object3D.DEFAULT_MATRIX_WORLD_AUTO_UPDATE,
+  colorManagement: THREE.ColorManagement.enabled,
+  workingColorSpace: THREE.ColorManagement.workingColorSpace,
+  cache: THREE.Cache.enabled,
+};
+
+function restoreDefaults() {
+  THREE.Object3D.DEFAULT_UP = DEFAULTS.up.clone();
+  THREE.Object3D.DEFAULT_MATRIX_AUTO_UPDATE = DEFAULTS.matrixAutoUpdate;
+  THREE.Object3D.DEFAULT_MATRIX_WORLD_AUTO_UPDATE = DEFAULTS.matrixWorldAutoUpdate;
+  THREE.ColorManagement.enabled = DEFAULTS.colorManagement;
+  THREE.ColorManagement.workingColorSpace = DEFAULTS.workingColorSpace;
+  THREE.Cache.enabled = DEFAULTS.cache;
+}
+
+const disposedRenderers = new WeakSet();
+
+function disposeRenderer(r) {
+  if (disposedRenderers.has(r)) return;
+  disposedRenderers.add(r);
+  r.setAnimationLoop(null);
+  r.dispose();
+  if (r.domElement && r.domElement !== canvas) {
+    if (!r.getContext().isContextLost()) r.forceContextLoss();
+    r.domElement.remove();
+  }
+}
+
 function startGuard(ms) {
   loopDeadline = performance.now() + ms;
   loopCount = 0;
+  loopTripped = false;
+}
+
+/**
+ * Erro a relatar depois de um trecho do código: o do primeiro laço interrompido, se houve um.
+ * Com try/catch o código pode ter engolido esse erro, e os laços seguintes param no começo.
+ */
+function loopAware(run, err) {
+  const first = run.loopError;
+  run.loopError = null;
+  return first && (!err || err instanceof LoopLimitError) ? first : err;
+}
+
+/** O código engoliu (com try/catch) o erro de um laço interrompido: avisa assim mesmo. */
+function reportSwallowedLoop(run, phase) {
+  const err = loopAware(run, null);
+  if (err) reportError(run, err, phase);
 }
 
 const vg = {
   THREE,
   t: (id, obj) => (userRun || pending || state.current).track(id, obj),
   l() {
-    if ((++loopCount & 255) === 0 && performance.now() > loopDeadline) {
-      loopDeadline = 0; // continua estourando até sair do laço
-      throw new LoopLimitError();
+    if (!userRun && !freeGuard) {
+      // Código do aluno fora de um contexto conhecido (depois de um await, num then):
+      // o prazo vale até o fim desta tarefa do navegador.
+      freeGuard = true;
+      startGuard(LOOP_LIMIT_MS.frame);
+      nativeTimers.setTimeout(() => (freeGuard = false), 0);
+    }
+    if (loopTripped || ((++loopCount & 255) === 0 && performance.now() > loopDeadline)) {
+      loopTripped = true; // continua estourando até sair de todos os laços, mesmo com try/catch
+      const err = new LoopLimitError();
+      if (userRun && !userRun.loopError) userRun.loopError = err;
+      throw err;
     }
   },
   end(animar) {
@@ -228,17 +380,35 @@ class LoopLimitError extends Error {
 // Eventos registrados pelo código do aluno são removidos na execução seguinte.
 const nativeAdd = EventTarget.prototype.addEventListener;
 const nativeRemove = EventTarget.prototype.removeEventListener;
+const captureOf = (options) => (typeof options === "boolean" ? options : !!(options && options.capture));
+const sameListener = (l, target, type, listener, capture) =>
+  l.target === target && l.type === type && l.listener === listener && l.capture === capture;
+
 EventTarget.prototype.addEventListener = function (type, listener, options) {
   const run = userRun;
   if (!run || typeof listener !== "function") return nativeAdd.call(this, type, listener, options);
-  const wrapped = run.wrap(listener, "evento");
-  run.listeners.push({ target: this, type, listener, wrapped, options });
-  return nativeAdd.call(this, type, wrapped, options);
+  const capture = captureOf(options);
+  // como no navegador, registrar a mesma função de novo não faz nada
+  if (run.listeners.some((l) => sameListener(l, this, type, listener, capture))) return undefined;
+  const entry = { target: this, type, listener, capture, options, wrapped: null };
+  const forget = () => {
+    const i = run.listeners.indexOf(entry);
+    if (i >= 0) run.listeners.splice(i, 1);
+  };
+  const inner = run.wrap(listener, "evento");
+  entry.wrapped = options && options.once ? function (...a) {
+    forget();
+    return inner.apply(this, a);
+  } : inner;
+  if (options && options.signal) nativeAdd.call(options.signal, "abort", forget, { once: true });
+  run.listeners.push(entry);
+  return nativeAdd.call(this, type, entry.wrapped, options);
 };
 EventTarget.prototype.removeEventListener = function (type, listener, options) {
+  const capture = captureOf(options);
   for (const run of [state.current, pending]) {
     if (!run) continue;
-    const i = run.listeners.findIndex((l) => l.target === this && l.type === type && l.listener === listener);
+    const i = run.listeners.findIndex((l) => sameListener(l, this, type, listener, capture));
     if (i >= 0) {
       nativeRemove.call(this, type, run.listeners[i].wrapped, options);
       run.listeners.splice(i, 1);
@@ -250,6 +420,7 @@ EventTarget.prototype.removeEventListener = function (type, listener, options) {
 
 function execute(msg) {
   if (msg.resetTime) state.elapsed = 0;
+  restoreDefaults();
   const run = new Run(msg);
   pending = run;
   vg.timers = run.makeTimers();
@@ -266,6 +437,7 @@ function execute(msg) {
   }
   if (!run.done && !run.error) run.error = runtimeSyntaxError || new Error("O código não terminou de rodar.");
   runtimeSyntaxError = null;
+  run.error = loopAware(run, run.error);
   if (run.error) {
     reportError(run, run.error, "run");
     run.stop();
@@ -309,7 +481,7 @@ function activate(run) {
   state.selected = null;
   state.hovered = null;
   state.highlighted = null;
-  gizmo.detach();
+  detachGizmo();
   updateGizmoCamera();
 
   const objects = [];
@@ -317,9 +489,11 @@ function activate(run) {
   post({ type: "ran", runId: run.id, ok: true, objects, hasAnimar: typeof run.animar === "function", hasCodeCamera: !!run.camera });
 
   if (old) {
-    // Libera a execução anterior depois de desenhar a nova: os shaders iguais são reaproveitados.
+    // Os contextos WebGL do código anterior saem já; o resto sai depois de desenhar a cena
+    // nova, para os shaders iguais serem reaproveitados.
+    old.disposeRenderers();
     const keep = run.resources();
-    requestAnimationFrame(() => requestAnimationFrame(() => old.stop(keep)));
+    raf(() => raf(() => old.stop(keep)));
   }
 }
 
@@ -393,6 +567,8 @@ function addHelper(run, helper, target) {
 function reportError(run, err, phase) {
   const error = err instanceof Error ? err : new Error(String(err));
   if (phase === "animar") run.animError = true;
+  // num setInterval, por exemplo, cada chamada travaria a página por 1 s
+  else if (phase !== "run" && error instanceof LoopLimitError) run.halted = true;
   const pos =
     scriptPosition(error.stack) ||
     (error.scriptLine ? { line: error.scriptLine, column: error.scriptColumn } : null) ||
@@ -432,8 +608,9 @@ function attachGizmo() {
   const sel = state.selected;
   const obj = sel && targetOf(sel.id);
   const axes = sel && sel.axes[MODE_PROP[state.mode]];
-  if (!obj || !axes || !axes.some(Boolean)) {
-    gizmo.detach();
+  // olhando pela própria câmera do código, o gizmo dela ficaria dentro da lente
+  if (!obj || obj === activeCamera() || !axes || !axes.some(Boolean)) {
+    detachGizmo();
     return;
   }
   gizmo.setMode(state.mode);
@@ -443,7 +620,25 @@ function attachGizmo() {
   // planos e a esfera livre só quando todos os eixos podem mudar
   const all = axes.every(Boolean);
   gizmo.showXY = gizmo.showYZ = gizmo.showXZ = gizmo.showXYZE = all;
-  gizmo.attach(obj);
+  handle.userData.target = obj.parent ? null : obj;
+  if (obj.parent) gizmo.attach(obj);
+  else {
+    syncHandle(obj);
+    gizmo.attach(handle);
+  }
+}
+
+function detachGizmo() {
+  gizmo.detach();
+  handle.userData.target = null;
+}
+
+function syncHandle(obj) {
+  handle.position.copy(obj.position);
+  handle.rotation.order = obj.rotation.order;
+  handle.quaternion.copy(obj.quaternion);
+  handle.scale.copy(obj.scale);
+  handle.updateMatrixWorld();
 }
 
 function updateBoxes() {
@@ -468,15 +663,22 @@ gizmo.addEventListener("dragging-changed", (e) => {
   orbit.enabled = !e.value;
 });
 gizmo.addEventListener("mouseDown", () => {
-  const obj = gizmo.object;
+  const obj = targetOf(state.selected.id);
   const prop = MODE_PROP[state.mode];
-  dragStart = { id: state.selected.id, prop, start: vectorOf(obj, prop) };
+  dragStart = { id: state.selected.id, prop, start: vectorOf(obj, prop), touched: [false, false, false] };
 });
 let transformQueued = false;
 gizmo.addEventListener("objectChange", () => {
+  const obj = handle.userData.target;
+  if (obj && gizmo.object === handle) {
+    obj.position.copy(handle.position);
+    obj.quaternion.copy(handle.quaternion);
+    obj.scale.copy(handle.scale);
+    obj.updateMatrixWorld();
+  }
   if (!dragStart || transformQueued) return;
   transformQueued = true;
-  requestAnimationFrame(() => {
+  raf(() => {
     transformQueued = false;
     sendTransform(false);
   });
@@ -491,7 +693,11 @@ function sendTransform(final) {
   if (!dragStart) return;
   const obj = targetOf(dragStart.id);
   if (!obj) return;
-  post({ type: "transform", id: dragStart.id, prop: dragStart.prop, values: vectorOf(obj, dragStart.prop), start: dragStart.start, final });
+  const { id, prop, start, touched } = dragStart;
+  const values = vectorOf(obj, prop);
+  // só os eixos que o arraste mudou vão para o código
+  values.forEach((v, i) => (touched[i] ||= Math.abs(v - start[i]) > 1e-6));
+  post({ type: "transform", id, prop, values, start, touched: [...touched], final });
 }
 
 function vectorOf(obj, prop) {
@@ -517,7 +723,7 @@ let hoverQueued = null;
 canvas.addEventListener("pointermove", (e) => {
   if (e.buttons || gizmo.dragging) return;
   if (!hoverQueued) {
-    requestAnimationFrame(() => {
+    raf(() => {
       const { x, y } = hoverQueued;
       hoverQueued = null;
       const id = gizmo.axis ? null : pickAt(x, y);
@@ -666,23 +872,26 @@ const clock = new THREE.Timer();
 const background = new THREE.Color("#15171c");
 
 function frame(time) {
-  requestAnimationFrame(frame);
+  raf(frame);
   clock.update(time);
   const dt = Math.min(clock.getDelta(), 0.1);
   const run = state.current;
-  if (run && state.playing && run.animar && !run.animError) {
+  // durante um arraste a animação espera: o que muda na cena é só o que o gizmo faz
+  if (run && state.playing && !gizmo.dragging && run.animar && !run.animError) {
     state.elapsed += dt;
     const prev = userRun;
     userRun = run;
     startGuard(LOOP_LIMIT_MS.frame);
     try {
       run.animar(state.elapsed, dt);
+      reportSwallowedLoop(run, "animar");
     } catch (err) {
-      reportError(run, err, "animar");
+      reportError(run, loopAware(run, err), "animar");
     } finally {
       userRun = prev;
     }
   }
+  if (handle.userData.target && !gizmo.dragging) syncHandle(handle.userData.target);
   orbit.update();
 
   const camera = activeCamera();
@@ -714,7 +923,7 @@ function frame(time) {
   renderer.autoClear = false;
   renderer.render(overlay, camera);
 }
-requestAnimationFrame(frame);
+raf(frame);
 
 // ---------------------------------------------------------------------------
 // Mensagens do editor
@@ -725,7 +934,10 @@ window.addEventListener("message", (event) => {
   if (!msg || msg.source !== "visugraph-editor") return;
   switch (msg.type) {
     case "run":
-      execute(msg);
+      // Durante um arraste o visor já mostra o resultado, e rodar agora soltaria o gizmo:
+      // o editor roda o código de novo quando o arraste termina.
+      if (gizmo.dragging) post({ type: "ran", runId: msg.runId, ok: false, skipped: true });
+      else execute(msg);
       break;
     case "apply":
       applyProp(msg);
@@ -745,6 +957,7 @@ window.addEventListener("message", (event) => {
     case "view":
       state.view = msg.view === "camera" ? "camera" : "editor";
       updateGizmoCamera();
+      attachGizmo();
       break;
     case "play":
       state.playing = !!msg.playing;
@@ -795,4 +1008,4 @@ function toScreen(p) {
   return { x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height };
 }
 
-post({ type: "ready" });
+announce({ type: "ready" });

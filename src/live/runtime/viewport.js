@@ -4,13 +4,19 @@
 // acontece no visor (clique, arraste do gizmo, erros). O iframe isola as falhas e dá ao
 // código do aluno um `window` e um `document` próprios; não é uma barreira de segurança.
 //
-// Editor → visor: run, apply, select, highlight, inspect, mode, view, play
-// Visor → editor: ready, ran, error, pick, hover, transform, inspect, mode
+// Editor → visor: run, apply, select, highlight, inspect, mode, view, play, math, marker, glass, probe
+// Visor → editor: ready, ran, error, pick, hover, transform, inspect, mode, math, probe
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { scriptPosition } from "../engine/instrument.js";
+import { columnMajor, fromColumnMajor, multiply, normalMatrix } from "../../lib/transform3d.js";
+import { normalize, dot } from "../../lib/phong.js";
+import { shadePoint } from "../../lib/phong3d.js";
+import { localMatrix, objectMath, projectionMatrix, viewOf, worldMatrix } from "../mathModel.js";
+import { collectLights, createGlassMaterial, glassTerms, setLightUniforms, syncGlass } from "./glass.js";
+import { sceneFacts } from "./facts.js";
 
 const LOOP_LIMIT_MS = { run: 2000, frame: 1000 };
 // O navegador aceita uns 16 contextos WebGL por página e derruba o mais antigo (o do visor)
@@ -85,6 +91,11 @@ for (const box of [selectBox, hoverBox]) {
 }
 hoverBox.material.opacity = 0.7;
 
+// Contornos tracejados do alvo de um desafio, por cima de tudo: aparecem mesmo com o objeto
+// dentro deles.
+const ghosts = new THREE.Group();
+overlay.add(ghosts);
+
 const gizmo = new TransformControls(editorCamera, canvas);
 gizmo.setTranslationSnap(0.1);
 gizmo.setRotationSnap(THREE.MathUtils.degToRad(5));
@@ -110,6 +121,9 @@ const state = {
   selected: null, // { id, axes }
   hovered: null, // id vindo do mouse no visor
   highlighted: null, // id vindo do cursor no editor
+  glass: null, // "phong" ou "blinn": a cena é desenhada pelo shader caixa de vidro
+  marker: null, // { id, vertex }: vértice cujo caminho até o pixel o painel mostra
+  probe: null, // { bx, by, at, seq }: pixel (do buffer) onde a sonda mede a iluminação
 };
 let loopDeadline = Infinity;
 let loopCount = 0;
@@ -139,6 +153,7 @@ class Run {
     this.animError = false;
     this.halted = false; // um laço infinito num temporizador ou evento: o resto deles para
     this.loopError = null; // laço interrompido cujo erro o código do aluno pode ter engolido
+    this.glass = new Map(); // malha → materiais da caixa de vidro (um por material dela)
   }
 
   track(id, obj) {
@@ -243,6 +258,8 @@ class Run {
     for (const list of this.registry.values()) list.forEach(collect);
     collect(this.scene);
     this.disposeRenderers();
+    for (const list of this.glass.values()) for (const m of list) m?.dispose();
+    this.glass.clear();
     for (const r of resources) {
       if (keep.has(r)) continue;
       if (r.isMaterial) for (const v of Object.values(r)) if (v && v.isTexture && !keep.has(v)) v.dispose();
@@ -481,6 +498,8 @@ function activate(run) {
   state.selected = null;
   state.hovered = null;
   state.highlighted = null;
+  state.marker = null; // os ids podem ter mudado: o editor manda o marcador de novo
+  if (state.probe) state.probe.at = 0;
   detachGizmo();
   updateGizmoCamera();
 
@@ -718,6 +737,7 @@ canvas.addEventListener("pointerup", (e) => {
   down = null;
   if (moved > 4 || onGizmo || e.button !== 0) return;
   post({ type: "pick", id: pickAt(e.clientX, e.clientY) });
+  if (state.glass) setProbeAt(e.clientX, e.clientY);
 });
 let hoverQueued = null;
 canvas.addEventListener("pointermove", (e) => {
@@ -847,6 +867,341 @@ function inspect(msg) {
 }
 
 // ---------------------------------------------------------------------------
+// Matemática: os dados do painel, o marcador do vértice e a caixa de vidro
+
+/** Transformação local de um objeto, como em src/live/mathModel.js. */
+function trsOf(obj) {
+  if (!obj.matrixAutoUpdate) return { matrix: fromColumnMajor(obj.matrix.elements) };
+  const r = obj.rotation;
+  return { position: obj.position.toArray(), rotation: [r.x, r.y, r.z], order: r.order, scale: obj.scale.toArray() };
+}
+
+/** Da raiz até o objeto, cada elo com a transformação local e quem é ele no código. */
+function chainOf(obj) {
+  const chain = [];
+  for (let o = obj; o; o = o.parent) chain.unshift({ ...trsOf(o), id: state.current?.idOf.get(o) ?? null, name: o.name || null, type: o.type });
+  return chain;
+}
+
+function cameraInfo(camera) {
+  const info = {
+    source: camera === editorCamera ? "editor" : "code",
+    id: state.current?.idOf.get(camera) ?? null,
+    name: camera.name || null,
+    chain: chainOf(camera),
+    near: camera.near,
+    far: camera.far,
+    zoom: camera.zoom,
+  };
+  const offset = !!(camera.view && camera.view.enabled);
+  if (camera.isPerspectiveCamera && !offset && !camera.filmOffset) return { ...info, type: "perspective", fov: camera.fov, aspect: camera.aspect };
+  if (camera.isOrthographicCamera && !offset) {
+    return { ...info, type: "orthographic", left: camera.left, right: camera.right, top: camera.top, bottom: camera.bottom };
+  }
+  return { ...info, type: "other", projection: fromColumnMajor(camera.projectionMatrix.elements) };
+}
+
+const viewportSize = () => ({ width: canvas.clientWidth, height: canvas.clientHeight });
+
+/** Vértice `index` da geometria, no espaço do objeto; a origem para quem não tem geometria. */
+function vertexOf(obj, index = 0) {
+  const position = obj.isMesh ? obj.geometry?.attributes?.position : null;
+  const count = position ? position.count : 0;
+  if (!count) return { index: 0, count: 0, local: [0, 0, 0] };
+  const i = ((Math.round(index) % count) + count) % count;
+  return { index: i, count, local: obj.getVertexPosition(i, new THREE.Vector3()).toArray() };
+}
+
+/** Dados do painel "Matemática": a cadeia do objeto, a câmera ativa e o vértice escolhido. */
+function mathInfo(msg) {
+  const obj = targetOf(msg.id);
+  if (!obj || !obj.isObject3D) return { type: "math", id: msg.id, missing: true };
+  const camera = activeCamera();
+  const vertex = vertexOf(obj, msg.vertex);
+  // os mesmos números calculados pelo Three.js, para o painel conferir as próprias contas
+  obj.updateWorldMatrix(true, false);
+  camera.updateWorldMatrix(true, false);
+  const view = camera.matrixWorld.clone().invert();
+  const screen = toScreen(new THREE.Vector3(...vertex.local).applyMatrix4(obj.matrixWorld));
+  return {
+    type: "math",
+    id: msg.id,
+    chain: chainOf(obj),
+    camera: cameraInfo(camera),
+    viewport: viewportSize(),
+    vertex,
+    three: {
+      world: fromColumnMajor(obj.matrixWorld.elements),
+      view: fromColumnMajor(view.elements),
+      projection: fromColumnMajor(camera.projectionMatrix.elements),
+      screen: [screen.x, screen.y],
+    },
+  };
+}
+
+// O marcador fica no pixel que as contas do painel dão para o vértice, não onde o Three.js
+// desenhou: se as contas estivessem erradas, ele sairia de cima do vértice.
+const markerEl = document.createElement("div");
+markerEl.id = "vg-marker";
+Object.assign(markerEl.style, {
+  position: "fixed", left: "0", top: "0", width: "12px", height: "12px", margin: "-8px 0 0 -8px",
+  border: "2px solid #ff5fd2", borderRadius: "50%", boxShadow: "0 0 0 2px #000a", pointerEvents: "none", display: "none",
+});
+document.body.append(markerEl);
+
+function updateMarker(camera) {
+  const m = state.marker;
+  const obj = m && targetOf(m.id);
+  const path = obj && obj.isObject3D ? objectMath({ chain: chainOf(obj), camera: cameraInfo(camera), viewport: viewportSize(), vertex: vertexOf(obj, m.vertex).local }).path : null;
+  if (!path || !path.visible) {
+    markerEl.style.display = "none";
+    return;
+  }
+  if (!markerEl.isConnected) document.body.append(markerEl);
+  markerEl.style.display = "block";
+  markerEl.style.transform = `translate(${path.screen[0]}px, ${path.screen[1]}px)`;
+}
+
+/** Matriz de mundo pelas nossas contas (com memória por quadro, para os pais em comum). */
+function ourWorld(obj, memo) {
+  let m = memo.get(obj);
+  if (!m) {
+    const local = localMatrix(trsOf(obj));
+    m = obj.parent ? multiply(ourWorld(obj.parent, memo), local) : local;
+    memo.set(obj, m);
+  }
+  return m;
+}
+
+const isGlassMesh = (obj) => obj.isMesh && !obj.isInstancedMesh && !obj.isSkinnedMesh && !obj.isBatchedMesh && !!obj.material;
+const mat3Columns = (n) => [n[0][0], n[1][0], n[2][0], n[0][1], n[1][1], n[2][1], n[0][2], n[1][2], n[2][2]];
+
+/**
+ * Troca o material de cada malha pelo da caixa de vidro, com as nossas matrizes e as luzes
+ * da cena. Devolve as luzes e a posição da câmera usadas, e como desfazer a troca.
+ */
+function applyGlass(run, camera) {
+  run.scene.updateMatrixWorld();
+  if (!camera.parent) camera.updateMatrixWorld();
+  const cam = cameraInfo(camera);
+  const view = viewOf(cam);
+  const projection = projectionMatrix(cam);
+  if (!view || !projection) return null;
+  const lights = collectLights(run.scene, camera);
+  const camWorld = worldMatrix(cam.chain);
+  const eye = [camWorld[0][3], camWorld[1][3], camWorld[2][3]];
+  const viewM = new THREE.Matrix4().fromArray(columnMajor(view));
+  const projM = new THREE.Matrix4().fromArray(columnMajor(projection));
+  const memo = new Map();
+  const swapped = [];
+  run.scene.traverseVisible((obj) => {
+    if (!isGlassMesh(obj)) return;
+    const world = ourWorld(obj, memo);
+    const normal = normalMatrix(world);
+    if (!normal) return; // escala zero: não há superfície para iluminar
+    const originals = [].concat(obj.material);
+    let list = run.glass.get(obj);
+    if (!list) run.glass.set(obj, (list = []));
+    let changed = false;
+    const replaced = originals.map((material, i) => {
+      const info = glassTerms(material);
+      if (!info) return material;
+      const glass = (list[i] ||= createGlassMaterial());
+      syncGlass(glass, material, info, state.glass);
+      const u = glass.uniforms;
+      u.uModel.value.fromArray(columnMajor(world));
+      u.uView.value.copy(viewM);
+      u.uProj.value.copy(projM);
+      u.uNormalMatrix.value.fromArray(mat3Columns(normal));
+      u.uEye.value.fromArray(eye);
+      setLightUniforms(glass, lights);
+      glass.uniformsNeedUpdate = true;
+      changed = true;
+      return glass;
+    });
+    if (!changed) return;
+    swapped.push([obj, obj.material]);
+    obj.material = Array.isArray(obj.material) ? replaced : replaced[0];
+  });
+  return { lights, eye, restore: () => swapped.forEach(([obj, material]) => (obj.material = material)) };
+}
+
+// Sonda: mede a iluminação no pixel clicado e lê a cor que a tela tem nele.
+const PROBE_MS = 250;
+const probePixel = new Uint8Array(4);
+const probeArrows = new THREE.Group();
+overlay.add(probeArrows);
+let lastProbe = null;
+let probeSeq = 0;
+
+function setProbeAt(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const bx = Math.floor(((clientX - rect.left) / rect.width) * canvas.width);
+  const by = Math.floor(((clientY - rect.top) / rect.height) * canvas.height);
+  state.probe = { bx, by, at: 0, seq: ++probeSeq }; // seq: cada clique é uma medida nova
+}
+
+function clearProbe() {
+  state.probe = null;
+  lastProbe = null;
+  showArrows(null);
+}
+
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const apply3 = (m, v) => m.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+const applyPoint = (m, v) => m.slice(0, 3).map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2] + row[3]);
+
+/** A normal que o shader usa nesse ponto, no mundo, já do lado de quem olha. */
+function probeNormal(mesh, hit, world, params, v, side) {
+  const normals = mesh.geometry.attributes.normal;
+  let n;
+  if (normals && !params.flatShading) {
+    const local = THREE.Triangle.getInterpolatedAttribute(normals, hit.face.a, hit.face.b, hit.face.c, hit.barycoord, new THREE.Vector3());
+    n = normalize(apply3(normalMatrix(world), local.toArray()));
+  }
+  if (!n || n.every((c) => c === 0)) {
+    // sombreamento chapado: a normal do triângulo, virada para a câmera
+    const [a, b, c] = [hit.face.a, hit.face.b, hit.face.c].map((i) => applyPoint(world, mesh.getVertexPosition(i, new THREE.Vector3()).toArray()));
+    n = normalize(cross3(sub3(b, a), sub3(c, a)));
+    if (dot(n, v) < 0) n = n.map((x) => -x);
+  } else if (side !== THREE.FrontSide && dot(n, v) < 0) n = n.map((x) => -x);
+  return n;
+}
+
+function idOfObject(run, obj) {
+  for (let o = obj; o; o = o.parent) {
+    const id = run.idOf.get(o);
+    if (id != null && !o.isScene) return id;
+  }
+  return null;
+}
+
+/** Logo depois de desenhar a cena (antes do que é do editor): lê o pixel e refaz a conta. */
+function measureProbe(run, camera, glass) {
+  const p = state.probe;
+  const now = performance.now();
+  if (now - p.at < PROBE_MS) return;
+  p.at = now;
+  const W = canvas.width;
+  const H = canvas.height;
+  if (p.bx < 0 || p.by < 0 || p.bx >= W || p.by >= H) return;
+  const gl = renderer.getContext();
+  gl.readPixels(p.bx, H - 1 - p.by, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, probePixel);
+  const msg = {
+    type: "probe",
+    seq: p.seq,
+    model: state.glass,
+    pixel: [probePixel[0], probePixel[1], probePixel[2]],
+    screen: [((p.bx + 0.5) * canvas.clientWidth) / W, ((p.by + 0.5) * canvas.clientHeight) / H],
+  };
+  // o raio passa pelo centro do pixel, onde a placa de vídeo calculou a cor
+  raycaster.setFromCamera(new THREE.Vector2(((p.bx + 0.5) / W) * 2 - 1, 1 - ((p.by + 0.5) / H) * 2), camera);
+  const hit = raycaster.intersectObject(run.scene, true).find((h) => h.object.isMesh && isShown(h.object));
+  const mesh = hit && hit.face ? hit.object : null;
+  const material = mesh && [].concat(mesh.material)[Array.isArray(mesh.material) ? hit.face.materialIndex : 0];
+  const info = mesh && isGlassMesh(mesh) ? glassTerms(material) : null;
+  if (!info) {
+    showArrows(null);
+    lastProbe = { ...msg, hit: !!mesh, supported: false, id: mesh ? idOfObject(run, mesh) : null, materialType: material?.type ?? null };
+    post(lastProbe);
+    return;
+  }
+  const world = ourWorld(mesh, new Map());
+  const point = hit.point.toArray();
+  const eye = glass.eye;
+  const v = normalize(sub3(eye, point));
+  const normal = probeNormal(mesh, hit, world, info.params, v, material.side);
+  const result = shadePoint({ point, normal, eye, material: info.terms, lights: glass.lights.list, model: state.glass });
+  showArrows(point, result);
+  lastProbe = {
+    ...msg,
+    hit: true,
+    supported: true,
+    id: idOfObject(run, mesh),
+    point,
+    normal,
+    eye,
+    params: info.params,
+    terms: info.terms,
+    lights: glass.lights.list,
+    lightIds: glass.lights.objects.map((o) => run.idOf.get(o) ?? null),
+    ignored: glass.lights.ignored,
+    result,
+    transparent: !!material.transparent,
+  };
+  post(lastProbe);
+}
+
+/** Setas da sonda: normal (verde), observador (azul) e, por luz, l (amarela) e r ou h (rosa). */
+function showArrows(point, result) {
+  for (const child of [...probeArrows.children]) {
+    probeArrows.remove(child);
+    child.dispose();
+  }
+  if (!point) return;
+  const origin = new THREE.Vector3(...point);
+  const len = Math.max(0.3, origin.distanceTo(activeCamera().position) * 0.1);
+  const arrow = (dir, color) => {
+    const a = new THREE.ArrowHelper(new THREE.Vector3(...dir), origin, len, color, len * 0.25, len * 0.12);
+    a.traverse((o) => {
+      if (o.material) o.material.depthTest = false;
+      o.renderOrder = 3;
+    });
+    probeArrows.add(a);
+  };
+  arrow(result.n, 0x7ee07e);
+  arrow(result.v, 0x41c5ff);
+  for (const t of result.direct) {
+    arrow(t.l, 0xffc94d);
+    if (t.nl > 0) arrow(state.glass === "blinn" ? t.h : t.r, 0xff5fd2);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Desafios: os fatos que a correção confere e o contorno do alvo
+
+/** Fatos dos objetos da execução na tela, da câmera do código e das luzes acesas. */
+function factsInfo(msg) {
+  const run = state.current;
+  if (!run) return { type: "facts", seq: msg.seq, runId: null };
+  const entries = [...run.registry].map(([id, list]) => [id, list[0]]);
+  return { type: "facts", seq: msg.seq, runId: run.id, ...sceneFacts({ scene: run.scene, camera: run.camera, entries, idOf: (obj) => run.idOf.get(obj) }) };
+}
+
+function setGhosts(shapes) {
+  for (const line of [...ghosts.children]) {
+    line.geometry.dispose();
+    line.material.dispose();
+    ghosts.remove(line);
+  }
+  for (const shape of shapes || []) {
+    let geometry = null;
+    if (shape.kind === "box") {
+      const box = new THREE.BoxGeometry(...shape.size);
+      geometry = new THREE.EdgesGeometry(box);
+      box.dispose();
+    } else if (shape.kind === "ring") {
+      const points = [];
+      for (let i = 0; i <= 96; i++) {
+        const a = (i / 96) * Math.PI * 2;
+        points.push(new THREE.Vector3(Math.cos(a) * shape.radius, 0, Math.sin(a) * shape.radius));
+      }
+      geometry = new THREE.BufferGeometry().setFromPoints(points);
+    }
+    if (!geometry) continue;
+    const material = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.12, gapSize: 0.08, transparent: true, opacity: 0.85, depthTest: false });
+    const line = shape.kind === "box" ? new THREE.LineSegments(geometry, material) : new THREE.Line(geometry, material);
+    line.computeLineDistances();
+    line.matrixAutoUpdate = false;
+    if (shape.matrix) line.matrix.fromArray(columnMajor(shape.matrix));
+    else if (shape.center) line.matrix.makeTranslation(...shape.center);
+    line.renderOrder = 3;
+    ghosts.add(line);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Desenho
 
 function activeCamera() {
@@ -904,11 +1259,18 @@ function frame(time) {
     }
   }
   renderer.autoClear = true;
-  if (run) renderer.render(run.scene, camera);
-  else {
+  if (run) {
+    const glass = state.glass ? applyGlass(run, camera) : null;
+    renderer.render(run.scene, camera);
+    if (glass) {
+      glass.restore();
+      if (state.probe) measureProbe(run, camera, glass);
+    }
+  } else {
     renderer.setClearColor(background);
     renderer.clear();
   }
+  updateMarker(camera);
 
   if (run) {
     for (const h of run.helpers) {
@@ -962,6 +1324,27 @@ window.addEventListener("message", (event) => {
     case "play":
       state.playing = !!msg.playing;
       break;
+    case "math":
+      post(mathInfo(msg));
+      break;
+    case "marker":
+      state.marker = msg.id != null ? { id: msg.id, vertex: msg.vertex ?? 0 } : null;
+      break;
+    case "glass":
+      state.glass = msg.model === "phong" || msg.model === "blinn" ? msg.model : null;
+      if (!state.glass) clearProbe();
+      else if (state.probe) state.probe.at = 0;
+      break;
+    case "probe":
+      if (msg.clear) clearProbe();
+      else if (msg.x != null) setProbeAt(msg.x, msg.y);
+      break;
+    case "facts":
+      post(factsInfo(msg));
+      break;
+    case "ghost":
+      setGhosts(msg.shapes);
+      break;
   }
 });
 
@@ -1000,6 +1383,24 @@ window.__vgDebug = {
     for (const k of path.split(".")) v = v == null ? v : v[k];
     return v && v.isColor ? "#" + v.getHexString() : v;
   },
+  /** Onde o Three.js projeta o vértice `index` do objeto, em coordenadas da janela do iframe. */
+  vertexScreen(id, index = 0) {
+    const obj = targetOf(id);
+    if (!obj || !obj.isObject3D) return null;
+    obj.updateWorldMatrix(true, false);
+    return toScreen(new THREE.Vector3(...vertexOf(obj, index).local).applyMatrix4(obj.matrixWorld));
+  },
+  /** Onde o Three.js projeta um ponto do mundo, em coordenadas da janela do iframe. */
+  toScreen: (point) => toScreen(new THREE.Vector3(...point)),
+  marker() {
+    if (markerEl.style.display === "none") return null;
+    const r = markerEl.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  },
+  probe: () => lastProbe,
+  glass: () => state.glass,
+  /** Os contornos de alvo na tela: tipo e matriz de mundo (linha a linha) de cada um. */
+  ghosts: () => ghosts.children.map((g) => ({ kind: g.isLineSegments ? "box" : "ring", matrix: fromColumnMajor(g.matrixWorld.elements) })),
 };
 
 function toScreen(p) {

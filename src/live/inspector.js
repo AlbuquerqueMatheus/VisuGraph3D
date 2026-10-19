@@ -31,11 +31,13 @@ export class Inspector {
    * `handlers.select(id)`: escolher um objeto na lista;
    * `handlers.edit(id, key, value, phase)`: phase "live" durante o arraste, "commit" no fim;
    * `handlers.reveal(pos)`: mostrar uma posição no código.
+   * `readOnly`: uma mensagem quando o painel só mostra os valores (grupo controle do estudo).
    */
-  constructor({ list, panel }, handlers) {
+  constructor({ list, panel }, handlers, { readOnly = null } = {}) {
     this.listEl = list;
     this.panelEl = panel;
     this.handlers = handlers;
+    this.readOnly = readOnly;
     this.fields = [];
     this.signature = null;
     this.listSignature = null;
@@ -108,7 +110,8 @@ export class Inspector {
       ),
     );
     const sections = [head];
-    if (obj.context !== "top") {
+    if (this.readOnly) sections.push(el("p", { class: "lv-note", text: this.readOnly }));
+    else if (obj.context !== "top") {
       sections.push(el("p", { class: "lv-note", text: editability(a, obj.id, candidateKeys(obj)[0] || "position.x").message || "" }));
     }
     const keys = candidateKeys(obj);
@@ -262,13 +265,13 @@ export class Inspector {
       const obj = a.objects[f.obj.id];
       if (!obj) continue;
       f.obj = obj;
-      const { editable, message } = editability(a, obj.id, f.key);
+      const { editable, message } = this.readOnly ? { editable: false, message: this.readOnly } : editability(a, obj.id, f.key);
       const disabled = !editable;
       f.input.disabled = disabled;
       if (f.range) f.range.disabled = disabled;
       f.input.title = disabled ? message : "";
       if (f.why) {
-        f.why.hidden = !disabled;
+        f.why.hidden = !disabled || !!this.readOnly; // só leitura: o aviso único fica no topo
         f.why.textContent = disabled ? "só pelo código" : "";
         f.why.title = disabled ? message : "";
       }

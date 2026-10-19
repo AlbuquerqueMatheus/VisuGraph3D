@@ -37,6 +37,7 @@ const theme = EditorView.theme(
     ".cm-line.cm-vg-selected": { backgroundColor: "#ffc94d17", boxShadow: "inset 3px 0 #ffc94d" },
     ".cm-line.cm-vg-related": { backgroundColor: "#41c5ff10", boxShadow: "inset 3px 0 #41c5ff99" },
     ".cm-vg-number": { borderBottom: "1px dotted #f78c6c99", cursor: "ew-resize" },
+    ".cm-vg-math": { backgroundColor: "#ff5fd23d", outline: "1px solid #ff5fd2aa", borderRadius: "2px" },
     ".cm-tooltip": { backgroundColor: "#22252e", color: "#e6e9ef", border: "1px solid #343946", borderRadius: "6px" },
     ".cm-tooltip.cm-tooltip-hover": { maxWidth: "380px", padding: "8px 10px", fontFamily: "system-ui, sans-serif", fontSize: "13px" },
     ".cm-vg-tip-title": { fontFamily: MONO, color: "#ffcb6b", marginBottom: "4px", fontSize: "12.5px" },
@@ -97,6 +98,25 @@ function lineDecorations(doc, { selected = [], related = [] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Trechos ligados ao que está sob o mouse no painel "Matemática"
+
+const mathMark = Decoration.mark({ class: "cm-vg-math" });
+const setMathLinks = StateEffect.define();
+const mathField = StateField.define({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) {
+      if (!e.is(setMathLinks)) continue;
+      const ranges = e.value.filter((r) => r.to <= tr.state.doc.length && r.from < r.to).sort((a, b) => a.from - b.from);
+      deco = Decoration.set(ranges.map((r) => mathMark.range(r.from, r.to)));
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+// ---------------------------------------------------------------------------
 // Números editáveis sublinhados e arrastáveis
 
 const numberMark = Decoration.mark({ class: "cm-vg-number" });
@@ -145,6 +165,7 @@ function scrubPlugin(host) {
         if (event.button !== 0 || event.ctrlKey || event.metaKey) return false;
         const analysis = host.analysis();
         if (!analysis || !analysis.ok || analysis.code.length !== view.state.doc.length) return false;
+        if (host.canScrub && !host.canScrub()) return false;
         const number = numberAt(view, analysis, event.clientX, event.clientY);
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
         const info = number && scrubInfo(analysis, number);
@@ -274,6 +295,8 @@ function completions(host) {
 
 // ---------------------------------------------------------------------------
 
+const extensionsOf = new WeakMap(); // editor → extensões, para trocar de documento
+
 /**
  * Cria o editor. `host` fornece analysis() (análise do texto atual) e recebe os eventos:
  * onChange(update), onCursor(pos), onHoverPos(pos), onScrub(number, value), onScrubEnd(), onRun().
@@ -283,53 +306,58 @@ export function createEditor(parent, doc, host) {
     host.onRun?.();
     return true;
   };
-  const view = new EditorView({
-    parent,
-    state: EditorState.create({
-      doc,
-      extensions: [
-        basicSetup,
-        javascript(),
-        javascriptLanguage.data.of({ autocomplete: completions(host) }),
-        theme,
-        EditorView.lineWrapping,
-        syntaxHighlighting(highlight),
-        lintGutter(),
-        highlightField,
-        numbersField,
-        scrubPlugin(host),
-        hoverPlugin(host),
-        hoverTooltip((view, pos) => {
-          const analysis = host.analysis();
-          const info = analysis && analysis.code.length === view.state.doc.length ? explain(analysis, pos) : null;
-          if (!info) return null;
-          return {
-            pos: info.from,
-            end: info.to,
-            above: true,
-            create() {
-              const dom = document.createElement("div");
-              const title = dom.appendChild(document.createElement("div"));
-              title.className = "cm-vg-tip-title";
-              title.textContent = info.title;
-              dom.appendChild(document.createElement("div")).textContent = info.text;
-              return { dom };
-            },
-          };
-        }),
-        keymap.of([
-          { key: "Mod-Enter", run: runKey },
-          { key: "Mod-s", run: runKey, preventDefault: true },
-        ]),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) host.onChange?.(update);
-          if (update.selectionSet && !update.docChanged) host.onCursor?.(update.state.selection.main.head);
-        }),
-        EditorView.contentAttributes.of({ "aria-label": "Código da cena", spellcheck: "false" }),
-      ],
+  const extensions = [
+    basicSetup,
+    javascript(),
+    javascriptLanguage.data.of({ autocomplete: completions(host) }),
+    theme,
+    EditorView.lineWrapping,
+    syntaxHighlighting(highlight),
+    lintGutter(),
+    highlightField,
+    numbersField,
+    mathField,
+    scrubPlugin(host),
+    hoverPlugin(host),
+    hoverTooltip((view, pos) => {
+      const analysis = host.analysis();
+      const info = analysis && analysis.code.length === view.state.doc.length ? explain(analysis, pos) : null;
+      if (!info) return null;
+      return {
+        pos: info.from,
+        end: info.to,
+        above: true,
+        create() {
+          const dom = document.createElement("div");
+          const title = dom.appendChild(document.createElement("div"));
+          title.className = "cm-vg-tip-title";
+          title.textContent = info.title;
+          dom.appendChild(document.createElement("div")).textContent = info.text;
+          return { dom };
+        },
+      };
     }),
-  });
+    keymap.of([
+      { key: "Mod-Enter", run: runKey },
+      { key: "Mod-s", run: runKey, preventDefault: true },
+    ]),
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged) host.onChange?.(update);
+      if (update.selectionSet && !update.docChanged) host.onCursor?.(update.state.selection.main.head);
+    }),
+    EditorView.contentAttributes.of({ "aria-label": "Código da cena", spellcheck: "false" }),
+  ];
+  const view = new EditorView({ parent, state: EditorState.create({ doc, extensions }) });
+  extensionsOf.set(view, extensions);
   return view;
+}
+
+/**
+ * Troca o texto inteiro por outro documento (o código de outro desafio), com o histórico de
+ * desfazer zerado. Não passa por `onChange`: quem troca analisa e roda o código novo.
+ */
+export function resetDoc(view, doc) {
+  view.setState(EditorState.create({ doc, extensions: extensionsOf.get(view) }));
 }
 
 /** Destaca as linhas do objeto selecionado e as do objeto sob o mouse. */
@@ -337,14 +365,21 @@ export function showHighlight(view, selected, related) {
   view.dispatch({ effects: setHighlight.of({ selected, related }) });
 }
 
-/** Atualiza sublinhado dos números editáveis e a lista de erros. */
-export function showAnalysis(view, analysis, diagnostics) {
+/** Marca os trechos do código ligados ao número sob o mouse no painel (lista vazia limpa). */
+export function showMathLinks(view, ranges, scroll = false) {
+  const effects = [setMathLinks.of(ranges)];
+  if (scroll && ranges.length) effects.push(EditorView.scrollIntoView(ranges[0].from, { y: "nearest" }));
+  view.dispatch({ effects });
+}
+
+/** Atualiza sublinhado dos números editáveis (se `numbers`) e a lista de erros. */
+export function showAnalysis(view, analysis, diagnostics, numbers = true) {
   const doc = view.state.doc;
   const valid = diagnostics
     .filter((d) => d.from <= doc.length)
     .map((d) => ({ ...d, to: Math.min(Math.max(d.to, d.from), doc.length) }));
   view.dispatch(setDiagnostics(view.state, valid), {
-    effects: setNumbers.of(analysis.ok && analysis.code.length === doc.length ? numberDecorations(analysis) : Decoration.none),
+    effects: setNumbers.of(numbers && analysis.ok && analysis.code.length === doc.length ? numberDecorations(analysis) : Decoration.none),
   });
 }
 

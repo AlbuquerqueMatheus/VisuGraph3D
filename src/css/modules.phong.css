@@ -29,13 +29,14 @@
 .phong-swatch { display: inline-block; width: 14px; height: 14px; margin-left: 6px; vertical-align: middle; border: 1px solid #666; border-radius: 3px; }
 
 
-.btn-explain { grid-area: explain; align-self: start; justify-self: end; padding: 10px 20px; background: var(--accent-color); border: none; border-radius: 6px; cursor: pointer; color: #000; transition: background .2s; }
+.phong-actions { grid-area: explain; display: grid; gap: 10px; justify-items: end; align-self: start; }
+.btn-explain { align-self: start; justify-self: end; padding: 10px 20px; background: var(--accent-color); border: none; border-radius: 6px; cursor: pointer; color: #000; transition: background .2s; }
 .btn-explain:hover { background: var(--accent-hover); }
 
 
 @media (max-width: 900px) {
 .phong-main { grid-template-columns: 1fr; grid-template-areas: "controls" "viewer" "side"; }
 .phong-side { grid-template-columns: 1fr; grid-template-areas: "formula" "numbers" "explain"; }
-.btn-explain { justify-self: start; }
+.phong-actions, .btn-explain { justify-self: start; justify-items: start; }
 }
 }

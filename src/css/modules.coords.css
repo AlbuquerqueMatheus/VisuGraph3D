@@ -57,6 +57,7 @@
 
 
 .note { font-size: .9rem; color: #b8bdc9; }
+.note a { color: var(--accent-color); text-decoration: underline; }
 .subtle { margin: 8px 0 6px; color: #8fc7ff; }
 
 

@@ -39,6 +39,7 @@
 
     <main class="lv-grid">
       <section class="lv-code" aria-label="Código da cena">
+        <div class="lv-codebar" id="lv-codebar" hidden></div>
         <div id="lv-editor"></div>
       </section>
 
@@ -55,7 +56,14 @@
           <h2>Objetos</h2>
           <ul id="lv-objects"></ul>
         </section>
-        <section class="lv-props" id="lv-props" aria-live="polite"></section>
+        <div class="lv-tabs" role="tablist" aria-label="Painéis">
+          <button type="button" role="tab" id="lv-tab-props" data-tab="props" aria-controls="lv-props" aria-selected="true">Propriedades</button>
+          <button type="button" role="tab" id="lv-tab-math" data-tab="math" aria-controls="lv-math" aria-selected="false" tabindex="-1">Matemática</button>
+          <button type="button" role="tab" id="lv-tab-challenges" data-tab="challenges" aria-controls="lv-challenges" aria-selected="false" tabindex="-1">Desafios</button>
+        </div>
+        <section class="lv-props" id="lv-props" role="tabpanel" aria-labelledby="lv-tab-props" aria-live="polite"></section>
+        <section class="lv-math" id="lv-math" role="tabpanel" aria-labelledby="lv-tab-math" hidden></section>
+        <section class="lv-challenges" id="lv-challenges" role="tabpanel" aria-labelledby="lv-tab-challenges" hidden></section>
       </aside>
     </main>
 

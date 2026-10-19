@@ -2,8 +2,8 @@
 
 Laboratório interativo de Computação Gráfica que roda no navegador.
 
-- **Modo 3D** (`index-3d.html`): código vivo. A cena é um programa JavaScript com Three.js, e o código é a única fonte da verdade: clicar num objeto destaca as linhas que o criam, e arrastar o gizmo, mexer no painel de propriedades ou arrastar um número no código reescreve o próprio código. O que dá para editar pela cena está em [docs/codigo-vivo.md](docs/codigo-vivo.md).
-- **Modo 2D** (`index-2d.html`): sistema de coordenadas e transformações (com a matriz 3×3 em coordenadas homogêneas), sistemas de cores, modelo de iluminação Phong / Blinn–Phong e curvas de Bézier (De Casteljau).
+- **Modo 3D** (`index-3d.html`): código vivo. A cena é um programa JavaScript com Three.js, e o código é a única fonte da verdade: clicar num objeto destaca as linhas que o criam, e arrastar o gizmo, mexer no painel de propriedades ou arrastar um número no código reescreve o próprio código. A aba **Matemática** mostra as matrizes e o caminho de um vértice até o pixel, e a "caixa de vidro" desenha a cena com a fórmula de Phong à mostra. A aba **Desafios** tem 10 desafios corrigidos pela própria cena, e o modo de estudo (`?estudo=controle` ou `?estudo=experimental`) compara o app com e sem a ligação entre cena e código, com um registro de uso anônimo. Tudo isso está em [docs/codigo-vivo.md](docs/codigo-vivo.md).
+- **Modo 2D** (`index-2d.html`): sistema de coordenadas e transformações (com a matriz 3×3 em coordenadas homogêneas), sistemas de cores, modelo de iluminação Phong / Blinn–Phong e curvas de Bézier (De Casteljau). Os laboratórios de coordenadas e de Phong terminam com um link para a trilha de desafios correspondente no modo 3D.
 
 Todas as bibliotecas vêm do npm e são empacotadas pelo Vite: o site funciona sem CDN e pode ser publicado em qualquer subpasta (por exemplo, no GitHub Pages).
 
@@ -29,7 +29,7 @@ npm run check      # tudo acima, na ordem
 
 Antes do primeiro `npm run test:e2e`, instale o navegador do Playwright com `npx playwright install chromium`.
 
-Os testes de ponta a ponta servem o build numa subpasta (`/visugraph3d/`), para garantir que ele funciona em qualquer endereço, e falham se a página registrar erro no console, pedir arquivo fora do site ou não encontrar algum arquivo. Entre outras coisas, eles conferem que a cor de um pixel do visor Phong é a que a fórmula do painel calcula e que, no modo 3D, arrastar o gizmo e mexer no painel reescrevem o código.
+Os testes de ponta a ponta servem o build numa subpasta (`/visugraph3d/`), para garantir que ele funciona em qualquer endereço, e falham se a página registrar erro no console, pedir arquivo fora do site ou não encontrar algum arquivo. Entre outras coisas, eles conferem que a cor de um pixel do visor Phong é a que a fórmula do painel calcula e que, no modo 3D, arrastar o gizmo e mexer no painel reescrevem o código, a caixa de vidro pinta o pixel que a aba Matemática calcula e cada desafio é corrigido pela cena.
 
 ## Estrutura
 
@@ -38,11 +38,11 @@ index.html                    menu
 index-2d.html                 modo 2D
 index-3d.html, viewport.html  modo 3D (código vivo) e o visor, que roda a cena num iframe
 src/js/                       código do menu e das seções do modo 2D
-src/lib/                      funções puras com testes: transformações 2D, modelo de Phong e o shader que o implementa
-src/live/                     modo 3D: motor (análise do código e edições), editor, visor e painel
+src/lib/                      funções puras com testes: transformações 2D e 3D, modelo de Phong (2D e 3D) e o shader do visor Phong
+src/live/                     modo 3D: motor (análise do código e edições), editor, visor, painel, desafios e modo de estudo
 src/css/                      estilos (camadas: tokens, base, componentes, overrides)
 public/                       imagens e a fonte da logo (licença em public/fonts)
-docs/                         documentação (o subconjunto do Three.js que o modo 3D entende)
+docs/                         documentação do modo 3D: o subconjunto do Three.js, a aba Matemática, os desafios e o modo de estudo
 tests/unit/                   testes do Vitest
 tests/e2e/                    testes do Playwright
 ```

@@ -11,17 +11,74 @@ import { editableAxes, planEdit, planTransform } from "./engine/patch.js";
 import { ADD_ITEMS, STARTER_CODE, planAddObject } from "./engine/snippets.js";
 import { translateError } from "./engine/errors.js";
 import { degToRad } from "./engine/format.js";
-import { createEditor, revealPosition, sceneEdit, showAnalysis, showHighlight } from "./editor/editor.js";
+import { createEditor, resetDoc, revealPosition, sceneEdit, showAnalysis, showHighlight, showMathLinks } from "./editor/editor.js";
+import { isObject3DKind } from "./engine/catalog.js";
 import { Inspector } from "./inspector.js";
+import { MathPanel } from "./mathPanel.js";
+import { CHALLENGES, challengeById, firstOpen, grade, nextChallenge, trailById, trailOf } from "./challenges.js";
+import { ChallengesPanel } from "./challengesPanel.js";
+import { NO_STUDY, StudyLog, studyGroup } from "./study.js";
 import { ViewportBridge } from "./bridge.js";
 import { exportHtml } from "./export.js";
 
 const STORAGE_KEY = "visugraph.codigo.v1";
+const PROGRESS_KEY = "visugraph.desafios.v1"; // { feitos: [ids], atual: id }
+const challengeKey = (id) => `visugraph.desafio.${id}.v1`; // o código de cada desafio
 const RUNNING_KEY = "visugraph.rodando"; // presente enquanto um código roda: se a página travar, fica lá
+const NEW_SESSION_KEY = "visugraph.estudo.nova"; // sessionStorage: "Nova sessão" recarregou a página
 const TYPING_DELAY_MS = 300;
 const LIVE_RUN_MS = 80;
 
 const $ = (sel) => document.querySelector(sel);
+
+// Modo de estudo (?estudo=controle|experimental): no grupo controle a cena não escreve no
+// código e nada se acende entre os dois; o código continua rodando a cada mudança.
+const group = studyGroup(location.search);
+const study = group ? new StudyLog(group) : NO_STUDY;
+const sync = group !== "controle";
+const READ_ONLY = "No grupo controle do estudo, as mudanças são feitas pelo código.";
+// uma sessão que começa agora é de outro aluno: sem o progresso e o código de quem usou antes
+if (study.fresh) forgetStudent();
+// "Nova sessão" recarrega a página, que volta com o aviso do código novo na barra de status
+let newSession = false;
+try {
+  newSession = group != null && sessionStorage.getItem(NEW_SESSION_KEY) === study.code;
+  sessionStorage.removeItem(NEW_SESSION_KEY);
+} catch {
+  // sem sessionStorage: a faixa mostra o código mesmo assim
+}
+
+/** Apaga o progresso nos desafios e o código guardado (o livre e o de cada desafio). */
+function forgetStudent() {
+  try {
+    for (const c of CHALLENGES) localStorage.removeItem(challengeKey(c.id));
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(RUNNING_KEY); // o código que travou também foi embora
+  } catch {
+    // sem armazenamento: não há o que apagar
+  }
+}
+
+// Desafios: o que já foi feito e o desafio aberto. ?trilha=matriz|camera|phong (os links dos
+// laboratórios 2D) abre o primeiro desafio ainda não feito da trilha.
+function loadProgress() {
+  try {
+    const data = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "null");
+    const done = Array.isArray(data?.feitos) ? data.feitos.filter((id) => challengeById(id)) : [];
+    return { done: new Set(done), current: challengeById(data?.atual) };
+  } catch {
+    return { done: new Set(), current: null };
+  }
+}
+const progress = loadProgress();
+const trailAsked = trailById(new URLSearchParams(location.search).get("trilha"));
+if (trailAsked) {
+  // ao recarregar, vale o desafio que estava aberto, não o começo da trilha
+  const url = new URL(location.href);
+  url.searchParams.delete("trilha");
+  history.replaceState(history.state, "", url);
+}
 
 const state = {
   analysis: null, // análise do texto atual do editor
@@ -42,6 +99,16 @@ const state = {
   runTimer: null,
   liveTimer: null,
   liveDirty: false,
+  tab: "props", // aba do painel da direita: props, math ou challenges
+  glass: null, // caixa de vidro: null, "phong" ou "blinn"
+  vertex: 0, // vértice que o painel Matemática acompanha
+  probeSeq: null,
+  challenge: trailAsked ? firstOpen(trailAsked, progress.done) : progress.current, // desafio aberto: o editor tem o código dele
+  challengeOpenedAt: Date.now(),
+  hints: 0, // dicas mostradas no desafio aberto
+  gradeKey: null, // verificações que passaram na última correção (o registro guarda só as mudanças)
+  factsSeq: 0,
+  liveApplied: false, // o visor tem valores que o código ainda não rodou (arraste no painel ou num número)
 };
 
 // ---------------------------------------------------------------------------
@@ -92,31 +159,50 @@ function selectedId() {
 
 let startedAfterCrash = false;
 
+// Cada desafio guarda o próprio código; fora deles, o editor tem o código livre do aluno.
+const codeKey = () => (state.challenge ? challengeKey(state.challenge.id) : STORAGE_KEY);
+const starterCode = () => state.challenge?.starter ?? STARTER_CODE;
+
 function loadCode() {
   try {
     startedAfterCrash = localStorage.getItem(RUNNING_KEY) != null;
     localStorage.removeItem(RUNNING_KEY);
-    return localStorage.getItem(STORAGE_KEY) ?? STARTER_CODE;
   } catch {
-    return STARTER_CODE;
+    // sem armazenamento: começa do código inicial
+  }
+  return storedCode();
+}
+
+function storedCode() {
+  try {
+    return localStorage.getItem(codeKey()) ?? starterCode();
+  } catch {
+    return starterCode();
   }
 }
 
 let saveTimer = null;
 function saveSoon(code) {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => save(code), 400);
+  const key = codeKey(); // se o aluno trocar de desafio antes, o texto vai para o lugar certo
+  saveTimer = setTimeout(() => save(code, key), 400);
 }
-function save(code) {
+function save(code, key = codeKey()) {
   try {
-    localStorage.setItem(STORAGE_KEY, code);
+    localStorage.setItem(key, code);
   } catch {
     // modo privado ou armazenamento cheio: o código continua no editor
   }
 }
+let restarting = false; // "Nova sessão" já guardou o registro novo e apagou o código do aluno anterior
 window.addEventListener("pagehide", () => {
   clearTimeout(saveTimer);
+  if (restarting) return;
   save(view.state.doc.toString());
+  study.save();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!restarting) study.log("visibilidade", { visivel: document.visibilityState === "visible" });
 });
 
 // ---------------------------------------------------------------------------
@@ -126,10 +212,21 @@ const view = createEditor($("#lv-editor"), loadCode(), {
   analysis: () => state.analysis,
   onChange,
   onCursor: (pos) => setCodeHover(objectAt(pos)),
-  onHoverPos: (pos) => setCodeHover(pos == null ? objectAt(view.state.selection.main.head) : objectAt(pos)),
+  onHoverPos: (pos) => {
+    setCodeHover(pos == null ? objectAt(view.state.selection.main.head) : objectAt(pos));
+    const slot = pos == null || !sync ? null : state.analysis.numbers.find((n) => n.from <= pos && pos <= n.to)?.slot;
+    mathPanel.highlightKey(slot ? `${slot.id}:${slot.key}` : null);
+  },
   onScrub,
-  onScrubEnd: () => runNow(),
-  onRun: () => runNow({ force: true }),
+  onScrubEnd: (number) => {
+    study.log("arraste_numero", { chave: number?.slot?.key ?? null });
+    runNow();
+  },
+  onRun: () => {
+    study.log("rodar", { atalho: true });
+    runNow({ force: true });
+  },
+  canScrub: () => sync,
 });
 
 state.analysis = analyze(view.state.doc.toString());
@@ -141,7 +238,9 @@ function onChange(update) {
   saveSoon(code);
   queueMicrotask(refreshEditor);
   inspector.update(state.analysis, selectedId(), runtimeForCurrent());
+  updateMathContext();
   const kind = update.transactions.map((tr) => tr.annotation(sceneEdit)).find(Boolean);
+  if (!kind && update.transactions.some((tr) => tr.isUserEvent("input") || tr.isUserEvent("delete"))) study.log("digitacao");
   if (kind === "cena") return; // quem editou decide quando rodar
   if (kind === "scrub") return liveRun();
   if (hasBlockingError(state.analysis)) {
@@ -156,7 +255,8 @@ function onChange(update) {
 
 function refreshEditor() {
   const a = state.analysis;
-  showAnalysis(view, a, [...a.diagnostics, ...state.runtimeDiagnostics]);
+  showAnalysis(view, a, [...a.diagnostics, ...state.runtimeDiagnostics], sync);
+  if (!sync) return; // grupo controle: nada se acende no código pela cena
   const sel = selectedId();
   const selected = sel != null ? a.objects[sel].ranges : [];
   const hover = state.hoverId != null && state.hoverId !== sel && a.objects[state.hoverId] ? a.objects[state.hoverId].ranges : [];
@@ -172,7 +272,7 @@ function objectAt(pos) {
 }
 
 function setCodeHover(id) {
-  if (id === state.codeHoverId) return;
+  if (id === state.codeHoverId || !sync) return;
   state.codeHoverId = id;
   bridge.send({ type: "highlight", id: toScreen(id) });
 }
@@ -182,13 +282,15 @@ function onScrub(number, value) {
   const obj = slot && state.analysis.objects[slot.id];
   if (!slot || !obj || obj.kind === "geometry") return; // o código já mudou; liveRun cuida
   const v = slot.unit === "deg" ? degToRad(value) : value;
+  state.liveApplied = true;
   bridge.send({ type: "apply", id: toScreen(slot.id), key: slot.key, value: v });
 }
 
 // ---------------------------------------------------------------------------
 // Rodar o código no visor
 
-function runNow({ force = false, resetTime = false } = {}) {
+/** `quiet`: a barra de status não troca para "Cena atualizada" (fica o aviso que já está lá). */
+function runNow({ force = false, resetTime = false, quiet = false } = {}) {
   clearTimeout(state.runTimer);
   const analysis = state.analysis;
   if (hasBlockingError(analysis)) {
@@ -197,15 +299,16 @@ function runNow({ force = false, resetTime = false } = {}) {
   }
   if (!force && state.stuckCode === analysis.code) return;
   state.stuckCode = null;
-  sendRun(analysis, resetTime);
+  sendRun(analysis, resetTime, quiet);
 }
 
-function sendRun(analysis, resetTime = false) {
+function sendRun(analysis, resetTime = false, quiet = false) {
   const { script, toOriginal } = instrument(analysis);
   const runId = ++state.runId;
-  state.runs.set(runId, { analysis, toOriginal, failed: false });
+  state.runs.set(runId, { analysis, toOriginal, failed: false, quiet });
   for (const id of state.runs.keys()) if (id < runId - 20) state.runs.delete(id);
   state.runtimeDiagnostics = [];
+  state.liveApplied = false;
   markRunning(analysis.code);
   bridge.run({ runId, script, sceneId: analysis.scene?.id ?? null, cameraId: analysis.camera?.id ?? null, resetTime });
 }
@@ -243,11 +346,16 @@ function onMessage(msg) {
         if (startedAfterCrash) {
           state.stuckCode = state.analysis.code;
           setStatus("error", "Da última vez, este código travou a página e por isso não foi rodado. Confira os laços e clique em ↻ Rodar.");
-        } else runNow();
+        } else runNow({ quiet: newSession });
       } else if (state.screen) {
         // o visor foi reiniciado: mostra de novo a última cena que funcionou
         sendRun(state.screen);
       }
+      // o visor (re)começa do zero: manda de novo o que o editor ligou
+      if (state.glass) bridge.send({ type: "glass", model: state.glass });
+      if (state.view !== "editor") bridge.send({ type: "view", view: state.view });
+      if (!state.playing) bridge.send({ type: "play", playing: false });
+      sendGhosts();
       break;
     case "ran":
       onRan(msg);
@@ -257,6 +365,7 @@ function onMessage(msg) {
       break;
     case "pick":
       select(fromScreen(msg.id), { reveal: true });
+      study.log("selecao", { origem: "visor", tipo: kindOfSelected() });
       break;
     case "hover":
       state.hoverId = fromScreen(msg.id);
@@ -277,6 +386,19 @@ function onMessage(msg) {
     }
     case "mode":
       setMode(msg.mode, false);
+      break;
+    case "math":
+      if (msg.id != null && msg.id === toScreen(selectedId())) mathPanel.setData(msg);
+      break;
+    case "facts":
+      onFacts(msg);
+      break;
+    case "probe":
+      mathPanel.setProbe(msg);
+      if (msg.seq !== state.probeSeq) {
+        state.probeSeq = msg.seq;
+        study.log("sonda", { modelo: msg.model, suportado: !!msg.supported, material: msg.params?.className ?? msg.materialType ?? null });
+      }
       break;
     case "fatal":
       setStatus("error", msg.message);
@@ -313,16 +435,23 @@ function onRan(msg) {
   updateToolbar();
   if (!run.failed && msg.runId === state.runId) {
     const count = run.analysis.objects.filter((o) => o.kind === "mesh" || o.kind === "light").length;
-    setStatus("ok", `Cena atualizada · ${count} ${count === 1 ? "objeto" : "objetos"}${msg.hasAnimar ? " · animar() rodando" : ""}`);
+    if (!run.quiet) setStatus("ok", `Cena atualizada · ${count} ${count === 1 ? "objeto" : "objetos"}${msg.hasAnimar ? " · animar() rodando" : ""}`);
+    study.log("execucao", { ok: true, objetos: count, animar: !!msg.hasAnimar });
   }
   sendSelection();
   requestInspect();
+  updateMathContext();
+  sendMarker();
+  requestMath();
+  // um valor mudado direto no visor (arraste no painel) ainda não está no código: corrige depois
+  if (msg.runId === state.runId && !state.liveApplied) requestFacts();
 }
 
 function onRuntimeError(msg) {
   const run = state.runs.get(msg.runId);
   if (!run) return;
   run.failed = true;
+  study.log("erro", { origem: "execucao", fase: msg.phase, tipo: msg.name, laco: !!msg.loop });
   let pos = msg.line != null ? run.toOriginal(msg.line, msg.column ?? 0) : null;
   const where = { animar: "Em animar() (a animação parou): ", timer: "Num temporizador: ", evento: "Num evento: ", async: "Numa função async: " };
   const text = (where[msg.phase] || "") + translateError(msg.name, msg.message);
@@ -344,6 +473,7 @@ function onRuntimeError(msg) {
 function showBlockingError() {
   const d = state.analysis.diagnostics.find((x) => x.severity === "error");
   if (!d) return;
+  study.log("erro", { origem: d.source });
   const line = view.state.doc.lineAt(Math.min(d.from, view.state.doc.length)).number;
   setStatus("error", `Linha ${line}: ${d.message}`, d.from);
 }
@@ -368,13 +498,23 @@ function clearRunning() {
 // Seleção
 
 function select(id, { reveal = false } = {}) {
-  state.selectedKey = id == null ? null : keysOf(state.analysis).byId.get(id) ?? null;
+  const key = id == null ? null : keysOf(state.analysis).byId.get(id) ?? null;
+  if (key !== state.selectedKey) state.vertex = 0;
+  state.selectedKey = key;
   refreshEditor();
   inspector.update(state.analysis, selectedId(), runtimeForCurrent());
+  updateMathContext();
   sendSelection();
   requestInspect();
+  sendMarker();
+  requestMath();
   const obj = id != null ? state.analysis.objects[id] : null;
-  if (reveal && obj) revealPosition(view, obj.ranges[0]?.from ?? obj.from);
+  if (reveal && obj && sync) revealPosition(view, obj.ranges[0]?.from ?? obj.from);
+}
+
+function kindOfSelected() {
+  const id = selectedId();
+  return id != null ? state.analysis.objects[id].kind : null;
 }
 
 function sendSelection() {
@@ -386,7 +526,8 @@ function sendSelection() {
     return;
   }
   const id = selectedId();
-  const axes = id == null ? {} : Object.fromEntries(["position", "rotation", "scale"].map((p) => [p, editableAxes(a, id, p)]));
+  // sem eixos o visor não mostra o gizmo: no grupo controle, a cena não escreve no código
+  const axes = id == null || !sync ? {} : Object.fromEntries(["position", "rotation", "scale"].map((p) => [p, editableAxes(a, id, p)]));
   bridge.send({ type: "select", id: toScreen(id), axes });
 }
 
@@ -424,30 +565,253 @@ function onTransform(msg) {
   // uma execução pendente (de algo digitado antes) esperaria o arraste acabar no visor
   if (!msg.final) clearTimeout(state.runTimer);
   applyPlan(planTransform(state.analysis, id, msg.prop, msg.values, msg.start, msg.touched));
-  if (msg.final) runNow();
+  if (msg.final) {
+    study.log("gizmo", { prop: msg.prop });
+    runNow();
+  }
 }
 
 function onInspectorEdit(id, key, value, phase) {
   const ok = applyPlan(planEdit(state.analysis, id, key, value, { current: (oid, k) => state.runtimeValues[oid]?.[k] }));
   if (!ok) return;
   if (phase === "commit") {
+    study.log("painel", { chave: key });
     runNow();
     return;
   }
   const obj = state.analysis.objects[id];
   if (obj && obj.kind === "geometry") liveRun();
-  else bridge.send({ type: "apply", id: toScreen(id), key, value });
+  else {
+    state.liveApplied = true;
+    bridge.send({ type: "apply", id: toScreen(id), key, value });
+  }
 }
 
 const inspector = new Inspector(
   { list: $("#lv-objects"), panel: $("#lv-props") },
   {
-    select: (id) => select(id, { reveal: true }),
+    select: (id) => {
+      select(id, { reveal: true });
+      study.log("selecao", { origem: "lista", tipo: kindOfSelected() });
+    },
     edit: onInspectorEdit,
     reveal: (pos) => revealPosition(view, pos, true),
   },
+  { readOnly: sync ? null : READ_ONLY },
 );
 inspector.update(state.analysis, null);
+
+// ---------------------------------------------------------------------------
+// Abas do painel e a aba Matemática
+
+const mathPanel = new MathPanel($("#lv-math"), {
+  hover: (keys) => showMathLinks(view, keys ? rangesOf(keys) : [], true),
+  vertex(index) {
+    state.vertex = index;
+    sendMarker();
+    requestMath();
+  },
+  glass: (model) => setGlass(model),
+  log: (type, data) => study.log(type, data),
+});
+
+/** Trechos do código dos literais "id:chave" (só os que o painel pode apontar). */
+function rangesOf(keys) {
+  const a = state.analysis;
+  if (!a.ok) return [];
+  const out = [];
+  for (const key of keys) {
+    const i = key.indexOf(":");
+    const st = a.objects[Number(key.slice(0, i))]?.props[key.slice(i + 1)];
+    if (st && st.status === "slot") out.push({ from: st.slot.from, to: st.slot.to });
+  }
+  return out;
+}
+
+function updateMathContext() {
+  const id = selectedId();
+  const obj = id != null ? state.analysis.objects[id] : null;
+  mathPanel.setContext(
+    obj && isObject3DKind(obj.kind)
+      ? {
+        id,
+        name: obj.name,
+        className: obj.className,
+        ids: fromScreen,
+        material: (meshId) => state.analysis.objects[meshId]?.links.material ?? null,
+        nameOf: (objId) => state.analysis.objects[objId]?.name ?? null,
+        links: sync,
+      }
+      : null,
+  );
+}
+
+function requestMath() {
+  const id = state.tab === "math" ? toScreen(selectedId()) : null;
+  if (id != null) bridge.send({ type: "math", id, vertex: state.vertex });
+}
+// a câmera do editor e a animação mudam as contas sem o código mudar
+setInterval(() => {
+  if (document.visibilityState === "visible") requestMath();
+}, 200);
+
+function sendMarker() {
+  const id = state.tab === "math" ? toScreen(selectedId()) : null;
+  bridge.send({ type: "marker", id, vertex: state.vertex });
+}
+
+function setGlass(model) {
+  state.glass = model;
+  bridge.send({ type: "glass", model });
+  mathPanel.setGlass(model);
+  study.log("vidro", { modelo: model ?? "desligado" });
+}
+
+const tabs = [...document.querySelectorAll('.lv-tabs [role="tab"]')];
+function setTab(tab) {
+  if (tab !== state.tab) study.log("aba", { aba: tab });
+  state.tab = tab;
+  for (const t of tabs) {
+    const on = t.dataset.tab === tab;
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+    document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+  }
+  showMathLinks(view, []);
+  sendMarker();
+  requestMath();
+}
+for (const t of tabs) {
+  t.addEventListener("click", () => setTab(t.dataset.tab));
+  t.addEventListener("keydown", (e) => {
+    const k = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (!k) return;
+    const visible = tabs.filter((x) => !x.hidden);
+    const next = visible[(visible.indexOf(t) + k + visible.length) % visible.length];
+    setTab(next.dataset.tab);
+    next.focus();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Desafios: abrir, corrigir pela cena e guardar o progresso
+
+const challengesPanel = new ChallengesPanel(
+  $("#lv-challenges"),
+  {
+    open: (id, origin) => openChallenge(challengeById(id), origin),
+    leave: () => openChallenge(null),
+    hint(id) {
+      const c = state.challenge;
+      if (!c || c.id !== id || state.hints >= c.hints.length) return;
+      state.hints++;
+      study.log("desafio.dica", { id, n: state.hints });
+      challengesPanel.setHints(state.hints);
+    },
+    nextOf: (id) => nextChallenge(id, progress.done),
+  },
+  { sceneEdits: sync },
+);
+challengesPanel.setDone(progress.done);
+
+function saveProgress() {
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ feitos: [...progress.done], atual: state.challenge?.id ?? null }));
+  } catch {
+    // sem armazenamento: o progresso vale até fechar a página
+  }
+}
+
+/**
+ * Abre um desafio (null volta ao código livre). O editor troca de documento: o código que
+ * sai fica guardado, e o que entra é o guardado daquele desafio ou o inicial dele.
+ */
+function openChallenge(challenge, origin = "lista", { keepCode = true, quiet = false } = {}) {
+  if (challenge === state.challenge && keepCode) return;
+  clearTimeout(saveTimer);
+  if (keepCode) save(view.state.doc.toString());
+  if (state.challenge) study.log("desafio.sair", { id: state.challenge.id, feito: progress.done.has(state.challenge.id) });
+  state.challenge = challenge;
+  saveProgress();
+  if (challenge) study.log("desafio.abrir", { id: challenge.id, origem: origin });
+  resetDoc(view, storedCode());
+  state.analysis = analyze(view.state.doc.toString());
+  state.runtimeDiagnostics = [];
+  state.stuckCode = null;
+  select(null);
+  showChallenge();
+  if (hasBlockingError(state.analysis)) showBlockingError();
+  else runNow({ force: true, resetTime: true, quiet });
+}
+
+/** Painel, faixa sobre o código, contornos e vista do desafio aberto. */
+function showChallenge() {
+  const c = state.challenge;
+  state.challengeOpenedAt = Date.now();
+  state.hints = 0;
+  state.gradeKey = null;
+  challengesPanel.show(c);
+  updateChallengeBar(null);
+  sendGhosts();
+  if (!c) return;
+  setView(c.view);
+  const glass = trailOf(c.id).glass;
+  if (glass && !state.glass) setGlass(glass);
+}
+
+function sendGhosts() {
+  bridge.send({ type: "ghost", shapes: state.challenge?.ghosts ?? [] });
+}
+
+function requestFacts() {
+  if (state.challenge) bridge.send({ type: "facts", seq: ++state.factsSeq });
+}
+
+/** Corrige o desafio aberto com os fatos da cena, pelos nomes das variáveis do código que rodou. */
+function onFacts(msg) {
+  const challenge = state.challenge;
+  const analysis = state.runs.get(msg.runId)?.analysis;
+  if (!challenge || !analysis || msg.seq !== state.factsSeq) return;
+  const objects = Object.create(null);
+  for (const [id, facts] of Object.entries(msg.objects)) {
+    const name = analysis.objects[id]?.name;
+    if (name && !objects[name]) objects[name] = facts;
+  }
+  const nameOf = (id) => analysis.objects[id]?.name ?? null;
+  const result = grade(challenge, { objects, camera: msg.camera, lights: msg.lights, nameOf });
+  challengesPanel.setResult(result);
+  const passed = result.results.filter((r) => r.ok).length;
+  updateChallengeBar({ passed, total: result.results.length, ok: result.ok });
+  const key = result.results.map((r) => (r.ok ? 1 : 0)).join("");
+  if (key !== state.gradeKey) {
+    if (state.gradeKey != null || passed) study.log("desafio.conferir", { id: challenge.id, ok: result.ok, passou: passed, total: result.results.length });
+    state.gradeKey = key;
+  }
+  if (result.ok && !progress.done.has(challenge.id)) {
+    progress.done.add(challenge.id);
+    saveProgress();
+    challengesPanel.setDone(progress.done);
+    study.log("desafio.concluir", { id: challenge.id, segundos: (Date.now() - state.challengeOpenedAt) / 1000, dicas: state.hints });
+    setStatus("ok", `Desafio feito: ${challenge.title}.`);
+  }
+}
+
+// Faixa sobre o código: lembra que o editor tem o código do desafio, e como ele vai.
+const codebar = $("#lv-codebar");
+const codebarTitle = document.createElement("strong");
+const codebarStatus = document.createElement("span");
+const codebarOpen = Object.assign(document.createElement("button"), { type: "button", className: "lv-link", textContent: "ver desafio" });
+codebarOpen.addEventListener("click", () => setTab("challenges"));
+codebar.append("Desafio: ", codebarTitle, codebarStatus, codebarOpen);
+
+function updateChallengeBar(grading) {
+  const c = state.challenge;
+  codebar.hidden = !c;
+  if (!c) return;
+  codebarTitle.textContent = c.title;
+  codebar.dataset.ok = String(!!grading?.ok);
+  codebarStatus.textContent = !grading ? "" : grading.ok ? "✓ feito" : `${grading.passed} de ${grading.total} ${grading.total === 1 ? "verificação" : "verificações"}`;
+}
 
 // ---------------------------------------------------------------------------
 // Barra de ferramentas
@@ -461,6 +825,7 @@ for (const item of ADD_ITEMS) {
   button.textContent = item.label;
   button.addEventListener("click", () => {
     $("#lv-add").open = false;
+    study.log("adicionar", { tipo: item.kind });
     const plan = planAddObject(state.analysis, item.kind);
     if (plan.error) {
       setStatus("warn", plan.error);
@@ -482,23 +847,33 @@ function setMode(mode, notify = true) {
 }
 for (const b of document.querySelectorAll("[data-mode]")) b.addEventListener("click", () => setMode(b.dataset.mode));
 
-$("#lv-view").addEventListener("click", () => {
-  state.view = state.view === "editor" ? "camera" : "editor";
-  bridge.send({ type: "view", view: state.view });
+function setView(next) {
+  if (next === state.view) return;
+  state.view = next;
+  bridge.send({ type: "view", view: next });
   updateToolbar();
+}
+$("#lv-view").addEventListener("click", () => {
+  setView(state.view === "editor" ? "camera" : "editor");
+  study.log("vista", { vista: state.view });
 });
 
 $("#lv-play").addEventListener("click", () => {
   state.playing = !state.playing;
+  study.log("animar", { tocando: state.playing });
   bridge.send({ type: "play", playing: state.playing });
   updateToolbar();
 });
 
-$("#lv-restart").addEventListener("click", () => runNow({ force: true, resetTime: true }));
+$("#lv-restart").addEventListener("click", () => {
+  study.log("rodar", { atalho: false });
+  runNow({ force: true, resetTime: true });
+});
 
 $("#lv-copy").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(view.state.doc.toString());
+    study.log("copiar");
     setStatus("ok", "Código copiado.");
   } catch {
     setStatus("warn", "O navegador não deixou copiar: selecione o código e use Ctrl+C.");
@@ -517,14 +892,16 @@ $("#lv-download").addEventListener("click", () => {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  study.log("baixar");
   setStatus("ok", "Página baixada: abra cena-visugraph.html no navegador (precisa de internet para carregar o Three.js).");
 });
 
 $("#lv-reset").addEventListener("click", () => {
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: STARTER_CODE }, userEvent: "input.cena" });
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: starterCode() }, userEvent: "input.cena" });
   state.selectedKey = null;
+  study.log("restaurar", { desafio: state.challenge?.id ?? null });
   runNow({ force: true, resetTime: true });
-  setStatus("ok", "Exemplo restaurado. Ctrl+Z desfaz.");
+  setStatus("ok", state.challenge ? "Código inicial do desafio restaurado. Ctrl+Z desfaz." : "Exemplo restaurado. Ctrl+Z desfaz.");
 });
 
 function updateToolbar() {
@@ -559,6 +936,66 @@ function setStatus(kind, text, pos = null) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Faixa do modo de estudo
+
+if (group) {
+  document.body.dataset.study = group;
+  if (!sync) {
+    // sem gizmo e sem inserir código pela cena
+    $("#lv-add").hidden = true;
+    $('.lv-seg[aria-label="Ferramenta do gizmo"]').hidden = true;
+    $(".lv-view__hint").textContent = "Clique para selecionar · arraste para girar a vista · F centraliza";
+  }
+  const code = document.createElement("strong");
+  const exportButton = document.createElement("button");
+  exportButton.type = "button";
+  exportButton.textContent = "Exportar registro";
+  exportButton.addEventListener("click", () => {
+    study.save();
+    const url = URL.createObjectURL(new Blob([study.export()], { type: "application/json" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `visugraph-estudo-${study.code}.json` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus("ok", `Registro da sessão ${study.code} baixado. Ele não tem o seu código nem dados pessoais.`);
+  });
+  const newButton = document.createElement("button");
+  newButton.type = "button";
+  newButton.textContent = "Nova sessão";
+  newButton.title = "Para o próximo aluno neste computador (exporte o registro antes)";
+  newButton.addEventListener("click", () => {
+    // o próximo aluno começa como numa página recém-aberta: mesma vista, sem desafio aberto,
+    // sem caixa de vidro e com o código inicial
+    restarting = true;
+    clearTimeout(saveTimer);
+    study.start();
+    study.save();
+    forgetStudent();
+    try {
+      sessionStorage.setItem(NEW_SESSION_KEY, study.code);
+    } catch {
+      // idem
+    }
+    location.reload();
+  });
+  code.textContent = study.code;
+  const banner = document.createElement("div");
+  banner.className = "lv-study";
+  banner.setAttribute("role", "note");
+  banner.append(`Estudo · grupo ${group} · sessão `, code, exportButton, newButton);
+  $(".lv-top").append(banner);
+}
+
+if (state.challenge) {
+  study.log("desafio.abrir", { id: state.challenge.id, origem: trailAsked ? "trilha" : "retomar" });
+  saveProgress();
+  showChallenge();
+  setTab("challenges");
+}
+
 queueMicrotask(refreshEditor);
 if (hasBlockingError(state.analysis)) showBlockingError();
+else if (newSession) setStatus("ok", `Nova sessão: ${study.code}. Anote este código no questionário.`);
 else setStatus("info", "Carregando o visor…");

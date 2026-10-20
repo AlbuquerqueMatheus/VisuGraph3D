@@ -131,13 +131,14 @@ A aba **Desafios** tem 10 desafios em três trilhas. Cada desafio troca o códig
 | --- | --- | --- |
 | Transformações e matrizes | translação, rotação em radianos, escala e centro, hierarquia (pai e filho), matriz de modelo | Coordenadas |
 | Câmera e projeção | `lookAt`, campo de visão | |
-| Luz e cor (Phong) | luz difusa (`n·l`), especular (o expoente `n`), cor canal a canal | Modelo Phong (a trilha liga a caixa de vidro) |
+| Luz e cor (Phong) | luz difusa (`n·l`), especular (o expoente `n`), cor canal a canal | Modelo Phong (a trilha liga a caixa de vidro) e Sistemas de cores (o desafio da cor) |
 
 - **A correção olha a cena, não o texto.** A cada execução, o visor conta à correção como a cena está (posições de mundo, caixas, matrizes, câmera, luzes e materiais), e cada verificação aparece com o que a cena tem, como "(está em (0,00; 0,50; 0,00))". Vale qualquer caminho até o resultado: o código, o gizmo ou o painel. A faixa acima do código mostra o desafio aberto e quantas verificações já passaram.
 - **Contornos tracejados** mostram no visor onde um objeto tem de ficar, nos desafios em que isso ajuda. Os desafios de câmera e de luz abrem pela **Câmera do código**.
 - **Dicas**: três por desafio, uma de cada vez. A última é a resposta.
 - **Código e progresso**: cada desafio guarda o próprio código no navegador, e **Restaurar exemplo** volta ao código inicial dele (`Ctrl+Z` desfaz). **← Sair do desafio** volta ao código livre, que fica guardado à parte. Os desafios feitos ficam marcados, e **Próximo** segue a trilha e depois as outras.
-- **Links**: `index-3d.html?trilha=matriz`, `?trilha=camera` e `?trilha=phong` abrem o primeiro desafio ainda não feito da trilha. Os laboratórios de coordenadas e de Phong do modo 2D terminam com esses links. O parâmetro sai da URL ao abrir, então recarregar a página volta ao desafio que estava aberto. `index-3d.html?livre` abre o editor livre, sem o desafio que estava aberto.
+- **Links**: `index-3d.html?trilha=matriz`, `?trilha=camera` e `?trilha=phong` abrem a trilha no desafio que estava aberto, se ele é dessa trilha e ainda não foi feito, ou no primeiro desafio ainda não feito dela. `?desafio=<id>` abre um desafio pelo nome, como `?desafio=cor`. Os laboratórios de coordenadas e de Phong do modo 2D terminam com o link da trilha, e o de Sistemas de cores com o do desafio da cor. O parâmetro sai da URL ao abrir, então recarregar a página volta ao desafio que estava aberto. `index-3d.html?livre` abre o editor livre, sem o desafio que estava aberto.
+- **Rever no laboratório**: cada trilha da lista e cada desafio levam ao laboratório 2D do tema deles (o desafio da cor leva a Sistemas de cores). De lá, **Programar** na barra volta ao desafio que estava aberto. No modo de estudo esses links não aparecem, para a sessão não sair do código vivo.
 
 ## Modo de estudo
 
@@ -180,7 +181,7 @@ O registro fica no navegador (`localStorage`) até ser exportado. Ele guarda só
 | `aba`, `vista`, `animar` | trocou de aba ou de câmera, pausou ou tocou a animação | `aba`, `vista`, `tocando` |
 | `vidro`, `sonda` | ligou a caixa de vidro, mediu um pixel | `modelo`, `suportado`, `material` |
 | `math.hover`, `math.factors`, `math.vertex` | usou a aba Matemática | `keys`, `on`, `index` |
-| `desafio.abrir` | abriu um desafio | `id`, `origem` (`trilha`, `lista`, `proximo`, `retomar`) |
+| `desafio.abrir` | abriu um desafio | `id`, `origem` (`trilha`, `endereco` para `?desafio=`, `lista`, `proximo`, `retomar`) |
 | `desafio.dica` | pediu uma dica | `id`, `n` |
 | `desafio.conferir` | o resultado da correção mudou | `id`, `ok`, `passou`, `total` |
 | `desafio.concluir` | fez o desafio pela primeira vez | `id`, `segundos`, `dicas` |

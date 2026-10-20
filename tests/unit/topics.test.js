@@ -2,8 +2,8 @@
 // e com os links da tela inicial e dos laboratórios.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { TOPICS, labById, topicOfLab, topicOfTrail } from "../../src/js/topics.js";
-import { TRAILS, trailById } from "../../src/live/challenges.js";
+import { TOPICS, labById, labsOfTrail, topicOfLab, topicOfTrail } from "../../src/js/topics.js";
+import { CHALLENGES, TRAILS, challengeById, trailById, trailOf } from "../../src/live/challenges.js";
 
 const page = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), "utf8");
 const captures = (text, pattern) => [...text.matchAll(pattern)].map((m) => m[1]);
@@ -28,6 +28,15 @@ describe("temas", () => {
       const html = page(file);
       for (const lab of captures(html, /index-2d\.html#([\w-]+)/g)) expect(labById(lab), `${file}: #${lab}`).not.toBeNull();
       for (const trail of captures(html, /index-3d\.html\?trilha=([\w-]+)/g)) expect(trailById(trail), `${file}: ${trail}`).not.toBeNull();
+      for (const id of captures(html, /index-3d\.html\?desafio=([\w-]+)/g)) expect(challengeById(id), `${file}: ${id}`).not.toBeNull();
     }
+  });
+
+  it("o laboratório que um desafio manda rever é um laboratório do tema da trilha dele", () => {
+    const named = CHALLENGES.filter((c) => c.lab);
+    expect(named.length).toBeGreaterThan(0);
+    for (const c of named) expect(labsOfTrail(trailOf(c.id).id).map((l) => l.id), c.id).toContain(c.lab);
+    expect(labsOfTrail("phong").map((l) => l.id)).toEqual(["phong", "cores"]);
+    expect(labsOfTrail("camera"), "Câmera ainda não tem laboratório").toEqual([]);
   });
 });

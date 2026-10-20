@@ -24,3 +24,4 @@ export const FREE_EDITOR_URL = "./index-3d.html?livre"; // o código vivo sem de
 export const topicOfLab = (lab) => TOPICS.find((t) => t.labs.some((l) => l.id === lab)) ?? null;
 export const topicOfTrail = (trail) => TOPICS.find((t) => t.trail != null && t.trail === trail) ?? null;
 export const labById = (lab) => topicOfLab(lab)?.labs.find((l) => l.id === lab) ?? null;
+export const labsOfTrail = (trail) => topicOfTrail(trail)?.labs ?? []; // para "Rever no laboratório"

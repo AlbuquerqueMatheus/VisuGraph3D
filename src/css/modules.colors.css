@@ -1,6 +1,6 @@
 @layer components {
 /* Títulos dos painéis: os das seções do painel do código vivo */
-#color-system-section .color-panel > h3, #color-system-section #a11y-panel .a11y-title, #color-system-section .color-palette h3 { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); margin: 0 0 12px; }
+#color-system-section .color-panel > h3, #color-system-section #a11y-panel .a11y-title, #color-system-section .color-palette h3, #color-system-section .color-bridge h3 { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); margin: 0 0 12px; }
 #color-system-section .tip { color: var(--text-2); font-size: 13px; }
 
 
@@ -18,19 +18,20 @@
 
 /* Grid principal: os três sistemas lado a lado, e embaixo acessibilidade e imagem pela metade.
    minmax(0, 1fr): nenhum painel empurra os outros para fora da tela */
-#color-system-section .color-main { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-areas: "rgb rgb hsl hsl hsv hsv" "a11y a11y a11y ctrls ctrls ctrls"; gap: var(--space-4); align-items: start; }
+#color-system-section .color-main { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-areas: "rgb rgb hsl hsl hsv hsv" "bridge bridge bridge bridge bridge bridge" "a11y a11y a11y ctrls ctrls ctrls"; gap: var(--space-4); align-items: start; }
 #color-system-section #rgb-panel { grid-area: rgb; }
 #color-system-section #hsl-panel { grid-area: hsl; }
 #color-system-section #hsv-panel { grid-area: hsv; }
 #color-system-section #a11y-panel { grid-area: a11y; }
 #color-system-section #color-controls { grid-area: ctrls; width: 100%; }
+#color-system-section #color-bridge { grid-area: bridge; }
 
 
 @media (max-width: 1200px) {
-#color-system-section .color-main { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "rgb hsl" "hsv a11y" "ctrls ctrls"; }
+#color-system-section .color-main { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "rgb hsl" "hsv a11y" "bridge bridge" "ctrls ctrls"; }
 }
 @media (max-width: 760px) {
-#color-system-section .color-main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "rgb" "hsl" "hsv" "a11y" "ctrls"; }
+#color-system-section .color-main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "rgb" "hsl" "hsv" "bridge" "a11y" "ctrls"; }
 }
 
 
@@ -55,6 +56,13 @@
 #color-system-section .text-rec { display: inline-block; padding: 0 8px; border-radius: 999px; border: 1px solid var(--surface-line); background: var(--surface-2); color: #ddd; }
 #color-system-section .text-rec--dark { background: #fff; color: #000; border-color: #aaa; }
 #color-system-section .text-rec--light { background: #000; color: #fff; border-color: #000; }
+
+
+/* A cor no código vivo: o mesmo valor como THREE.Color, para colar numa cena, e o desafio de cor */
+#color-system-section .color-bridge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px var(--space-4); background: var(--surface-1); border: 1px solid var(--surface-line); border-radius: var(--radius-3); }
+#color-system-section .color-bridge h3 { margin: 0; }
+#color-system-section #color-code { padding: 3px 8px; background: var(--surface-0); border: 1px solid var(--surface-line); border-radius: var(--radius-1); font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+#color-system-section .color-bridge .lab-next { margin-left: auto; }
 
 
 /* Acessibilidade & percepção */

@@ -42,6 +42,9 @@ class CoordenadasApp {
     this._matrixKey = "";
 
     this.setupUI();
+    // Exemplo inicial: um triângulo já unido, para o plano não abrir vazio
+    this.addTriangle();
+    this.shape = [...this.points];
   }
 
   /* ==================== UI / Abas ==================== */
@@ -59,15 +62,18 @@ class CoordenadasApp {
     });
 
     // Construir
+    const msg = byId("coords-msg");
+    const say = (text) => msg && (msg.textContent = text);
     byId("btn-add-point")?.addEventListener("click", () => {
       const sel = byId("primitive-select").value;
       if (sel === "point") this.addPoint();
       if (sel === "triangle") this.addTriangle();
       if (sel === "rectangle") this.addRectangle();
+      say("");
     });
     byId("btn-unir")?.addEventListener("click", () => {
       if (this.points.length >= 3) this.shape = [...this.points];
-      else alert("Adicione pelo menos 3 pontos.");
+      say(this.points.length >= 3 ? "" : "Para unir, são precisos pelo menos 3 pontos.");
     });
     byId("btn-reset")?.addEventListener("click", () => {
       this.points = [];
@@ -79,7 +85,8 @@ class CoordenadasApp {
       this.resetSliders();
       this.measureMode = false;
       this.measureA = this.measureB = null;
-      byId("btn-measure")?.classList.remove("ghost");
+      byId("btn-measure")?.setAttribute("aria-pressed", "false");
+      say("");
       this.syncInputs();
     });
 
@@ -133,7 +140,7 @@ class CoordenadasApp {
     btnMeasure?.addEventListener("click", () => {
       this.measureMode = !this.measureMode;
       this.measureA = this.measureB = null;
-      btnMeasure.classList.toggle("ghost", this.measureMode);
+      btnMeasure.setAttribute("aria-pressed", String(this.measureMode));
     });
 
     // Teclado: só quando esta seção está na tela e ninguém está digitando
@@ -142,7 +149,7 @@ class CoordenadasApp {
       if (e.key === "Escape") {
         this.measureMode = false;
         this.measureA = this.measureB = null;
-        btnMeasure?.classList.remove("ghost");
+        btnMeasure?.setAttribute("aria-pressed", "false");
       }
       if ((e.key === "Delete" || e.key === "Backspace") && this.selectedPoint) {
         this.removePoint(this.selectedPoint);
@@ -200,9 +207,9 @@ class CoordenadasApp {
 
   resizeCanvasToContainer() {
     const wrap = this.container;
-    // Canvas grande por padrão: ocupa a largura da coluna da direita e quase toda a altura
-    let side = Math.min((wrap?.clientWidth || window.innerWidth) - 16, window.innerHeight - 160);
-    side = Math.max(700, Math.floor(side));
+    // O plano inteiro cabe na tela: a largura da coluna e a altura que sobra abaixo da barra e do título
+    let side = Math.min((wrap?.clientWidth || window.innerWidth) - 18, window.innerHeight - 200);
+    side = Math.max(320, Math.floor(side));
     side -= side % 2; // centro em pixel inteiro: grade e eixos ficam nítidos
     if (side !== this.p.width || side !== this.p.height) this.p.resizeCanvas(side, side);
   }

@@ -33,26 +33,25 @@
       <div class="content">
         <!-- ========================= COORDENADAS ========================= -->
         <section id="coords-section" class="section coords-section hidden">
+          <header class="lab-head">
+            <div>
+              <h2>Coordenadas</h2>
+              <p class="lab-hint">
+                Arraste um vértice do triângulo ou ligue uma transformação em
+                <strong>Transformar</strong>: a figura transformada e a matriz em
+                <strong>Medir &amp; Matriz</strong> mudam juntas.
+              </p>
+            </div>
+            <button id="btn-coords-help" type="button">Ajuda</button>
+          </header>
+
           <div class="coords-layout">
             <!-- Painel lateral com abas -->
             <aside class="coords-sidebar">
-              <div class="coords-title-row">
-                <h2 class="coords-title">Sistema de Coordenadas</h2>
-                <button id="btn-coords-help" class="btn-info small">
-                  Ajuda
-                </button>
-              </div>
-
-              <div class="coords-tabs">
-                <button class="coord-tab is-active" data-tab="build">
-                  Construir
-                </button>
-                <button class="coord-tab" data-tab="transform">
-                  Transformar
-                </button>
-                <button class="coord-tab" data-tab="measure">
-                  Medir &amp; Matriz
-                </button>
+              <div class="coords-tabs" role="group" aria-label="Etapa">
+                <button type="button" class="coord-tab is-active" data-tab="build">Construir</button>
+                <button type="button" class="coord-tab" data-tab="transform">Transformar</button>
+                <button type="button" class="coord-tab" data-tab="measure">Medir &amp; Matriz</button>
               </div>
 
               <div class="coords-tabpanels">
@@ -64,22 +63,19 @@
                 >
                   <div class="group">
                     <div class="row">
-                      <label for="primitive-select">Adicionar Primitiva:</label>
-                      <select id="primitive-select" class="coords-select">
+                      <label for="primitive-select">Adicionar primitiva:</label>
+                      <select id="primitive-select">
                         <option value="point">Ponto</option>
                         <option value="triangle">Triângulo</option>
                         <option value="rectangle">Retângulo</option>
                       </select>
-                      <button id="btn-add-point" class="coords-btn">
-                        Adicionar
-                      </button>
-                      <button id="btn-unir" class="coords-btn">
-                        Unir Pontos
-                      </button>
-                      <button id="btn-reset" class="coords-btn ghost">
-                        Limpar
-                      </button>
                     </div>
+                    <div class="row">
+                      <button id="btn-add-point" type="button" class="lab-btn--primary">Adicionar</button>
+                      <button id="btn-unir" type="button">Unir pontos</button>
+                      <button id="btn-reset" type="button">Limpar</button>
+                    </div>
+                    <p id="coords-msg" class="lab-msg" role="status"></p>
 
                     <div class="row">
                       <label class="coords-check">
@@ -109,7 +105,7 @@
                     </div>
                   </div>
 
-                  <h4 class="subtle">Modificar Coordenadas</h4>
+                  <h4 class="subtle">Coordenadas dos pontos</h4>
                   <div id="coords-modifier" class="coords-modifier"></div>
                 </div>
 
@@ -202,7 +198,7 @@
 
                     <div class="row">
                       <label for="order-select">Ordem:</label>
-                      <select id="order-select" class="coords-select">
+                      <select id="order-select">
                         <option value="TRS">T·R·S (P' = T·R·S·P)</option>
                         <option value="TSR">T·S·R</option>
                         <option value="RTS">R·T·S</option>
@@ -218,8 +214,8 @@
                 <div id="tab-measure" class="coords-tabpanel" role="region">
                   <div class="group">
                     <div class="row">
-                      <button id="btn-measure" class="coords-btn">
-                        Medir distância &amp; ângulo
+                      <button id="btn-measure" type="button" aria-pressed="false">
+                        Medir distância e ângulo
                       </button>
                       <label class="coords-check"
                         ><input id="chk-reflect" type="checkbox" /> Mostrar
@@ -228,7 +224,7 @@
                     </div>
                   </div>
 
-                  <h4 class="subtle">Matriz de Transformação Atual</h4>
+                  <h4 class="subtle">Matriz da transformação</h4>
                   <table id="matrix-table" class="matrix-table"></table>
 
                   <p class="note">
@@ -256,9 +252,16 @@
 
         <!-- ======================== SISTEMA DE CORES ======================== -->
         <section id="color-system-section" class="section color-section hidden">
-          <div class="color-header">
-            <h2>Explore diferentes representações de cores</h2>
-          </div>
+          <header class="lab-head">
+            <div>
+              <h2>Sistemas de cores</h2>
+              <p class="lab-hint">
+                Mude um canal em qualquer sistema: a mesma cor aparece em RGB,
+                HSL e HSV, com o contraste do texto e a simulação de daltonismo.
+              </p>
+            </div>
+            <button id="btn-cores" type="button">Ajuda</button>
+          </header>
 
           <div id="color-main" class="color-main">
             <!-- RGB -->
@@ -273,14 +276,14 @@
                       type="number"
                       min="0"
                       max="255"
-                      value="255"
+                      value="51"
                     />
                     <input
                       id="r-slider"
                       type="range"
                       min="0"
                       max="255"
-                      value="255"
+                      value="51"
                       class="slider-input grad-rgb-r"
                     />
                   </div>
@@ -291,14 +294,14 @@
                       type="number"
                       min="0"
                       max="255"
-                      value="255"
+                      value="102"
                     />
                     <input
                       id="g-slider"
                       type="range"
                       min="0"
                       max="255"
-                      value="255"
+                      value="102"
                       class="slider-input grad-rgb-g"
                     />
                   </div>
@@ -309,14 +312,14 @@
                       type="number"
                       min="0"
                       max="255"
-                      value="255"
+                      value="204"
                     />
                     <input
                       id="b-slider"
                       type="range"
                       min="0"
                       max="255"
-                      value="255"
+                      value="204"
                       class="slider-input grad-rgb-b"
                     />
                   </div>
@@ -326,7 +329,7 @@
                   <div id="rgb-preview" class="color-preview"></div>
                   <div class="color-hex">
                     <h3>Valor HEX</h3>
-                    <p id="hex-value-rgb">#FFFFFF</p>
+                    <p id="hex-value-rgb">#3366CC</p>
                   </div>
                 </div>
               </div>
@@ -344,14 +347,14 @@
                       type="number"
                       min="0"
                       max="360"
-                      value="0"
+                      value="220"
                     />
                     <input
                       id="h-slider-hsl"
                       type="range"
                       min="0"
                       max="360"
-                      value="0"
+                      value="220"
                       class="slider-input grad-hsl-h"
                     />
                   </div>
@@ -362,14 +365,14 @@
                       type="number"
                       min="0"
                       max="100"
-                      value="100"
+                      value="60"
                     />
                     <input
                       id="s-slider-hsl"
                       type="range"
                       min="0"
                       max="100"
-                      value="100"
+                      value="60"
                       class="slider-input grad-hsl-s"
                     />
                   </div>
@@ -380,14 +383,14 @@
                       type="number"
                       min="0"
                       max="100"
-                      value="100"
+                      value="50"
                     />
                     <input
                       id="l-slider-hsl"
                       type="range"
                       min="0"
                       max="100"
-                      value="100"
+                      value="50"
                       class="slider-input grad-hsl-l"
                     />
                   </div>
@@ -397,7 +400,7 @@
                   <div id="hsl-preview" class="color-preview"></div>
                   <div class="color-hex">
                     <h3>Valor HEX</h3>
-                    <p id="hex-value-hsl">#FFFFFF</p>
+                    <p id="hex-value-hsl">#3366CC</p>
                   </div>
                 </div>
               </div>
@@ -415,14 +418,14 @@
                       type="number"
                       min="0"
                       max="360"
-                      value="0"
+                      value="220"
                     />
                     <input
                       id="h-slider-hsv"
                       type="range"
                       min="0"
                       max="360"
-                      value="0"
+                      value="220"
                       class="slider-input grad-hsv-h"
                     />
                   </div>
@@ -433,14 +436,14 @@
                       type="number"
                       min="0"
                       max="100"
-                      value="0"
+                      value="75"
                     />
                     <input
                       id="s-slider-hsv"
                       type="range"
                       min="0"
                       max="100"
-                      value="0"
+                      value="75"
                       class="slider-input grad-hsv-s"
                     />
                   </div>
@@ -451,14 +454,14 @@
                       type="number"
                       min="0"
                       max="100"
-                      value="100"
+                      value="80"
                     />
                     <input
                       id="v-slider-hsv"
                       type="range"
                       min="0"
                       max="100"
-                      value="100"
+                      value="80"
                       class="slider-input grad-hsv-v"
                     />
                   </div>
@@ -468,7 +471,7 @@
                   <div id="hsv-preview" class="color-preview"></div>
                   <div class="color-hex">
                     <h3>Valor HEX</h3>
-                    <p id="hex-value-hsv">#FFFFFF</p>
+                    <p id="hex-value-hsv">#3366CC</p>
                   </div>
                 </div>
               </div>
@@ -532,24 +535,23 @@
                 <strong>HEX</strong> permanecem da cor original (sem simulação).
               </p>
 
-              <div id="help-button-container">
-                <button id="btn-cores" class="btn-help">
-                  Ajuda sobre Sistemas de Cores
-                </button>
-              </div>
             </div>
           </div>
         </section>
 
         <!-- =========================== MODELO PHONG =========================== -->
         <section id="phong-section" class="section phong-section hidden">
-          <div class="phong-header">
-            <h2>Explorando o Modelo Phong</h2>
-            <p>
-              Ajuste os parâmetros para ver o efeito na superfície e nos termos
-              da equação.
-            </p>
-          </div>
+          <header class="lab-head">
+            <div>
+              <h2>Modelo Phong</h2>
+              <p class="lab-hint">
+                Clique ou arraste sobre o objeto para escolher um ponto: os
+                vetores, a fórmula e os números mostram a conta da cor daquele
+                pixel, e acompanham a luz e os controles.
+              </p>
+            </div>
+            <button id="btn-phong-explain" type="button">Ajuda</button>
+          </header>
 
           <div id="phong-main" class="phong-main">
             <!-- CONTROLES -->
@@ -709,11 +711,6 @@
                 /></label>
               </div>
 
-              <p class="tip">
-                Dica: clique/arraste sobre o objeto para mudar o
-                <strong>ponto de inspeção</strong>. Os vetores e os valores ao
-                lado atualizam em tempo real.
-              </p>
             </div>
 
             <!-- VISOR 3D -->
@@ -741,9 +738,6 @@
               </div>
 
               <div class="phong-actions">
-                <button id="btn-phong-explain" class="btn-explain">
-                  Explicações
-                </button>
                 <a class="lab-next" href="./index-3d.html?trilha=phong">
                   Continuar no 3D: a mesma fórmula, pixel a pixel&nbsp;→
                 </a>
@@ -754,11 +748,17 @@
 
         <!-- =============================== CURVAS =============================== -->
         <section id="curves-section" class="section hidden">
-          <div class="header-buttons">
-            <button id="btn-curves-help" class="btn-info">Ajuda</button>
-          </div>
-
-          <h2 class="curves-title">Sistema de Curvas Bézier Didático</h2>
+          <header class="lab-head">
+            <div>
+              <h2>Curvas de Bézier</h2>
+              <p class="lab-hint">
+                Arraste os pontos de controle e mova o <strong>t</strong>: o
+                algoritmo de De Casteljau leva ao ponto B(t). Duplo clique
+                adiciona um ponto, e Delete remove o último.
+              </p>
+            </div>
+            <button id="btn-curves-help" type="button">Ajuda</button>
+          </header>
 
           <div class="controls">
             <label for="bezier-degree">Grau:</label>
@@ -768,14 +768,14 @@
               <option value="4">4</option>
             </select>
 
-            <label for="t-slider">t: <span id="t-value">0.00</span></label>
+            <label for="t-slider">t: <span id="t-value">0.50</span></label>
             <input
               type="range"
               id="t-slider"
               min="0"
               max="1"
               step="0.01"
-              value="0"
+              value="0.5"
             />
 
             <label for="speed-slider">velocidade:</label>
@@ -788,7 +788,8 @@
               value="1"
             />
 
-            <button id="play-btn">Iniciar Animação</button>
+            <button id="play-btn" type="button" class="lab-btn--primary">Iniciar animação</button>
+            <span class="sep" aria-hidden="true"></span>
 
             <label
               ><input type="checkbox" id="show-polygon" checked />
@@ -811,13 +812,14 @@
               grau</label
             >
 
-            <button id="reset-curve">Limpar</button>
+            <span class="sep" aria-hidden="true"></span>
+            <button id="reset-curve" type="button">Limpar</button>
           </div>
 
           <canvas id="bezier-canvas" width="800" height="400"></canvas>
 
           <section id="properties">
-            <h2>Propriedades das Curvas de Bézier</h2>
+            <h2>Propriedades das curvas de Bézier</h2>
             <ul>
               <li>Interpolam os pontos extremos (B(0)=P0, B(1)=Pn).</li>
               <li>Estão contidas no fecho convexo dos pontos de controle.</li>

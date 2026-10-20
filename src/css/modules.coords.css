@@ -1,70 +1,63 @@
 @layer components {
-/* Layout */
-.coords-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+/* Layout: o painel com as etapas à esquerda e o plano à direita */
+.coords-layout { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 @media (max-width: 1100px) { .coords-layout { grid-template-columns: 1fr; } }
 
 
-.coords-title { margin: 0 0 8px; color: var(--accent-color); }
-.coords-sidebar { background: var(--sidebar-bg); border: 1px solid var(--accent-color); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.coords-sidebar { background: var(--surface-1); border: 1px solid var(--surface-line); border-radius: var(--radius-3); padding: var(--space-4); display: flex; flex-direction: column; gap: 12px; }
 
 
-/* Abas (painel lateral) */
-.coords-tabs { display: flex; gap: 8px; }
-.coord-tab { flex: 1 1 auto; padding: 8px 10px; border-radius: 8px; background: #0e0f12; color: #dfe7ff; border: 1px solid #2d2f3a; cursor: pointer; transition: background .15s, transform .03s; }
-.coord-tab:hover { background: #14161b; }
-.coord-tab.is-active { background: var(--accent-color); color: #000; border-color: var(--accent-color); }
-.coord-tab:active { transform: translateY(1px); }
+/* Etapas (Construir | Transformar | Medir): o segmentado do código vivo */
+.coords-tabs { display: flex; }
+.coord-tab { flex: 1 1 0; margin-left: -1px; padding: 5px 8px; border-radius: 0; line-height: 1.3; }
+.coord-tab:first-child { margin-left: 0; border-radius: var(--radius-2) 0 0 var(--radius-2); }
+.coord-tab:last-child { border-radius: 0 var(--radius-2) var(--radius-2) 0; }
+.coord-tab:hover { position: relative; }
+.coord-tab.is-active { position: relative; background: color-mix(in oklab, var(--accent-color) 22%, var(--surface-2)); border-color: var(--accent-color); font-weight: 600; }
 
 
 .coords-tabpanel { display: none; }
 .coords-tabpanel.is-active { display: block; }
 
 
-.group { border: 1px solid var(--accent-color); border-radius: 8px; padding: 10px; background: #101216; margin-bottom: 10px; }
-.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.toggles { gap: 16px; }
+.group { display: grid; gap: 10px; border: 1px solid var(--surface-line); border-radius: var(--radius-2); padding: 10px; margin-bottom: 12px; }
+.row { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.toggles { gap: 8px 16px; }
 
 
-.coords-select { padding: 6px 8px; border-radius: 8px; border: 1px solid #4a4d58; background: #0e0f12; color: #eaeaf2; }
-.coords-btn { background: var(--accent-color); color: #000; border: none; padding: 7px 12px; border-radius: 8px; cursor: pointer; }
-.coords-btn:hover { background: var(--accent-hover); }
-.coords-btn.ghost { background: transparent; color: #eaeafd; border: 1px solid #3a3d48; }
-.coords-btn.ghost:hover { background: #14161b; }
-
-
-.coords-check { display: inline-flex; align-items: center; gap: 6px; }
+.coords-check { display: inline-flex; align-items: center; gap: 6px; line-height: 1.4; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .w-16 { width: 2.5rem; display: inline-block; }
 
 
 /* Lista de coordenadas */
-.coords-modifier { border: 1px solid var(--accent-color); background: var(--input-bg); border-radius: 8px; padding: 10px; max-height: 260px; overflow: auto; }
+.coords-modifier { border: 1px solid var(--surface-line); background: var(--surface-0); border-radius: var(--radius-2); padding: 10px; max-height: 260px; overflow: auto; }
+.coords-modifier:empty::before { content: "Nenhum ponto: adicione um em Adicionar primitiva."; color: var(--text-2); font-size: 13px; }
 .coords-row { display: grid; grid-template-columns: 26px 1fr 1fr; gap: 8px; align-items: center; margin-bottom: 6px; }
-.coords-point-label { color: #cfd5e6; }
-.coords-num { width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid #6b6f7b; background: #fff; color: #111; }
+.coords-point-label { color: var(--text-2); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.coords-num { width: 100%; }
 .coords-prime { grid-column: 2 / -1; margin-top: -2px; font-size: .8rem; color: #8fc7ff; }
 
 
 /* Sliders */
-.slider-group .row input[type="range"] { width: 260px; accent-color: var(--accent-color); }
+.slider-group .row input[type="range"] { flex: 1; min-width: 0; max-width: 260px; }
 
 
 /* Matriz */
-.matrix-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, Menlo, Consolas, monospace; margin-top: 10px; background: var(--input-bg); border: 1px solid var(--accent-color); color: var(--text-color); text-align: center; }
-.matrix-table th, .matrix-table td { border: 1px solid #3b3e49; padding: 6px 8px; }
-.matrix-table th { background: #12141a; color: #cfe9ff; }
-.matrix-table td { font-family: monospace; }
+.matrix-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, Menlo, Consolas, monospace; margin-top: 8px; background: var(--surface-0); color: var(--text-color); text-align: center; }
+.matrix-table th, .matrix-table td { border: 1px solid var(--surface-line); padding: 6px 8px; }
+.matrix-table th { background: var(--surface-2); color: var(--text-2); font-weight: 600; }
 
 
-.note { font-size: .9rem; color: #b8bdc9; }
+.note { font-size: 13px; color: var(--text-2); margin: 8px 0 12px; }
 .note a { color: var(--accent-color); text-decoration: underline; }
-.subtle { margin: 8px 0 6px; color: #8fc7ff; }
+.subtle { margin: 4px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
 
 
-/* Canvas container */
-.coords-canvas-wrap { border: 1px solid var(--accent-color); border-radius: 10px; background: #0b0c10; min-height: clamp(720px, 82vh, 1300px); display: grid; place-items: center; position: relative; contain: layout paint size; }
+/* Plano: o canvas define a altura (src/js/coordenadas.js cabe o plano na tela) */
+.coords-canvas-wrap { border: 1px solid var(--surface-line); border-radius: var(--radius-3); background: #121212; padding: 8px; display: grid; place-items: center; position: relative; overflow: hidden; contain: layout paint; }
 .coords-canvas-wrap canvas { display: block; max-width: 100%; height: auto; }
 
 
-.canvas-hint { position: absolute; bottom: 10px; right: 12px; font-size: .85rem; color: #aab3c2; background: #0e1118cc; padding: 6px 8px; border-radius: 6px; pointer-events: none; }
+.canvas-hint { position: absolute; bottom: 10px; right: 12px; font-size: 12px; color: var(--text-2); background: #121318d9; padding: 4px 8px; border-radius: var(--radius-2); pointer-events: none; }
 }

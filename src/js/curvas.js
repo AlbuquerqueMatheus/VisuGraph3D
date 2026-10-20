@@ -37,6 +37,8 @@ class CurvasApp {
     this.animating = false;
     this.animationId = null;
     this.animT = 0; // t independente do slider
+    // Exemplo inicial: uma cúbica em S, em frações do canvas, posta quando ele tiver o tamanho de verdade
+    this.example = [[0.14, 0.76], [0.34, 0.16], [0.66, 0.84], [0.86, 0.24]];
 
     // ===== Responsivo / HiDPI =====
     this.pixelRatio = Math.max(1, window.devicePixelRatio || 1);
@@ -118,8 +120,9 @@ class CurvasApp {
   toggleAnimation() {
     this.animating = !this.animating;
     if (this.playBtn)
-      this.playBtn.textContent = this.animating ? "Pausar" : "Iniciar Animação";
+      this.playBtn.textContent = this.animating ? "Pausar" : "Iniciar animação";
     if (this.animating) {
+      this.animT = parseFloat(this.tSlider?.value || "0"); // começa do t que está no slider
       this.animLoop();
     } else if (this.animationId) {
       cancelAnimationFrame(this.animationId);
@@ -142,6 +145,10 @@ class CurvasApp {
     const { width, height } = this.canvas.getBoundingClientRect();
     const w = Math.max(100, Math.floor(width));
     const h = Math.max(100, Math.floor(height));
+    if (this.example && width >= 200 && height >= 200) {
+      this.points = this.example.map(([fx, fy]) => ({ x: Math.round(fx * w), y: Math.round(fy * h) }));
+      this.example = null;
+    }
     this.canvas.width = Math.floor(w * this.pixelRatio);
     this.canvas.height = Math.floor(h * this.pixelRatio);
     this.ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
@@ -207,8 +214,16 @@ class CurvasApp {
     ctx.clearRect(0, 0, w, h);
     if (this.showGridChk?.checked) this.drawGrid(ctx, w, h);
 
-    // sem pontos -> nada
-    if (this.points.length === 0) return;
+    // sem pontos: diz onde clicar
+    if (this.points.length === 0) {
+      ctx.save();
+      ctx.fillStyle = "#a3abbc";
+      ctx.font = "14px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Dê um duplo clique para pôr o primeiro ponto de controle", w / 2, h / 2);
+      ctx.restore();
+      return;
+    }
 
     // pontos de controle
     if (this.showPolygonChk?.checked) this.drawControlPolygon(ctx);

@@ -2,27 +2,25 @@
 :root {
 /* Paleta base: o app é escuro (painéis, canvas e editor foram desenhados para fundo escuro) */
 color-scheme: dark;
---bg-color: #1d1f27;
 --text-color: #fff;
---sidebar-bg: #252932;
 --accent-color: #41c5ff;
---accent-hover: #33a0d6;
 --input-bg: #333;
 --input-border: #41c5ff;
 --hover-border: #007acc;
---modal-bg: #333;
---modal-text: #ddd;
---modal-header: #00bcd4;
---close-btn-bg: #ff4444;
---close-btn-hover: #cc0000;
 
-/* Superfícies do código vivo e da tela inicial: fundo, painel, painel elevado, linha */
+/* Superfícies de todas as páginas: fundo, painel, painel elevado, linha */
 --surface-0: #121318;
 --surface-1: #1a1c23;
 --surface-2: #20232c;
 --surface-line: #2c303b;
 --text-2: #a3abbc;
 --ok-color: #5fd39a;
+--bg-color: var(--surface-0);
+
+/* Janelas de ajuda dos laboratórios */
+--modal-bg: var(--surface-1);
+--modal-text: #dfe3ea;
+--modal-header: var(--text-color);
 
 /* Tokens utilitários */
 --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;

@@ -12,7 +12,7 @@ import { ADD_ITEMS, STARTER_CODE, planAddObject } from "./engine/snippets.js";
 import { translateError } from "./engine/errors.js";
 import { degToRad } from "./engine/format.js";
 import { createEditor, resetDoc, revealPosition, sceneEdit, showAnalysis, showHighlight, showMathLinks } from "./editor/editor.js";
-import { isObject3DKind } from "./engine/catalog.js";
+import { isDrawableKind, isObject3DKind } from "./engine/catalog.js";
 import { Inspector } from "./inspector.js";
 import { MathPanel } from "./mathPanel.js";
 import { CHALLENGES, challengeById, firstOpen, grade, nextChallenge, trailById, trailOf } from "./challenges.js";
@@ -456,7 +456,7 @@ function onRan(msg) {
   state.hasCodeCamera = msg.hasCodeCamera;
   updateToolbar();
   if (!run.failed && msg.runId === state.runId) {
-    const count = run.analysis.objects.filter((o) => o.kind === "mesh" || o.kind === "light").length;
+    const count = run.analysis.objects.filter((o) => isDrawableKind(o.kind) || o.kind === "light").length;
     if (!run.quiet) setStatus("ok", `Cena atualizada · ${count} ${count === 1 ? "objeto" : "objetos"}${msg.hasAnimar ? " · animar() rodando" : ""}`);
     study.log("execucao", { ok: true, objetos: count, animar: !!msg.hasAnimar });
   }

@@ -11,7 +11,7 @@ import { javascript, javascriptLanguage } from "@codemirror/lang-javascript";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { lintGutter, setDiagnostics } from "@codemirror/lint";
 import { tags as t } from "@lezer/highlight";
-import { CLASSES, VALUE_CLASSES, classInfo, isObject3DKind } from "../engine/catalog.js";
+import { CLASSES, VALUE_CLASSES, classInfo, isDrawableKind, isObject3DKind } from "../engine/catalog.js";
 import { planNumber, scrubInfo } from "../engine/patch.js";
 import { explain } from "../explain.js";
 
@@ -257,11 +257,16 @@ function hoverPlugin(host) {
 // Autocompletar THREE.X e propriedades dos objetos
 
 const THREE_NAMES = [
-  ...Object.keys(CLASSES), ...VALUE_CLASSES, "MathUtils", "DoubleSide", "FrontSide", "BackSide",
+  ...Object.keys(CLASSES), ...VALUE_CLASSES, "MathUtils", "DoubleSide", "FrontSide", "BackSide", "AdditiveBlending", "NormalBlending",
 ].sort();
 
 const OBJECT_MEMBERS = ["position", "rotation", "scale", "visible", "castShadow", "receiveShadow", "add", "remove", "lookAt", "name"];
 const VECTOR_MEMBERS = ["x", "y", "z", "set"];
+// o que se usa de uma geometria montada à mão e de uma malha instanciada
+const CLASS_MEMBERS = {
+  BufferGeometry: ["setAttribute", "getAttribute", "attributes", "setFromPoints", "computeVertexNormals"],
+  InstancedMesh: ["count", "setMatrixAt", "setColorAt", "instanceMatrix"],
+};
 
 function completions(host) {
   return (context) => {
@@ -284,8 +289,8 @@ function completions(host) {
       }
     } else {
       if (isObject3DKind(obj.kind)) labels = [...OBJECT_MEMBERS];
-      if (obj.kind === "mesh") labels.push("material", "geometry");
-      labels.push(...Object.keys(classInfo(obj.className).props || {}));
+      if (isDrawableKind(obj.kind)) labels.push("material", "geometry");
+      labels.push(...(CLASS_MEMBERS[obj.className] || []), ...Object.keys(classInfo(obj.className).props || {}));
     }
     if (!labels.length) return null;
     const from = member.from + member.text.lastIndexOf(".") + 1;

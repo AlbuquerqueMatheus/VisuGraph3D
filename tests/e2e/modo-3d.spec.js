@@ -223,6 +223,62 @@ test("modo 3D: o menu Adicionar escreve o objeto no código e o seleciona", asyn
   expect(text.indexOf("const esfera"), "o objeto novo entra antes de animar()").toBeLessThan(text.indexOf("function animar"));
 });
 
+// Um disco de pontos (sem Math.random, para o clique cair sempre num ponto) e três cópias de um cone.
+const PONTOS_E_COPIAS = `const cena = new THREE.Scene();
+const quantidade = 2000;
+const posicoes = new Float32Array(quantidade * 3);
+for (let i = 0; i < quantidade; i++) {
+  const r = Math.sqrt(i / quantidade) * 2;
+  posicoes[i * 3] = Math.cos(i * 2.4) * r;
+  posicoes[i * 3 + 2] = Math.sin(i * 2.4) * r;
+}
+const geometria = new THREE.BufferGeometry();
+geometria.setAttribute("position", new THREE.BufferAttribute(posicoes, 3));
+const material = new THREE.PointsMaterial({ color: "#ffcc66", size: 0.05 });
+const galaxia = new THREE.Points(geometria, material);
+cena.add(galaxia);
+
+const arvores = new THREE.InstancedMesh(new THREE.ConeGeometry(0.2, 0.6, 6), new THREE.MeshBasicMaterial({ color: "#2f6b3a" }), 3);
+const matriz = new THREE.Matrix4();
+for (let i = 0; i < 3; i++) arvores.setMatrixAt(i, matriz.makeTranslation(i - 1, 0.3, 3));
+cena.add(arvores);`;
+
+test("modo 3D: pontos e cópias de uma malha são objetos da cena, com o tamanho da geometria no painel", async ({ page }) => {
+  await openLive(page);
+  await pasteCode(page, PONTOS_E_COPIAS);
+  await expect(status(page)).toContainText("Cena atualizada · 2 objetos");
+  await expect(page.locator(".lv-object", { hasText: "galaxia" }).locator(".lv-object__class")).toHaveText("Points");
+  await expect(page.locator(".lv-object", { hasText: "arvores" }).locator(".lv-object__class")).toHaveText("InstancedMesh");
+
+  // pontos não têm superfície: o clique vale perto de um deles
+  const id = await objectId(page, "galaxia");
+  const center = await inPage(page, await viewport(page).evaluate((i) => window.__vgDebug.project(i), id));
+  await page.mouse.click(center.x, center.y);
+  await expect(page.locator("#lv-props .lv-props__head h2")).toHaveText("galaxia");
+  await expect.poll(async () => (await viewport(page).evaluate(() => window.__vgDebug.info())).gizmo).toBe("translate");
+  await expect(page.locator("#lv-props .lv-info")).toHaveText("2.000 pontos · atributo position");
+
+  const size = page.locator('#lv-props input[type="number"][data-key="size"]');
+  await expect(size).toHaveValue("0.05");
+  await size.fill("0.1");
+  await size.press("Enter");
+  await expect.poll(() => code(page)).toContain('new THREE.PointsMaterial({ color: "#ffcc66", size: 0.1 });');
+  await expect.poll(() => sceneValue(page, id, "material.size")).toBeCloseTo(0.1, 5);
+
+  // a aba Matemática segue um ponto da nuvem até o pixel
+  await page.click("#lv-tab-math");
+  await expect(page.locator("#lv-math .lv-vsel")).toContainText("vértice 1 de 2000");
+  await expect(page.locator('#lv-math [data-sec="path"] [data-verify]')).toContainText("✓ Conferido");
+
+  // numa malha instanciada, cada cópia tem a sua matriz: o painel conta as cópias e a Matemática fica na origem
+  await page.click("#lv-tab-props");
+  await page.locator(".lv-object", { hasText: "arvores" }).click();
+  await expect(page.locator("#lv-props .lv-info").first()).toHaveText("3 cópias desta malha");
+  await expect(page.locator("#lv-props .lv-info").nth(1)).toHaveText(/^\d+ vértices · atributos position, normal e uv$/);
+  await page.click("#lv-tab-math");
+  await expect(page.locator("#lv-math .lv-vsel")).toContainText("origem do objeto");
+});
+
 test("modo 3D: Baixar HTML gera uma página com o código da cena", async ({ page }) => {
   await openLive(page);
   const [download] = await Promise.all([page.waitForEvent("download"), page.click("#lv-download")]);

@@ -5,7 +5,7 @@ import { candidateKeys } from "./engine/analyze.js";
 import { editability, propDef } from "./engine/patch.js";
 import { degToRad, formatNumber, radToDeg } from "./engine/format.js";
 
-const KIND_LABEL = { scene: "cena", mesh: "malha", light: "luz", camera: "câmera", group: "grupo", object: "objeto" };
+const KIND_LABEL = { scene: "cena", mesh: "malha", points: "pontos", line: "linha", light: "luz", camera: "câmera", group: "grupo", object: "objeto" };
 const CONTEXT_LABEL = { loop: "laço", function: "função", animar: "animar()", conditional: "bloco" };
 const TRANSFORM_LABEL = { position: "Posição", rotation: "Rotação (graus)", scale: "Escala" };
 
@@ -39,6 +39,7 @@ export class Inspector {
     this.handlers = handlers;
     this.readOnly = readOnly;
     this.fields = [];
+    this.infos = []; // linhas só de leitura, com números da cena (vértices, cópias)
     this.signature = null;
     this.listSignature = null;
     this.analysis = null;
@@ -90,6 +91,7 @@ export class Inspector {
 
   renderPanel(obj) {
     this.fields = [];
+    this.infos = [];
     const a = this.analysis;
     if (!obj) {
       this.panelEl.replaceChildren(
@@ -110,6 +112,7 @@ export class Inspector {
       ),
     );
     const sections = [head];
+    if (obj.className === "InstancedMesh") sections.push(this.info(obj, (v) => countText(v?.instances, "cópia desta malha", "cópias desta malha")));
     if (this.readOnly) sections.push(el("p", { class: "lv-note", text: this.readOnly }));
     else if (obj.context !== "top") {
       sections.push(el("p", { class: "lv-note", text: editability(a, obj.id, candidateKeys(obj)[0] || "position.x").message || "" }));
@@ -129,12 +132,20 @@ export class Inspector {
       const linked = a.objects[id];
       const props = Object.keys(classInfo(linked.className).props || {});
       const title = `${link === "geometry" ? "Geometria" : "Material"}: ${linked.className}`;
-      const shared = linked.users.length > 1 ? `usado também por ${linked.users.filter((u) => u !== obj.id).map((u) => a.objects[u].name || "outra malha").join(", ")}` : null;
+      const shared = linked.users.length > 1 ? `usado também por ${linked.users.filter((u) => u !== obj.id).map((u) => a.objects[u].name || "outro objeto").join(", ")}` : null;
       const rows = props.map((k) => this.field(linked, k));
+      if (link === "geometry") rows.unshift(this.info(linked, (v) => geometryText(v, obj.kind)));
       if (!props.length) rows.push(el("p", { class: "lv-note", text: "Esta classe não tem controles no painel; edite pelo código." }));
       sections.push(this.group(title, rows, shared, linked));
     }
     this.panelEl.replaceChildren(...sections);
+  }
+
+  /** Linha que mostra um número lido da cena; `text(valores)` vazio esconde a linha. */
+  info(obj, text) {
+    const node = el("p", { class: "lv-note lv-info", hidden: true });
+    this.infos.push({ obj, node, text });
+    return node;
   }
 
   lineLink(pos, text) {
@@ -261,6 +272,11 @@ export class Inspector {
   refresh() {
     const a = this.analysis;
     if (!a || !a.ok) return;
+    for (const info of this.infos) {
+      const text = info.text(this.runtime[info.obj.id]);
+      info.node.textContent = text;
+      info.node.hidden = !text;
+    }
     for (const f of this.fields) {
       const obj = a.objects[f.obj.id];
       if (!obj) continue;
@@ -300,6 +316,20 @@ export class Inspector {
     if (def.transform) return 0;
     return def.default;
   }
+}
+
+/** "1 cópia", "10.000 cópias"; vazio quando a cena ainda não disse o número. */
+function countText(n, one, many) {
+  return typeof n === "number" ? `${n.toLocaleString("pt-BR")} ${n === 1 ? one : many}` : "";
+}
+
+/** "1.000 pontos · atributos position e color": o tamanho da geometria que está na cena. */
+function geometryText(values, kind) {
+  const count = kind === "points" ? countText(values?.vertices, "ponto", "pontos") : countText(values?.vertices, "vértice", "vértices");
+  const names = values?.attributes || [];
+  if (!count || !names.length) return count;
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]}`;
+  return `${count} · ${names.length === 1 ? "atributo" : "atributos"} ${list}`;
 }
 
 /** O que define a forma do painel: se não mudar, só os valores são atualizados. */

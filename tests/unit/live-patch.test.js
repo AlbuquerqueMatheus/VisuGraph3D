@@ -145,6 +145,15 @@ describe("escrever o que o código ainda não define", () => {
     expect(edit(trailing, "m", "wireframe", true)).toContain('    color: "#ffffff",\n    wireframe: true,\n});');
   });
 
+  it("pontos: o tamanho troca o literal, e as opções novas entram no PointsMaterial, mesmo pelo objeto", () => {
+    const code = HEAD + `const material = new THREE.PointsMaterial({ size: 0.03 });
+const galaxia = new THREE.Points(new THREE.BufferGeometry(), material);
+cena.add(galaxia);`;
+    expect(roundTrip(code, "galaxia.material", "size", 0.05)).toContain("new THREE.PointsMaterial({ size: 0.05 });");
+    expect(edit(code, "galaxia.material", "sizeAttenuation", false)).toContain("new THREE.PointsMaterial({ size: 0.03, sizeAttenuation: false });");
+    expect(edit(code, "galaxia", "visible", false)).toContain("const galaxia = new THREE.Points(new THREE.BufferGeometry(), material);\ngalaxia.visible = false;");
+  });
+
   it("material sem opções, com objeto vazio ou sem parênteses", () => {
     const code = HEAD + "const a = new THREE.MeshBasicMaterial();\nconst b = new THREE.MeshBasicMaterial({});\nconst c = new THREE.MeshBasicMaterial;";
     expect(edit(code, "a", "wireframe", true)).toContain("new THREE.MeshBasicMaterial({ wireframe: true });");

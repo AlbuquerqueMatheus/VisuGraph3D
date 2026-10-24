@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyze, hasBlockingError } from "../../src/live/engine/analyze.js";
+import { analyze, candidateKeys, hasBlockingError } from "../../src/live/engine/analyze.js";
 import { STARTER_CODE } from "../../src/live/engine/snippets.js";
 
 const byName = (a, name) => a.objects.find((o) => o.name === name);
@@ -201,5 +201,80 @@ function loop() { requestAnimationFrame(loop); }`);
   it("sem cena, avisa como começar", () => {
     const a = analyze("const cubo = new THREE.Mesh();");
     expect(a.diagnostics.some((d) => /Nenhuma cena/.test(d.message))).toBe(true);
+  });
+});
+
+describe("analyze(): pontos, malhas instanciadas e linhas", () => {
+  const GALAXIA = `const cena = new THREE.Scene();
+const quantidade = 1000;
+const posicoes = new Float32Array(quantidade * 3);
+for (let i = 0; i < posicoes.length; i++) posicoes[i] = (Math.random() - 0.5) * 4;
+const geometria = new THREE.BufferGeometry();
+geometria.setAttribute("position", new THREE.BufferAttribute(posicoes, 3));
+const material = new THREE.PointsMaterial({ size: 0.03, depthWrite: false, blending: THREE.AdditiveBlending });
+const galaxia = new THREE.Points(geometria, material);
+galaxia.material.vertexColors = true;
+cena.add(galaxia);`;
+  const a = analyze(GALAXIA);
+
+  it("THREE.Points é um objeto da cena, ligado à geometria e ao material dele", () => {
+    expect(a.diagnostics).toEqual([]);
+    const galaxia = byName(a, "galaxia");
+    expect(galaxia.kind).toBe("points");
+    expect(a.objects[galaxia.links.geometry].className).toBe("BufferGeometry");
+    expect(byName(a, "material").users).toEqual([galaxia.id]);
+    // o atributo é um valor, como um Vector3: não vira um objeto à parte
+    expect(a.objects.map((o) => o.className)).toEqual(["Scene", "BufferGeometry", "PointsMaterial", "Points"]);
+  });
+
+  it("as opções do PointsMaterial viram campos, escritos no material ou pelos pontos", () => {
+    const props = byName(a, "material").props;
+    expect(props.size).toMatchObject({ status: "slot", slot: { kind: "number", value: 0.03 } });
+    expect(props.depthWrite).toMatchObject({ status: "slot", slot: { kind: "boolean", value: false } });
+    expect(props.vertexColors).toMatchObject({ status: "slot", slot: { kind: "boolean", value: true } });
+    expect(props.sizeAttenuation).toEqual({ status: "missing" });
+    // o número do tamanho no código é arrastável como uma propriedade do material
+    expect(a.numbers.find((n) => n.raw === "0.03").slot).toMatchObject({ id: byName(a, "material").id, key: "size" });
+  });
+
+  it("pontos e linhas têm posição, rotação, escala e visível; sombras só nas malhas", () => {
+    const keys = candidateKeys(byName(a, "galaxia"));
+    expect(keys).toEqual(expect.arrayContaining(["position.x", "rotation.y", "scale.z", "visible"]));
+    expect(keys).not.toContain("castShadow");
+    expect(byName(a, "galaxia").props["position.x"]).toEqual({ status: "missing" });
+  });
+
+  it("avisa quando os pontos ainda não estão na cena", () => {
+    const solto = analyze(GALAXIA.replace("cena.add(galaxia);", ""));
+    expect(solto.diagnostics.map((d) => d.message)).toEqual(["galaxia ainda não está na cena: escreva cena.add(galaxia); para ele aparecer."]);
+  });
+
+  it("a malha instanciada é uma malha: geometria, material e sombras; o número de cópias não é um elo", () => {
+    const b = analyze(`const cena = new THREE.Scene();
+const arvores = new THREE.InstancedMesh(new THREE.ConeGeometry(0.4, 1.6, 6), new THREE.MeshStandardMaterial({ color: "#2f6b3a" }), 500);
+arvores.castShadow = true;
+cena.add(arvores);`);
+    const arvores = byName(b, "arvores");
+    expect(arvores.kind).toBe("mesh");
+    expect(b.objects[arvores.links.geometry].className).toBe("ConeGeometry");
+    expect(b.objects[arvores.links.material].props.color).toMatchObject({ status: "slot", slot: { value: "#2f6b3a" } });
+    expect(arvores.props.castShadow).toMatchObject({ status: "slot", slot: { value: true } });
+    expect(Object.keys(arvores.links)).toEqual(["geometry", "material"]);
+  });
+
+  it("Line, LineSegments e LineLoop ligam a geometria ao LineBasicMaterial", () => {
+    const b = analyze(`const cena = new THREE.Scene();
+const pontos = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 0)];
+const geometria = new THREE.BufferGeometry().setFromPoints(pontos);
+const traco = new THREE.LineBasicMaterial({ color: "#ffcc00" });
+const linha = new THREE.Line(geometria, traco);
+const arestas = new THREE.LineSegments(geometria, traco);
+const orbita = new THREE.LineLoop(geometria, traco);
+orbita.material.color.set("#00ccff");
+cena.add(linha, arestas, orbita);`);
+    for (const name of ["linha", "arestas", "orbita"]) expect(byName(b, name).kind, name).toBe("line");
+    expect(byName(b, "traco").users).toEqual(["linha", "arestas", "orbita"].map((n) => byName(b, n).id));
+    expect(byName(b, "traco").props.color).toMatchObject({ status: "slot", slot: { value: "#00ccff" } });
+    expect(b.diagnostics).toEqual([]);
   });
 });

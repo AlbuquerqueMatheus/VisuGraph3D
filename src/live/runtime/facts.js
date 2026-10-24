@@ -34,6 +34,9 @@ const BLENDING_NAMES = Object.fromEntries(
   ["NoBlending", "NormalBlending", "AdditiveBlending", "SubtractiveBlending", "MultiplyBlending", "CustomBlending"].map((name) => [THREE[name], name]),
 );
 
+/** Qual lado dos triângulos o material pinta, como no código (THREE.DoubleSide → "DoubleSide"). */
+const SIDE_NAMES = { [THREE.FrontSide]: "FrontSide", [THREE.BackSide]: "BackSide", [THREE.DoubleSide]: "DoubleSide" };
+
 /**
  * Fatos de um objeto. `idOf(obj)` diz quem é o pai no código: o `parent` dos fatos é esse id,
  * null se o objeto está direto na cena (ou fora dela) e -1 se o pai não veio do código.
@@ -63,6 +66,7 @@ function objectFacts(obj, idOf) {
       opacity: material.opacity,
       depthWrite: material.depthWrite,
       blending: BLENDING_NAMES[material.blending] ?? null,
+      side: SIDE_NAMES[material.side] ?? null,
     };
   }
   const geometry = drawn && obj.geometry?.isBufferGeometry ? obj.geometry : null;
@@ -79,7 +83,8 @@ function objectFacts(obj, idOf) {
   }
   if (obj.isInstancedMesh) facts.instances = obj.count;
   if (obj.isLight) {
-    facts.light = { color: rgbArray(obj.color), intensity: obj.intensity };
+    // decay e distance: como a luz pontual e o holofote enfraquecem com a distância
+    facts.light = { color: rgbArray(obj.color), intensity: obj.intensity, decay: obj.decay ?? null, distance: obj.distance ?? null };
     // o alvo só se atualiza se estiver na cena, como no desenho do Three.js
     if (obj.target?.isObject3D) facts.target = worldPositionOf(obj.target);
   }

@@ -131,6 +131,7 @@
   background: var(--surface-1);
   overflow: hidden;
 }
+.project + .project { margin-top: 16px; }
 .project__shot { display: block; width: 100%; height: 100%; object-fit: cover; background: #05060a; } /* o fundo da cena */
 .project__text { display: flex; flex-direction: column; gap: 12px; padding: 24px; }
 .project__level { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }

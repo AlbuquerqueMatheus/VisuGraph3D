@@ -109,6 +109,8 @@ const handle = new THREE.Object3D();
 overlay.add(handle);
 
 const raycaster = new THREE.Raycaster();
+// Pontos e linhas não têm superfície: o raio acerta o que passa a esta folga (em pixels) deles.
+const PICK_SLACK_PX = 6;
 const PROXY_GEOMETRY = new THREE.SphereGeometry(0.3, 12, 8);
 const PROXY_MATERIAL = new THREE.MeshBasicMaterial({ visible: false });
 
@@ -527,6 +529,8 @@ function kindOf(obj) {
   if (!obj) return "other";
   if (obj.isScene) return "scene";
   if (obj.isMesh) return "mesh";
+  if (obj.isPoints) return "points";
+  if (obj.isLine) return "line";
   if (obj.isLight) return "light";
   if (obj.isCamera) return "camera";
   if (obj.isMaterial) return "material";
@@ -762,12 +766,30 @@ canvas.addEventListener("pointerleave", () => {
   }
 });
 
+/**
+ * Aponta o raio para `ndc` (coordenadas de -1 a 1 na tela). A folga de pontos e linhas é medida
+ * em unidades da cena na distância para onde a câmera olha: o alvo da órbita, ou a origem na
+ * câmera do código.
+ */
+function aimRay(ndc, camera) {
+  raycaster.setFromCamera(ndc, camera);
+  const height = canvas.clientHeight || 1;
+  let seen; // altura da cena que cabe na tela, na distância do foco
+  if (camera.isOrthographicCamera) seen = (camera.top - camera.bottom) / camera.zoom;
+  else {
+    const focus = camera === editorCamera ? orbit.target : new THREE.Vector3();
+    const distance = Math.max(1, camera.getWorldPosition(new THREE.Vector3()).distanceTo(focus));
+    seen = (2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov ?? 50) / 2)) / (camera.zoom || 1);
+  }
+  raycaster.params.Points.threshold = raycaster.params.Line.threshold = (PICK_SLACK_PX * seen) / height;
+}
+
 function pickAt(clientX, clientY) {
   const run = state.current;
   if (!run) return null;
   const rect = canvas.getBoundingClientRect();
   pointer.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
-  raycaster.setFromCamera(pointer, activeCamera());
+  aimRay(pointer, activeCamera());
   const hits = [];
   if (state.view === "editor") {
     for (const h of raycaster.intersectObjects(run.proxies, false)) hits.push({ distance: h.distance, object: h.object.userData.target });
@@ -839,8 +861,8 @@ function setProp(obj, key, value) {
 
 const READ_KEYS = [
   "visible", "castShadow", "receiveShadow", "color", "emissive", "emissiveIntensity", "specular", "shininess", "roughness",
-  "metalness", "opacity", "transparent", "wireframe", "flatShading", "groundColor", "intensity", "distance", "decay", "angle",
-  "penumbra", "fov", "near", "far", "background",
+  "metalness", "opacity", "transparent", "wireframe", "flatShading", "size", "sizeAttenuation", "vertexColors", "depthWrite",
+  "groundColor", "intensity", "distance", "decay", "angle", "penumbra", "fov", "near", "far", "background",
 ];
 
 function readValues(id) {
@@ -856,7 +878,13 @@ function readValues(id) {
     if (v && v.isColor) values[key] = "#" + v.getHexString();
     else if (typeof v === "number" || typeof v === "boolean") values[key] = v;
   }
-  if (obj.isBufferGeometry && obj.parameters) Object.assign(values, obj.parameters);
+  if (obj.isBufferGeometry) {
+    if (obj.parameters) Object.assign(values, obj.parameters);
+    // o tamanho da geometria, para o painel: quantos vértices e com quais atributos
+    values.vertices = obj.getAttribute("position")?.count ?? 0;
+    values.attributes = Object.keys(obj.attributes);
+  }
+  if (obj.isInstancedMesh) values.instances = obj.count;
   return values;
 }
 
@@ -903,13 +931,18 @@ function cameraInfo(camera) {
 
 const viewportSize = () => ({ width: canvas.clientWidth, height: canvas.clientHeight });
 
-/** Vértice `index` da geometria, no espaço do objeto; a origem para quem não tem geometria. */
+/**
+ * Vértice `index` da geometria, no espaço do objeto; a origem para quem não tem geometria. Numa
+ * malha instanciada cada cópia tem a sua matriz, que a cadeia do painel não mostra: fica a origem.
+ */
 function vertexOf(obj, index = 0) {
-  const position = obj.isMesh ? obj.geometry?.attributes?.position : null;
+  const drawn = (obj.isMesh && !obj.isInstancedMesh) || obj.isPoints || obj.isLine;
+  const position = drawn ? obj.geometry?.attributes?.position : null;
   const count = position ? position.count : 0;
   if (!count) return { index: 0, count: 0, local: [0, 0, 0] };
   const i = ((Math.round(index) % count) + count) % count;
-  return { index: i, count, local: obj.getVertexPosition(i, new THREE.Vector3()).toArray() };
+  const local = obj.isMesh ? obj.getVertexPosition(i, new THREE.Vector3()) : new THREE.Vector3().fromBufferAttribute(position, i);
+  return { index: i, count, local: local.toArray() };
 }
 
 /** Dados do painel "Matemática": a cadeia do objeto, a câmera ativa e o vértice escolhido. */
@@ -1096,7 +1129,7 @@ function measureProbe(run, camera, glass) {
     screen: [((p.bx + 0.5) * canvas.clientWidth) / W, ((p.by + 0.5) * canvas.clientHeight) / H],
   };
   // o raio passa pelo centro do pixel, onde a placa de vídeo calculou a cor
-  raycaster.setFromCamera(new THREE.Vector2(((p.bx + 0.5) / W) * 2 - 1, 1 - ((p.by + 0.5) / H) * 2), camera);
+  aimRay(new THREE.Vector2(((p.bx + 0.5) / W) * 2 - 1, 1 - ((p.by + 0.5) / H) * 2), camera);
   const hit = raycaster.intersectObject(run.scene, true).find((h) => h.object.isMesh && isShown(h.object));
   const mesh = hit && hit.face ? hit.object : null;
   const material = mesh && [].concat(mesh.material)[Array.isArray(mesh.material) ? hit.face.materialIndex : 0];

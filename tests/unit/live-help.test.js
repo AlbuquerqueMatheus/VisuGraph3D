@@ -49,6 +49,24 @@ describe("explain", () => {
     expect(at("16 / 9").title).toBe("Número"); // não é uma propriedade, mas dá para arrastar
   });
 
+  it("explica os pontos, a geometria feita à mão e as opções do PointsMaterial", () => {
+    const code = `const cena = new THREE.Scene();
+const posicoes = new Float32Array(300);
+const geometria = new THREE.BufferGeometry();
+geometria.setAttribute("position", new THREE.BufferAttribute(posicoes, 3));
+const galaxia = new THREE.Points(geometria, new THREE.PointsMaterial({ size: 0.03, blending: THREE.AdditiveBlending }));
+cena.add(galaxia);`;
+    const b = analyze(code);
+    const on = (text, offset = 0) => explain(b, code.indexOf(text) + offset);
+    expect(on("Points(").title).toBe("THREE.Points");
+    expect(on("Float32Array").text).toContain("placa de vídeo");
+    expect(on("setAttribute").text).toContain('"position"');
+    expect(on("size:").text).toContain("sizeAttenuation");
+    expect(on("AdditiveBlending").title).toBe("THREE.AdditiveBlending");
+    expect(on("0.03").title).toBe("tamanho do ponto do material de galaxia");
+    expect(on("galaxia);").title).toBe("galaxia: THREE.Points");
+  });
+
   it("não explica palavras soltas nem a condição de um ternário", () => {
     const code = "const cena = new THREE.Scene();\nconst a = true ? roughness : 1;";
     expect(explain(analyze(code), code.indexOf("roughness"))).toBeNull();

@@ -178,3 +178,32 @@ describe("trilhas", () => {
     expect(TRAILS.find((t) => t.id === "phong").glass).toBe("phong");
   });
 });
+
+describe("fatos da cena: pontos, malhas instanciadas e linhas", () => {
+  it("contam o tipo, quantos vértices e cópias, e como o material mistura as cores", () => {
+    const facts = factsOf(`const cena = new THREE.Scene();
+const geometria = new THREE.BufferGeometry();
+geometria.setAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 2, 0]), 3));
+geometria.setAttribute("color", new THREE.BufferAttribute(new Float32Array(9), 3));
+const galaxia = new THREE.Points(geometria, new THREE.PointsMaterial({ size: 0.05, vertexColors: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+cena.add(galaxia);
+const arvores = new THREE.InstancedMesh(new THREE.ConeGeometry(0.5, 1), new THREE.MeshStandardMaterial(), 20);
+cena.add(arvores);
+const contorno = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0)]);
+const orbita = new THREE.LineLoop(contorno, new THREE.LineBasicMaterial({ color: "#ffcc00" }));
+cena.add(orbita);`);
+    expect(facts.objects.galaxia).toMatchObject({
+      type: "Points",
+      geometry: { type: "BufferGeometry", vertices: 3, attributes: ["position", "color"] },
+      material: { type: "PointsMaterial", size: 0.05, vertexColors: true, depthWrite: false, blending: "AdditiveBlending" },
+      box: { min: [0, 0, 0], max: [1, 2, 0] },
+    });
+    expect(facts.objects.arvores).toMatchObject({
+      type: "InstancedMesh",
+      instances: 20,
+      geometry: { type: "ConeGeometry", attributes: ["position", "normal", "uv"] },
+      material: { type: "MeshStandardMaterial", size: null, depthWrite: true, blending: "NormalBlending" },
+    });
+    expect(facts.objects.orbita).toMatchObject({ type: "LineLoop", geometry: { vertices: 3 }, material: { type: "LineBasicMaterial", hex: "#ffcc00" } });
+  });
+});

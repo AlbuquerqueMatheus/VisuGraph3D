@@ -8,7 +8,7 @@ Esta página descreve o subconjunto do Three.js que o VisuGraph entende, o que p
 
 - **Barra** (no alto): o tema do desafio aberto, que troca de trilha sem recarregar a página, e **Explorar | Programar**, que leva ao laboratório 2D do mesmo tema. O menu do tema também volta ao **editor livre**, sem desafio. O nome VisuGraph volta à tela inicial.
 - **Código** (à esquerda): editor com destaque de sintaxe, autocompletar (`Ctrl+Espaço`) e explicações ao passar o mouse sobre uma palavra (`THREE.Mesh`, `roughness`, `animar`…).
-- **Visor** (no centro): a cena rodando. Clique num objeto para selecioná-lo; as linhas que o criam e alteram ficam destacadas no código. No sentido contrário, o objeto da linha onde está o cursor (ou o mouse) fica destacado no visor.
+- **Visor** (no centro): a cena rodando. Clique num objeto para selecioná-lo; as linhas que o criam e alteram ficam destacadas no código. No sentido contrário, o objeto da linha onde está o cursor (ou o mouse) fica destacado no visor. Pontos e linhas não têm superfície: o clique vale a uns 6 pixels deles.
 - **Painel** (à direita), em três abas: **Propriedades** (a lista de objetos e as propriedades do objeto selecionado), **Matemática** (as contas que põem o objeto selecionado na tela) e **Desafios**.
 - **Barra de status** (embaixo): o resultado da última execução ou o erro, com um link para a linha.
 
@@ -82,11 +82,13 @@ O gizmo também move objetos que não estão na cena, como a câmera do código,
 
 ### Classes conhecidas
 
-- **Cena e grupos**: `Scene`, `Group`, `Object3D`, `Mesh`.
+- **Cena, grupos e o que se desenha**: `Scene`, `Group`, `Object3D`, `Mesh`, `InstancedMesh` (muitas cópias de uma malha), `Points` (um ponto em cada vértice), `Line`, `LineSegments` e `LineLoop`. Todos eles aparecem na lista de objetos, com a geometria e o material ligados como os de uma malha.
 - **Câmeras**: `PerspectiveCamera` (campo de visão, planos próximo e distante) e `OrthographicCamera` (só posição).
 - **Luzes**: `AmbientLight`, `DirectionalLight`, `PointLight`, `SpotLight`, `HemisphereLight`.
-- **Geometrias**: `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `CapsuleGeometry`, `CircleGeometry`, `RingGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `OctahedronGeometry`, `TetrahedronGeometry`.
-- **Materiais**: `MeshBasicMaterial`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardMaterial`, `MeshPhysicalMaterial`, `MeshToonMaterial`, `MeshNormalMaterial`.
+- **Geometrias**: `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `CapsuleGeometry`, `CircleGeometry`, `RingGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `OctahedronGeometry`, `TetrahedronGeometry` e `BufferGeometry`, montada à mão com `setAttribute` (sem controles, porque não tem argumentos).
+- **Materiais**: `MeshBasicMaterial`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardMaterial`, `MeshPhysicalMaterial`, `MeshToonMaterial`, `MeshNormalMaterial`, `PointsMaterial` (cor, tamanho do ponto, `sizeAttenuation`, `vertexColors`, opacidade e `depthWrite`) e `LineBasicMaterial`.
+
+O grupo da geometria no painel diz o tamanho dela como está na cena, por exemplo "2.000 pontos · atributos position e color" ou "24 vértices · atributos position, normal e uv", e uma `InstancedMesh` diz quantas cópias desenha. Na aba Matemática, um objeto `Points` ou `Line` segue os próprios vértices até o pixel; uma `InstancedMesh` fica na origem do objeto, porque a matriz de cada cópia não entra na cadeia do painel. `BufferAttribute` e `Float32BufferAttribute` são valores, como `Vector3`: não viram objetos da lista.
 
 Qualquer outra parte do Three.js continua funcionando normalmente: ela só não ganha controles no painel.
 
@@ -133,7 +135,7 @@ A aba **Desafios** tem 10 desafios em três trilhas. Cada desafio troca o códig
 | Câmera e projeção | `lookAt`, campo de visão | |
 | Luz e cor (Phong) | luz difusa (`n·l`), especular (o expoente `n`), cor canal a canal | Modelo Phong (a trilha liga a caixa de vidro) e Sistemas de cores (o desafio da cor) |
 
-- **A correção olha a cena, não o texto.** A cada execução, o visor conta à correção como a cena está (posições de mundo, caixas, matrizes, câmera, luzes e materiais), e cada verificação aparece com o que a cena tem, como "(está em (0,00; 0,50; 0,00))". Vale qualquer caminho até o resultado: o código, o gizmo ou o painel. A faixa acima do código mostra o desafio aberto e quantas verificações já passaram.
+- **A correção olha a cena, não o texto.** A cada execução, o visor conta à correção como a cena está (posições de mundo, caixas, matrizes, câmera, luzes, materiais, o tipo de cada objeto, quantos vértices e quais atributos a geometria tem e quantas cópias uma `InstancedMesh` desenha), e cada verificação aparece com o que a cena tem, como "(está em (0,00; 0,50; 0,00))". Vale qualquer caminho até o resultado: o código, o gizmo ou o painel. A faixa acima do código mostra o desafio aberto e quantas verificações já passaram.
 - **Contornos tracejados** mostram no visor onde um objeto tem de ficar, nos desafios em que isso ajuda. Os desafios de câmera e de luz abrem pela **Câmera do código**.
 - **Dicas**: três por desafio, uma de cada vez. A última é a resposta.
 - **Código e progresso**: cada desafio guarda o próprio código no navegador, e **Restaurar exemplo** volta ao código inicial dele (`Ctrl+Z` desfaz). **← Sair do desafio** volta ao código livre, que fica guardado à parte. Os desafios feitos ficam marcados, e **Próximo** segue a trilha e depois as outras.

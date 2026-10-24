@@ -6,7 +6,7 @@
 // ou o motivo de não ser editável pela cena (expressão, animação, laço...).
 
 import { parseCode, walk, isFunctionNode, isLoopNode } from "./parse.js";
-import { AXES, OBJECT_FLAGS, RUNTIME_NAMES, TRANSFORMS, VALUE_CLASSES, classInfo, isObject3DKind } from "./catalog.js";
+import { AXES, OBJECT_FLAGS, RUNTIME_NAMES, TRANSFORMS, VALUE_CLASSES, classInfo, isDrawableKind, isObject3DKind } from "./catalog.js";
 import { normalizeColor } from "./format.js";
 
 const TRANSLATE_METHODS = new Set(["translateX", "translateY", "translateZ", "translateOnAxis"]);
@@ -250,7 +250,7 @@ class Analysis {
     for (const s of deferredWrites) this.resolveStatement(s, bindings);
 
     for (const obj of this.objects) {
-      if (obj.kind !== "mesh") continue;
+      if (!isDrawableKind(obj.kind)) continue;
       for (const key of ["geometry", "material"]) {
         const id = obj.links[key];
         if (id != null) this.objects[id].users.push(obj.id);
@@ -289,7 +289,7 @@ class Analysis {
   }
 
   resolveLinks(obj, bindings) {
-    if (obj.kind !== "mesh") return;
+    if (!isDrawableKind(obj.kind)) return;
     ["geometry", "material"].forEach((key, i) => {
       const arg = obj.node.arguments[i];
       if (!arg) return;
@@ -320,7 +320,7 @@ class Analysis {
     let path = w.path;
     const base = { rootId: w.rootId, context: w.context, from: w.stmt.start, to: w.stmt.end, line: this.lineOf(w.stmt.start), stmt: w.stmt };
 
-    if (obj.kind === "mesh" && (path[0] === "material" || path[0] === "geometry")) {
+    if (isDrawableKind(obj.kind) && (path[0] === "material" || path[0] === "geometry")) {
       if (path.length === 1) {
         if (w.type === "assign" && w.context === "top") {
           const target = w.value.type === "Identifier" ? bindings.get(w.value.name) : this.byNode.get(w.value)?.id;
@@ -603,6 +603,7 @@ export function candidateKeys(obj) {
     const transformProps = info.positionless ? [] : obj.kind === "light" || obj.kind === "camera" ? ["position"] : Object.keys(TRANSFORMS);
     for (const p of transformProps) for (const a of AXES) keys.push(`${p}.${a}`);
     if (obj.kind === "mesh") keys.push("visible", "castShadow", "receiveShadow");
+    else if (obj.kind === "points" || obj.kind === "line") keys.push("visible");
     else if (obj.kind === "light" && !info.positionless && obj.className !== "HemisphereLight") keys.push("castShadow");
   }
   const props = classInfo(obj.className).props;

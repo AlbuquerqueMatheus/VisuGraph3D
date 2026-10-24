@@ -48,6 +48,11 @@ export const MATERIAL_PROPS = {
   transparent: bool("transparente"),
   wireframe: bool("arame (wireframe)"),
   flatShading: bool("sombreamento plano"),
+  // pontos (PointsMaterial): o tamanho fica em unidades da cena enquanto sizeAttenuation for true
+  size: num("tamanho do ponto", 1, { min: 0, max: 10, step: 0.01, decimals: 3 }),
+  sizeAttenuation: bool("diminui com a distância", true),
+  vertexColors: bool("cor de cada vértice"),
+  depthWrite: bool("grava a profundidade", true),
 };
 
 const BASIC = ["color", "opacity", "transparent", "wireframe"];
@@ -82,6 +87,12 @@ export const CLASSES = {
   Group: { kind: "group" },
   Object3D: { kind: "group" },
   Mesh: { kind: "mesh", links: ["geometry", "material"] },
+  // o terceiro argumento é quantas cópias a malha desenha
+  InstancedMesh: { kind: "mesh", links: ["geometry", "material"] },
+  Points: { kind: "points", links: ["geometry", "material"] },
+  Line: { kind: "line", links: ["geometry", "material"] },
+  LineSegments: { kind: "line", links: ["geometry", "material"] },
+  LineLoop: { kind: "line", links: ["geometry", "material"] },
 
   // argText: texto usado quando um argumento sem controle precisa ser preenchido.
   PerspectiveCamera: { kind: "camera", args: ["fov", null, "near", "far"], argText: { 1: "16 / 9" }, props: CAMERA_PROPS },
@@ -153,6 +164,8 @@ export const CLASSES = {
   DodecahedronGeometry: geometry([["radius", size("raio")], ["detail", int("detalhe", 0, { min: 0, max: 6 })]]),
   OctahedronGeometry: geometry([["radius", size("raio")], ["detail", int("detalhe", 0, { min: 0, max: 6 })]]),
   TetrahedronGeometry: geometry([["radius", size("raio")], ["detail", int("detalhe", 0, { min: 0, max: 6 })]]),
+  // geometria montada à mão, atributo por atributo: não tem argumentos para virar controle
+  BufferGeometry: { kind: "geometry" },
 
   MeshBasicMaterial: material(BASIC),
   MeshLambertMaterial: material([...BASIC, "emissive"]),
@@ -161,13 +174,15 @@ export const CLASSES = {
   MeshPhysicalMaterial: material([...BASIC, "roughness", "metalness", "emissive", "emissiveIntensity", "flatShading"]),
   MeshToonMaterial: material([...BASIC, "emissive"]),
   MeshNormalMaterial: material(["opacity", "transparent", "wireframe", "flatShading"]),
+  PointsMaterial: material(["color", "size", "sizeAttenuation", "vertexColors", "opacity", "transparent", "depthWrite"]),
+  LineBasicMaterial: material(["color", "vertexColors", "opacity", "transparent"]),
 };
 
 /** Classes de valor (vetores, cores, matrizes): não são objetos da cena e não são rastreadas. */
 export const VALUE_CLASSES = new Set([
   "Vector2", "Vector3", "Vector4", "Color", "Euler", "Quaternion", "Matrix3", "Matrix4",
   "Box2", "Box3", "Sphere", "Ray", "Plane", "Line3", "Triangle", "Spherical", "Cylindrical",
-  "Clock", "Timer", "Raycaster", "Layers",
+  "Clock", "Timer", "Raycaster", "Layers", "BufferAttribute", "Float32BufferAttribute",
 ]);
 
 export function classInfo(className) {
@@ -182,7 +197,12 @@ export function classInfo(className) {
 
 /** Objetos que existem no espaço da cena (têm posição, rotação e escala). */
 export function isObject3DKind(kind) {
-  return kind === "mesh" || kind === "light" || kind === "camera" || kind === "group" || kind === "object" || kind === "scene";
+  return isDrawableKind(kind) || kind === "light" || kind === "camera" || kind === "group" || kind === "object" || kind === "scene";
+}
+
+/** Objetos desenhados a partir de uma geometria e de um material: malhas, pontos e linhas. */
+export function isDrawableKind(kind) {
+  return kind === "mesh" || kind === "points" || kind === "line";
 }
 
 function pick(source, keys) {

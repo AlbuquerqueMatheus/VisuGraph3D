@@ -1,8 +1,10 @@
 // Projetos: o endereço abre o passo, o código pronto passa na conferência, os passos seguem um do
-// outro e o progresso fica.
+// outro e o progresso fica. Os passos no computador baixam o projeto e ficam feitos pela pessoa.
+import { readFile } from "node:fs/promises";
 import { test, expect } from "./fixtures.js";
 import { code, pasteCode, status } from "./live.js";
 import { GALAXIA } from "../../src/live/projects/galaxia.js";
+import { unzip } from "../../src/lib/zip.js";
 
 const panel = (page) => page.locator("#lv-project");
 const title = (page) => panel(page).locator(".lv-pj-title");
@@ -10,6 +12,12 @@ const result = (page, n = 0) => panel(page).locator(".lv-result").nth(n);
 const codeState = (page) => panel(page).locator("[data-code-state]");
 const done = (page) => panel(page).locator(".lv-ch__done");
 const stepButton = (page, n) => panel(page).locator(`.lv-pj-steps [data-step="${n}"]`);
+
+/** Os arquivos de um .zip baixado: { caminho: texto }. */
+async function zipFiles(download) {
+  const files = unzip(new Uint8Array(await readFile(await download.path())));
+  return Object.fromEntries(files.map((f) => [f.path, new TextDecoder().decode(f.content)]));
+}
 
 test("projetos: o endereço abre o passo, o código pronto passa na conferência e o próximo passo parte dele", async ({ page }) => {
   await page.goto("index-3d.html?projeto=galaxia&passo=2");
@@ -19,7 +27,7 @@ test("projetos: o endereço abre o passo, o código pronto passa na conferência
   await expect(panel(page).locator(".lv-ch__kicker")).toHaveText("Intermediário · Gerador de galáxias");
   await expect(title(page)).toHaveText("2. Mil pontos");
   await expect(stepButton(page, 2)).toHaveAttribute("aria-current", "step");
-  await expect(page.locator("#lv-codebar")).toContainText("Gerador de galáxias · passo 2 de 10");
+  await expect(page.locator("#lv-codebar")).toContainText("Gerador de galáxias · passo 2 de 12");
   await expect(page.locator("#lv-codebar")).toContainText("0 de 2 conferências");
   await expect(codeState(page)).toHaveText(/^Escreva no editor as linhas marcadas com \+/);
   expect(await code(page), "o passo 2 começa do fim do passo 1").toContain("camera.lookAt(0, 0, 0);");
@@ -88,14 +96,14 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await expect(panel(page).locator(".lv-pj-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
   await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(8);
   const card = panel(page).locator('.lv-pj-card[data-project="galaxia"]');
-  await expect(card.locator(".lv-pj-card__progress")).toHaveText("10 passos");
+  await expect(card.locator(".lv-pj-card__progress")).toHaveText("12 passos");
 
   await card.click();
   await expect(title(page)).toHaveText("1. O palco");
   await expect.poll(() => code(page)).toContain("// Gerador de galáxias");
   expect(await code(page), "o projeto começa do zero").not.toContain("THREE");
   await expect(status(page)).toContainText("Nenhuma cena foi criada");
-  await expect(page.locator("#lv-codebar")).toContainText("Gerador de galáxias · passo 1 de 10");
+  await expect(page.locator("#lv-codebar")).toContainText("Gerador de galáxias · passo 1 de 12");
   await panel(page).locator('[data-action="apply"]').click();
   await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
   await expect(status(page)).toContainText("Passo feito: 1. O palco.");
@@ -103,12 +111,63 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await panel(page).locator('[data-action="leave"]').click();
   await expect(page.locator("#lv-codebar")).toBeHidden();
   await expect.poll(() => code(page)).toContain("Tudo o que aparece no visor vem deste código");
-  await expect(card.locator(".lv-pj-card__progress")).toHaveText("1 de 10 passos");
+  await expect(card.locator(".lv-pj-card__progress")).toHaveText("1 de 12 passos");
 
   // de volta ao projeto, ele abre no primeiro passo ainda não feito, com o código guardado
   await card.click();
   await expect(title(page)).toHaveText("2. Mil pontos");
   await expect.poll(() => code(page)).toContain("camera.lookAt(0, 0, 0);");
+});
+
+test("projetos: os passos no computador baixam o projeto, explicam os arquivos e ficam feitos quando funciona", async ({ page }) => {
+  await page.goto("index-3d.html?projeto=galaxia&passo=11");
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(title(page)).toHaveText("11. No seu computador");
+  await expect(stepButton(page, 11)).toHaveAttribute("data-kind", "computador");
+  await expect(page.locator("#lv-codebar")).toContainText("Gerador de galáxias · passo 11 de 12");
+  await expect(page.locator("#lv-codebar")).toContainText("no seu computador");
+  await expect(panel(page).locator(".lv-pj-cmd code").first()).toHaveText("node -v\nnpm -v");
+  await expect(panel(page).locator(".lv-pj-file h4")).toHaveText(["package.json", "vite.config.js", "index.html", "src/cena.js", "src/main.js"]);
+
+  // passar o mouse na explicação acende a linha no arquivo
+  const main = panel(page).locator('.lv-pj-file[data-path="src/main.js"]');
+  await main.locator(".lv-pj-snippet", { hasText: "controles.update();" }).hover();
+  await expect(main.locator("[data-mark]")).toHaveText(["  controles.update();"]);
+
+  // o projeto leva o código do editor, que é o do fim do passo 10: o cena.js sai igual ao do passo
+  const [download] = await Promise.all([page.waitForEvent("download"), panel(page).locator('[data-download="galaxia.zip"]').click()]);
+  expect(download.suggestedFilename()).toBe("galaxia.zip");
+  const files = await zipFiles(download);
+  expect(Object.keys(files)).toEqual(["README.md", "package.json", "vite.config.js", "index.html", "src/main.js", "src/cena.js", ".gitignore"]);
+  for (const file of GALAXIA.steps[10].files) expect(files[file.path], file.path).toBe(file.code);
+  await expect(status(page)).toContainText("Projeto baixado: galaxia.zip.");
+
+  // quem confere é a pessoa
+  await expect(done(page)).toBeHidden();
+  await panel(page).locator('[data-action="confirm"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!");
+  await expect(panel(page).locator('[data-action="confirm"]')).toBeHidden();
+  await expect(stepButton(page, 11)).toHaveAttribute("data-done", "true");
+  await expect(page.locator("#lv-codebar")).toContainText("✓ feito");
+  await expect(status(page)).toContainText("Passo feito: 11. No seu computador.");
+
+  // de volta ao passo 10, o editor tem o código do fim dele, e não um passo adiantado
+  await stepButton(page, 10).click();
+  await expect(codeState(page)).toHaveText("O editor já tem o código deste passo.");
+  await stepButton(page, 11).click();
+  await done(page).locator('[data-action="next"]').click();
+  await expect(title(page)).toHaveText("12. Um painel de controle");
+  await expect(panel(page).locator('.lv-pj-file[data-path="src/cena.js"] .lv-pj-diff__line[data-op="add"]', { hasText: 'import GUI from "lil-gui";' })).toHaveCount(1);
+  expect(await code(page), "o passo 12 não troca o código do editor").toContain("const quantidade = 50000;");
+  expect(await code(page)).not.toContain("parametros");
+
+  // o projeto pronto do passo, com o lil-gui
+  const [ready] = await Promise.all([page.waitForEvent("download"), panel(page).locator('[data-download="galaxia-painel.zip"]').click()]);
+  const readyFiles = await zipFiles(ready);
+  expect(JSON.parse(readyFiles["package.json"]).dependencies).toEqual({ "lil-gui": "^0.21.0", three: "^0.186.1" });
+  expect(readyFiles["src/cena.js"]).toContain('const painel = new GUI({ title: "Galáxia" });');
+  await panel(page).locator('[data-action="confirm"]').click();
+  await expect(done(page)).toContainText("✓ Projeto pronto!");
 });
 
 test("projetos: o modo de estudo não tem a aba Projetos", async ({ page }) => {

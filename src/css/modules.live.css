@@ -70,6 +70,8 @@
 }
 .lv-menu__list button { text-align: left; border: none; background: transparent; border-radius: var(--radius-1); }
 .lv-menu__list button:hover { background: color-mix(in oklab, var(--accent-color) 18%, transparent); }
+.lv-menu__list--end { left: auto; right: 0; } /* menu perto da borda direita: abre para a esquerda */
+.lv-menu__about { display: block; font-size: 11px; line-height: 1.4; color: var(--lv-text-2); white-space: normal; }
 
 .lv-grid {
   display: grid;
@@ -332,7 +334,7 @@
 }
 .lv-project { padding: var(--space-3); display: grid; gap: var(--space-3); align-content: start; }
 .lv-project .lv-pj-title { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: 0; text-transform: none; color: var(--text-color); }
-.lv-project code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; padding: 0 3px; border-radius: 3px; background: #ffffff12; white-space: pre-wrap; }
+.lv-project code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; padding: 0 3px; border-radius: 3px; background: #ffffff12; white-space: pre-wrap; overflow-wrap: anywhere; }
 .lv-pj-level { display: grid; gap: 6px; border-top: 1px solid var(--lv-line); padding-top: var(--space-2); }
 .lv-pj-level h3 { font-size: 13px; font-weight: 600; }
 .lv-pj-list { list-style: none; display: grid; gap: 4px; }
@@ -400,6 +402,37 @@
 .lv-pj-nav .lv-mini { padding: 2px 10px; font-size: 12px; }
 .lv-mini:disabled { opacity: 0.4; cursor: default; }
 .lv-mini:disabled:hover { border-color: var(--lv-line); }
+
+/* Passos no seu computador: a bolinha tracejada, os comandos, os arquivos e o que conferir */
+.lv-pj-steps button[data-kind="computador"] { border-style: dashed; }
+.lv-pj-setup { display: grid; gap: 12px; padding-left: 18px; }
+.lv-pj-setup li { display: grid; gap: 6px; justify-items: start; font-size: 13px; line-height: 1.5; }
+.lv-pj-setup li::marker { color: var(--lv-text-2); }
+.lv-pj-cmd { display: flex; align-items: flex-start; gap: 6px; width: 100%; }
+.lv-pj-cmd pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--lv-line);
+  border-radius: var(--radius-1);
+  background: #0f1116;
+  color: #e6e9ef;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.lv-project .lv-pj-cmd code { padding: 0; background: none; font-size: inherit; }
+.lv-pj-cmd .lv-mini { margin-top: 3px; }
+.lv-pj-download { padding: 2px 10px; font-size: 12px; border-color: var(--accent-color); }
+.lv-pj-file { display: grid; gap: 6px; }
+.lv-pj-file + .lv-pj-file { border-top: 1px dashed var(--lv-line); padding-top: var(--space-2); }
+.lv-pj-file h4 { font-size: 13px; font-weight: 600; }
+.lv-project .lv-pj-file h4 code { background: none; padding: 0; font-size: 13px; color: var(--accent-color); }
+.lv-pj-file .lv-pj-diff { max-height: 26em; overflow: auto; }
+.lv-pj-diff--file .lv-pj-diff__line { grid-template-columns: minmax(0, 1fr); color: var(--text-color); }
+.lv-pj-diff__line[data-mark] { background: #ff5fd22b; box-shadow: inset 2px 0 #ff5fd2; }
+.lv-pj-confirm { display: grid; gap: 8px; }
 
 /* ====== Status ====== */
 .lv-status {

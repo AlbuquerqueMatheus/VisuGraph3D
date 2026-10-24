@@ -17,7 +17,7 @@ import { Inspector } from "./inspector.js";
 import { MathPanel } from "./mathPanel.js";
 import { CHALLENGES, challengeById, firstOpen, grade, nextChallenge, trailById, trailOf } from "./challenges.js";
 import { PROGRESS_KEY, PROJECTS_KEY, readProgress, readProjects } from "./progress.js";
-import { PROJECTS, codeState, findSnippet, guideStep, projectById, startCode, stepIndex } from "./projects/index.js";
+import { PROJECTS, behind, codeState, findSnippet, isComputer, liveSteps, projectById, startCode, stepIndex } from "./projects/index.js";
 import { animatedKeys } from "./projects/checks.js";
 import { ProjectPanel } from "./projectPanel.js";
 import { topicOfTrail } from "../js/topics.js";
@@ -25,7 +25,8 @@ import { mountTopicBar } from "../js/topicbar.js";
 import { ChallengesPanel } from "./challengesPanel.js";
 import { NO_STUDY, StudyLog, studyGroup } from "./study.js";
 import { ViewportBridge } from "./bridge.js";
-import { exportHtml } from "./export.js";
+import { exportHtml, exportProject } from "./export.js";
+import { zip } from "../lib/zip.js";
 
 const STORAGE_KEY = "visugraph.codigo.v1";
 const challengeKey = (id) => `visugraph.desafio.${id}.v1`; // o código de cada desafio
@@ -227,8 +228,7 @@ function loadCode() {
   }
   const code = storedCode();
   // aberto num passo adiante (?passo=), o código de um passo anterior do guia vira o começo dele
-  const k = state.project ? guideStep(state.project.project, code) : null;
-  return k != null && k < state.project.index ? starterCode() : code;
+  return state.project && behind(state.project.project, state.project.index, code) ? starterCode() : code;
 }
 
 function storedCode() {
@@ -825,8 +825,12 @@ function sendGhosts() {
   bridge.send({ type: "ghost", shapes: state.challenge?.ghosts ?? [] });
 }
 
+/** O passo de projeto aberto, ou null. */
+const projectStep = () => (state.project ? state.project.project.steps[state.project.index] : null);
+
 function requestFacts() {
-  if (state.challenge || state.project) bridge.send({ type: "facts", seq: ++state.factsSeq });
+  // um passo no computador não confere a cena: quem diz que funcionou é a pessoa
+  if (state.challenge || (state.project && !isComputer(projectStep()))) bridge.send({ type: "facts", seq: ++state.factsSeq });
 }
 
 /**
@@ -835,8 +839,8 @@ function requestFacts() {
  */
 function onFacts(msg) {
   const analysis = state.runs.get(msg.runId)?.analysis;
-  const target = state.project ? state.project.project.steps[state.project.index] : state.challenge;
-  if (!target || !analysis || msg.seq !== state.factsSeq) return;
+  const target = state.project ? projectStep() : state.challenge;
+  if (!target || isComputer(target) || !analysis || msg.seq !== state.factsSeq) return;
   const objects = Object.create(null);
   for (const [id, facts] of Object.entries(msg.objects)) {
     const name = analysis.objects[id]?.name;
@@ -884,9 +888,12 @@ function updateCodebar(grading) {
   codebarKind.data = p ? "" : "Desafio: "; // o nome do projeto já diz o que é, e a faixa é estreita
   codebarTitle.textContent = p ? `${p.project.title} · passo ${p.index + 1} de ${p.project.steps.length}` : c.title;
   codebarOpen.textContent = p ? "ver passo" : "ver desafio";
+  // no computador não há conferência: a faixa diz onde o passo acontece, até a pessoa dizer que funcionou
+  const step = projectStep();
+  if (step && isComputer(step)) grading = { computer: true, ok: projects.done[p.project.id].has(step.id) };
   codebar.dataset.ok = String(!!grading?.ok);
   const checks = p ? ["conferência", "conferências"] : ["verificação", "verificações"];
-  codebarStatus.textContent = !grading ? "" : grading.ok ? "✓ feito" : `${grading.passed} de ${grading.total} ${grading.total === 1 ? checks[0] : checks[1]}`;
+  codebarStatus.textContent = !grading ? "" : grading.ok ? "✓ feito" : grading.computer ? "no seu computador" : `${grading.passed} de ${grading.total} ${grading.total === 1 ? checks[0] : checks[1]}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -902,6 +909,19 @@ const projectPanel = new ProjectPanel($("#lv-project"), {
   reveal(range) {
     revealPosition(view, range.from, true);
     showMathLinks(view, [range]);
+  },
+  copy: (text) => copyText(text, "Comando copiado: cole no terminal."),
+  download: (item) => downloadStepProject(item),
+  confirm() {
+    const { project, index } = state.project;
+    const step = project.steps[index];
+    const done = projects.done[project.id];
+    if (done.has(step.id)) return;
+    done.add(step.id);
+    saveProjects();
+    projectPanel.setDone(projects.done);
+    updateCodebar(null);
+    setStatus("ok", `Passo feito: ${index + 1}. ${step.title}.`);
   },
 });
 projectPanel.setDone(projects.done);
@@ -952,8 +972,7 @@ function openProject(project, index = null) {
     state.stuckCode = null;
     select(null);
   }
-  const k = guideStep(project, view.state.doc.toString());
-  if (k != null && k < index) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: starterCode() }, userEvent: "input.cena" });
+  if (behind(project, index, view.state.doc.toString())) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: starterCode() }, userEvent: "input.cena" });
   showProject();
   if (hasBlockingError(state.analysis)) showBlockingError();
   else runNow({ force: true, resetTime: true });
@@ -977,6 +996,23 @@ function showProject() {
   updateCodebar(null);
   showTopic();
   setView(project.steps[index].view);
+}
+
+/**
+ * Baixa o projeto Vite de um passo no computador: com o código do editor, ou o projeto pronto do
+ * passo (item.cena), que parte do código do guia.
+ */
+function downloadStepProject(item) {
+  const { project, index } = state.project;
+  const analysis = item.cena ? analyze(project.steps[index].code) : state.analysis;
+  const result = exportProject(analysis, { name: project.id, title: project.title, site: siteUrl(), cena: item.cena ?? null, extra: item.extra ?? [] });
+  if (result.error) {
+    setStatus("warn", `${result.error} Ou volte ao passo ${liveSteps(project).length} e use o código dele.`);
+    return;
+  }
+  saveFile(zip(result.files), item.file, "application/zip");
+  study.log("baixar", { tipo: "projeto" });
+  setStatus("ok", `Projeto baixado: ${item.file}.`);
 }
 
 function onStepResult(result) {
@@ -1049,30 +1085,64 @@ $("#lv-restart").addEventListener("click", () => {
   runNow({ force: true, resetTime: true });
 });
 
-$("#lv-copy").addEventListener("click", async () => {
+async function copyText(text, done) {
   try {
-    await navigator.clipboard.writeText(view.state.doc.toString());
-    study.log("copiar");
-    setStatus("ok", "Código copiado.");
+    await navigator.clipboard.writeText(text);
+    setStatus("ok", done);
+    return true;
   } catch {
-    setStatus("warn", "O navegador não deixou copiar: selecione o código e use Ctrl+C.");
+    setStatus("warn", "O navegador não deixou copiar: selecione o texto e use Ctrl+C.");
+    return false;
   }
+}
+
+$("#lv-copy").addEventListener("click", async () => {
+  if (await copyText(view.state.doc.toString(), "Código copiado.")) study.log("copiar");
 });
 
-$("#lv-download").addEventListener("click", () => {
-  const result = exportHtml(state.analysis);
-  if (result.error) {
-    setStatus("warn", result.error);
-    return;
-  }
-  const url = URL.createObjectURL(new Blob([result.html], { type: "text/html" }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: "cena-visugraph.html" });
+/** Entrega um arquivo feito na página, como um download. */
+function saveFile(content, name, type) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  study.log("baixar");
-  setStatus("ok", "Página baixada: abra cena-visugraph.html no navegador (precisa de internet para carregar o Three.js).");
+}
+
+/** O endereço do VisuGraph, para o README de um projeto baixado apontar o capítulo Seu computador. */
+const siteUrl = () => new URL(".", location.href).href;
+
+// Baixar: a cena como uma página HTML que roda sozinha, ou como um projeto Vite (.zip). Num
+// projeto, os arquivos levam o nome e o título dele.
+const downloadMenu = $("#lv-download");
+for (const button of downloadMenu.querySelectorAll("[data-download]")) {
+  button.addEventListener("click", () => {
+    downloadMenu.open = false;
+    const name = state.project ? state.project.project.id : "cena-visugraph";
+    const title = state.project?.project.title;
+    if (button.dataset.download === "html") {
+      const result = exportHtml(state.analysis, title);
+      if (result.error) return setStatus("warn", result.error);
+      saveFile(result.html, `${name}.html`, "text/html");
+      study.log("baixar", { tipo: "html" });
+      setStatus("ok", `Página baixada: abra ${name}.html no navegador (precisa de internet para carregar o Three.js).`);
+    } else {
+      const result = exportProject(state.analysis, { name, title, site: siteUrl() });
+      if (result.error) return setStatus("warn", result.error);
+      saveFile(zip(result.files), `${name}.zip`, "application/zip");
+      study.log("baixar", { tipo: "vite" });
+      setStatus("ok", `Projeto baixado: descompacte ${name}.zip e, na pasta, rode npm install e npm run dev (o README.md explica).`);
+    }
+  });
+}
+
+// Um menu da barra aberto fecha com um clique fora dele ou com Esc
+document.addEventListener("pointerdown", (event) => {
+  for (const menu of document.querySelectorAll(".lv-menu[open]")) if (!menu.contains(event.target)) menu.open = false;
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") for (const menu of document.querySelectorAll(".lv-menu[open]")) menu.open = false;
 });
 
 $("#lv-reset").addEventListener("click", () => {
@@ -1140,12 +1210,7 @@ if (group) {
   exportButton.textContent = "Exportar registro";
   exportButton.addEventListener("click", () => {
     study.save();
-    const url = URL.createObjectURL(new Blob([study.export()], { type: "application/json" }));
-    const a = Object.assign(document.createElement("a"), { href: url, download: `visugraph-estudo-${study.code}.json` });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    saveFile(study.export(), `visugraph-estudo-${study.code}.json`, "application/json");
     setStatus("ok", `Registro da sessão ${study.code} baixado. Ele não tem o seu código nem dados pessoais.`);
   });
   const newButton = document.createElement("button");

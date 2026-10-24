@@ -144,7 +144,7 @@ A aba **Desafios** tem 10 desafios em três trilhas. Cada desafio troca o códig
 
 ## Projetos
 
-A aba **Projetos** é um guia de projetos: cada projeto constrói uma cena completa do zero, em passos, e explica cada linha e o porquê de cada decisão. Os projetos se dividem em três níveis: **Fácil** (cena, malhas, materiais e luz), **Intermediário** (geometria feita à mão, milhares de objetos, curvas e animação) e **Avançado** (shaders). Por enquanto há um projeto pronto, o **Gerador de galáxias** (intermediário, 10 passos), e os outros aparecem na lista como "em breve".
+A aba **Projetos** é um guia de projetos: cada projeto constrói uma cena completa do zero, em passos, e explica cada linha e o porquê de cada decisão. Os projetos se dividem em três níveis: **Fácil** (cena, malhas, materiais e luz), **Intermediário** (geometria feita à mão, milhares de objetos, curvas e animação) e **Avançado** (shaders). Por enquanto há um projeto pronto, o **Gerador de galáxias** (intermediário, 12 passos: 10 no VisuGraph e 2 no seu computador), e os outros aparecem na lista como "em breve".
 
 | Passo | O que entra |
 | --- | --- |
@@ -158,6 +158,8 @@ A aba **Projetos** é um guia de projetos: cada projeto constrói uma cena compl
 | 8. Cores | `lerpColors` do núcleo à borda e `vertexColors` |
 | 9. Movimento | `animar(tempo)` gira a galáxia |
 | 10. Céu estrelado | 2.000 estrelas à mesma distância, em direções sorteadas por igual, com o tamanho em pixels |
+| 11. No seu computador | o projeto Vite baixado, com Node.js e npm: `package.json`, `vite.config.js`, `index.html`, `src/cena.js` e o `src/main.js` com o renderer, o tamanho da janela, os `OrbitControls` e o laço de quadros |
+| 12. Um painel de controle | `npm install lil-gui`, a galáxia numa função que gera de novo, `dispose()` e um painel com `onFinishChange` |
 
 Cada passo tem:
 
@@ -172,7 +174,13 @@ A faixa acima do código mostra o projeto, o passo e quantas conferências já p
 - **Código e progresso**: cada projeto guarda o próprio código no navegador, separado do editor livre e dos desafios. Abrir um passo adiante leva o editor ao começo dele quando o código é o de um passo anterior do guia; voltar a um passo anterior mantém o código e avisa que o editor está adiantado. Os passos feitos e o passo aberto ficam guardados, e recarregar a página volta ao passo aberto. **← Todos os projetos** volta à lista e ao editor livre, e abrir o projeto de novo retoma o primeiro passo ainda não feito.
 - **Links**: `index-3d.html?projeto=galaxia` abre o projeto no passo aberto da última vez ou no primeiro ainda não feito, e `?projeto=galaxia&passo=4` (ou `&passo=disco`) abre um passo pelo número ou pelo nome. O parâmetro sai da URL ao abrir, como nos desafios. A seção **Projetos** da tela inicial mostra o projeto pronto, quantos passos já foram feitos e os níveis.
 
-Depois dos passos no navegador vem levar o projeto para o computador, com Node, Vite, `OrbitControls` e `lil-gui` (em breve).
+Os dois últimos passos são **no seu computador** (a bolinha deles na fila é tracejada): o projeto sai do VisuGraph e roda com Node.js. Eles não mudam o código do editor, que continua com a galáxia do passo 10 no visor, e não conferem a cena. No lugar do código e da conferência, cada um tem:
+
+- **No seu computador**: os passos no terminal, com os comandos (e um botão de copiar), o link para o capítulo [Seu computador](../computador.html) e o botão de baixar. No passo 11, **Baixar galaxia.zip** monta o projeto Vite com o código que está no editor, a galáxia de quem fez o projeto; no passo 12, **Baixar galaxia-painel.zip** traz o projeto pronto do passo, com o lil-gui, para comparar.
+- **Arquivo por arquivo**: cada arquivo do projeto, inteiro ou só o que muda nele (no passo 12, a diferença do `src/cena.js` ignora o recuo das linhas que entram na função), com as linhas explicadas embaixo. Passar o mouse numa explicação acende as linhas no arquivo.
+- **Confira no seu computador**: o que deve acontecer lá, e o botão **Funcionou no meu computador**, que marca o passo como feito. Um link leva aos problemas comuns do capítulo.
+
+O capítulo **Seu computador** (`computador.html`) ensina a instalar o Node.js em cada sistema, usar o terminal e o VS Code, rodar um projeto baixado, começar um do zero com `npm create vite` e resolver os problemas mais comuns (o PowerShell que bloqueia o npm, a página em branco aberta com dois cliques, a porta ocupada). A tela inicial liga para ele na seção Projetos.
 
 ## Modo de estudo
 
@@ -285,7 +293,10 @@ O gizmo anda em passos de 0,1 (mover e escalar) e de 5° (girar).
 
 ## Exportar
 
-**Copiar código** copia o texto do editor. **Baixar HTML** gera `cena-visugraph.html`, uma página que roda a cena sozinha, com o código exatamente como está no editor e a mesma função `animar()`. Ela carrega o Three.js 0.186.1 do jsDelivr, então precisa de internet para abrir.
+**Copiar código** copia o texto do editor. O menu **Baixar** tem duas saídas, com o nome do projeto quando um projeto está aberto (`galaxia.html`, `galaxia.zip`):
+
+- **Página HTML** gera `cena-visugraph.html`, uma página que roda a cena sozinha, com o código exatamente como está no editor e a mesma função `animar()`. Ela carrega o Three.js 0.186.1 do jsDelivr, então precisa de internet para abrir.
+- **Projeto Vite (.zip)** gera `cena-visugraph.zip`, um projeto para rodar com Node.js: `npm install` e `npm run dev` na pasta. O código do editor vai para `src/cena.js`, com `import * as THREE from "three"` no começo e o `export` da cena, da câmera e de `animar` no fim; o `src/main.js` faz o que o visor fazia (o renderer, o tamanho da janela, os `OrbitControls` e o laço que chama `animar(tempo, delta)`) e se ajusta ao código: cria uma câmera se não houver, liga as sombras se houver `castShadow`, usa o fundo do visor se a cena não tiver um e centra os controles no último `camera.lookAt(x, y, z)`. O `package.json` pede o three.js e o Vite nas versões deste site, e o `README.md` explica como rodar e publicar. O .zip não tem uma pasta por fora, para o "Extrair Tudo" do Windows não criar uma pasta dentro de outra.
 
 ## Para quem mexe no VisuGraph
 
@@ -302,6 +313,8 @@ src/live/app.js    liga editor, visor (bridge.js, via postMessage) e as abas do 
 src/live/projects/ o guia de projetos: os níveis, os projetos e a diferença entre passos (index.js),
                    cada projeto com os seus passos (galaxia.js) e as medidas da cena que as
                    conferências usam, como os braços de uma galáxia (checks.js)
+src/live/export.js a cena fora do VisuGraph: a página HTML e os arquivos do projeto Vite, que os
+                   passos no computador também mostram; src/lib/zip.js monta o .zip
 src/live/study.js  o modo de estudo e o registro de uso; studySummary.js e studyPage.js, o resumo
                    do estudo (estudo.html)
 src/lib/           as contas 3D da aba Matemática e da caixa de vidro (transform3d.js e phong3d.js)
@@ -309,4 +322,4 @@ src/lib/           as contas 3D da aba Matemática e da caixa de vidro (transfor
 
 A cada mudança no texto, `analyze()` lê o código e gera um id para cada `new THREE.X(...)`, com os trechos que o criam e alteram e, para cada propriedade, o literal que a define ou o motivo de não ser editável. `instrument()` acrescenta ao código, sem mudar as linhas, o registro de cada objeto criado e a verificação de tempo em cada laço. Uma edição pela cena vira `planEdit()` ou `planTransform()`, que devolvem as trocas de texto aplicadas no editor como uma transação comum (por isso `Ctrl+Z` desfaz). Durante um arraste, o visor muda a propriedade direto e o código é atualizado sem rodar; ao soltar, o código roda uma vez para confirmar que a cena é o que ele diz.
 
-Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node, o dos desafios resolve cada um com a cena de verdade, e o dos projetos confere que o código de cada passo passa nas conferências dele e que o código de antes não passa), e os da página em `tests/e2e/modo-3d.spec.js`, `matematica.spec.js` (as contas do painel contra o Three.js e contra os pixels da tela), `desafios.spec.js`, `projetos.spec.js`, `estudo.spec.js` e `resumo-estudo.spec.js`.
+Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node, o dos desafios resolve cada um com a cena de verdade, e o dos projetos confere que o código de cada passo passa nas conferências dele e que o código de antes não passa, que o projeto baixado tem os arquivos que os passos no computador explicam e que o `cena.js` do painel gera uma galáxia nova liberando a antiga), e os da página em `tests/e2e/modo-3d.spec.js`, `matematica.spec.js` (as contas do painel contra o Three.js e contra os pixels da tela), `desafios.spec.js`, `projetos.spec.js`, `estudo.spec.js` e `resumo-estudo.spec.js`.

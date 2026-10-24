@@ -39,6 +39,10 @@ describe("temas", () => {
     const cards = captures(html, /data-project="([\w-]+)"/g);
     expect(cards.length).toBeGreaterThan(0);
     for (const id of cards) expect(projectById(id), id).not.toBeNull();
+    for (const [, id, card] of html.matchAll(/<article class="project" data-project="([\w-]+)">([\s\S]*?)<\/article>/g)) {
+      const chips = captures(card.match(/<ul class="project__concepts"[^>]*>([\s\S]*?)<\/ul>/)[1], /<li>(.*?)<\/li>/g);
+      expect(chips, `os conceitos de ${id}`).toEqual(projectById(id).concepts);
+    }
     expect(captures(html, /<h3 id="level-([\w-]+)">/g)).toEqual(LEVELS.map((l) => l.id));
     for (const level of LEVELS) {
       expect(html, level.id).toContain(`<p>${level.about}</p>`);

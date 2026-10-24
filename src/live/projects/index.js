@@ -5,6 +5,11 @@
 // inteiro como fica no fim dele (`code`), o objetivo, a explicação linha a linha (`lines`), o
 // porquê das decisões (`why`), sugestões para mexer (`try`) e conferências da cena (`needs` e
 // `checks`, como nos desafios: src/live/challenges.js).
+//
+// Os últimos passos podem ser "no seu computador" (kind: "computador"): o projeto sai do VisuGraph
+// e roda com Node.js. Eles não mudam o código do editor nem conferem a cena; em vez disso têm os
+// comandos (`setup`), os arquivos do projeto explicados (`files`) e o que conferir lá
+// (`confirm`), e a pessoa diz que funcionou. O código deles é o do último passo no VisuGraph.
 
 import { GALAXIA } from "./galaxia.js";
 
@@ -55,6 +60,11 @@ export function stepIndex(project, step) {
 /** O código com que o passo começa: o do passo anterior, ou o de partida do projeto. */
 export const startCode = (project, index) => (index === 0 ? project.start : project.steps[index - 1].code);
 
+export const isComputer = (step) => step.kind === "computador";
+
+/** Os passos feitos no VisuGraph, que vêm antes dos passos no computador. */
+export const liveSteps = (project) => project.steps.filter((s) => !isComputer(s));
+
 const normalize = (code) =>
   code
     .split("\n")
@@ -64,13 +74,22 @@ const normalize = (code) =>
 
 /**
  * De qual passo o código é o fim, ignorando espaços no fim das linhas: 0 para o código de
- * partida, k para o fim do passo k, null se é outro código.
+ * partida, k para o fim do passo k, null se é outro código. Só os passos no VisuGraph contam.
  */
 export function guideStep(project, code) {
   const mine = normalize(code);
-  const ends = [project.start, ...project.steps.map((s) => s.code)];
+  const ends = [project.start, ...liveSteps(project).map((s) => s.code)];
   for (let k = ends.length - 1; k >= 0; k--) if (normalize(ends[k]) === mine) return k;
   return null;
+}
+
+/**
+ * Se o código é o fim de um passo do guia anterior ao começo do passo `index`: ao abrir o passo,
+ * o editor troca o código pelo começo dele (os passos no computador começam do último no VisuGraph).
+ */
+export function behind(project, index, code) {
+  const k = guideStep(project, code);
+  return k != null && k < Math.min(index, liveSteps(project).length);
 }
 
 /**
@@ -86,22 +105,26 @@ export function codeState(project, index, code) {
 
 /**
  * Diferença linha a linha entre dois textos, pela maior subsequência comum: uma lista de
- * { op, text }, com op "same", "del" (só no primeiro) ou "add" (só no segundo).
+ * { op, text }, com op "same", "del" (só no primeiro) ou "add" (só no segundo). Com
+ * `ignoreIndent`, uma linha que só mudou de recuo conta como igual, e aparece como no segundo.
  */
-export function diffLines(before, after) {
+export function diffLines(before, after, { ignoreIndent = false } = {}) {
   const a = before.replace(/\n$/, "").split("\n");
   const b = after.replace(/\n$/, "").split("\n");
+  const key = ignoreIndent ? (line) => line.trim() : (line) => line;
+  const ka = a.map(key);
+  const kb = b.map(key);
   // lcs[i][j]: tamanho da maior subsequência comum de a[i..] e b[j..]
   const lcs = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1));
   for (let i = a.length - 1; i >= 0; i--) {
-    for (let j = b.length - 1; j >= 0; j--) lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    for (let j = b.length - 1; j >= 0; j--) lcs[i][j] = ka[i] === kb[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
   }
   const out = [];
   let i = 0;
   let j = 0;
   while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      out.push({ op: "same", text: a[i] });
+    if (ka[i] === kb[j]) {
+      out.push({ op: "same", text: b[j] });
       i++;
       j++;
     } else if (lcs[i + 1][j] >= lcs[i][j + 1]) out.push({ op: "del", text: a[i++] });

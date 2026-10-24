@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Como rodar um projeto three.js no seu computador: instalar o Node.js, usar o terminal e o VS Code, rodar um projeto baixado do VisuGraph com o Vite e resolver os problemas mais comuns."
+    />
+    <title>Seu computador · VisuGraph</title>
+    <link rel="stylesheet" href="src/css/computador.css" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+
+  <body class="page-home page-guide">
+    <header class="home-top">
+      <a class="home-brand" href="./index.html" aria-label="VisuGraph, início">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>VisuGraph</span>
+      </a>
+      <nav class="home-nav" aria-label="Atalhos">
+        <a href="./index.html#projetos">Projetos</a>
+        <a href="./index-3d.html?livre">Editor livre</a>
+        <a href="https://github.com/AlbuquerqueMatheus/VisuGraph3D" rel="noopener">Código-fonte</a>
+      </nav>
+    </header>
+
+    <main class="guide">
+      <header class="guide-head">
+        <p class="home-kicker">Guia de projetos</p>
+        <h1>Seu computador</h1>
+        <p class="home-lead">
+          O que você faz no código vivo também roda no seu computador, com as ferramentas de quem faz sites com
+          three.js: o Node.js, um terminal, um editor de código e o Vite. Aqui está como instalar cada um, como rodar
+          um projeto baixado do VisuGraph e o que fazer quando algo dá errado.
+        </p>
+        <nav class="guide-toc" aria-label="Neste capítulo">
+          <a href="#ferramentas">O que você vai usar</a>
+          <a href="#node">Node.js</a>
+          <a href="#terminal">O terminal</a>
+          <a href="#editor">O editor</a>
+          <a href="#rodar">Rodar um projeto baixado</a>
+          <a href="#zero">Começar do zero</a>
+          <a href="#problemas">Problemas comuns</a>
+        </nav>
+      </header>
+
+      <section id="ferramentas" aria-labelledby="ferramentas-title">
+        <h2 id="ferramentas-title">O que você vai usar</h2>
+        <dl class="guide-tools">
+          <div>
+            <dt>Node.js</dt>
+            <dd>Roda JavaScript fora do navegador. Vem com o npm, que baixa bibliotecas como o three.js.</dd>
+          </div>
+          <div>
+            <dt>Um terminal</dt>
+            <dd>A janela onde se digitam os comandos, como <code>npm install</code>. Todo sistema já tem um.</dd>
+          </div>
+          <div>
+            <dt>VS Code</dt>
+            <dd>O editor de código, com um terminal dentro. Qualquer editor serve, mas este ajuda bastante.</dd>
+          </div>
+          <div>
+            <dt>Vite</dt>
+            <dd>
+              O servidor que mostra a página enquanto você programa e prepara o site para publicar. Não precisa
+              instalar: cada projeto traz o seu, pelo npm.
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="node" aria-labelledby="node-title">
+        <h2 id="node-title">Node.js</h2>
+        <p>
+          Baixe a versão <strong>LTS</strong> em <a href="https://nodejs.org" rel="noopener">nodejs.org</a>. LTS quer
+          dizer suporte de longo prazo: é a versão estável, a que recebe correções por mais tempo. Os projetos do
+          VisuGraph pedem a 22.12 ou mais nova.
+        </p>
+        <div class="guide-os">
+          <section aria-labelledby="node-windows">
+            <h3 id="node-windows">Windows</h3>
+            <p>
+              Baixe o instalador (o arquivo <code>.msi</code>) e avance com as opções que já vêm marcadas: elas põem o
+              <code>node</code> e o <code>npm</code> ao alcance do terminal.
+            </p>
+          </section>
+          <section aria-labelledby="node-mac">
+            <h3 id="node-mac">macOS</h3>
+            <p>
+              Baixe o instalador (o arquivo <code>.pkg</code>) e siga as telas. Quem usa o Homebrew pode instalar com
+              <code>brew install node</code>.
+            </p>
+          </section>
+          <section aria-labelledby="node-linux">
+            <h3 id="node-linux">Linux</h3>
+            <p>
+              O pacote da distribuição costuma ter uma versão antiga. A página de download do nodejs.org mostra os
+              comandos para instalar a LTS, por exemplo com o <code>nvm</code>, que instala o Node na sua pasta, sem
+              precisar de administrador.
+            </p>
+          </section>
+        </div>
+        <p>Depois de instalar, abra um terminal novo e confira:</p>
+        <pre class="guide-cmd"><code>node -v
+npm -v</code></pre>
+        <p>
+          Cada comando responde com um número de versão, como <code>v22.12.0</code>. Se a resposta for que o comando
+          não existe, veja os <a href="#problemas">problemas comuns</a>.
+        </p>
+      </section>
+
+      <section id="terminal" aria-labelledby="terminal-title">
+        <h2 id="terminal-title">O terminal</h2>
+        <p>
+          No Windows, procure <strong>Terminal</strong> (ou PowerShell) no menu Iniciar. No macOS, procure
+          <strong>Terminal</strong> no Spotlight (Cmd + Espaço). No Linux, Ctrl + Alt + T abre um na maioria das
+          distribuições. No VS Code, o menu Terminal → Novo Terminal abre um dentro do editor.
+        </p>
+        <p>
+          O terminal está sempre dentro de uma pasta, e os comandos rodam nela. Quando abre, ele começa na sua pasta de
+          usuário. Os comandos para andar entre as pastas:
+        </p>
+        <dl class="guide-keys">
+          <div>
+            <dt><code>cd galaxia</code></dt>
+            <dd>entra na pasta <code>galaxia</code>; <code>cd ..</code> volta uma pasta</dd>
+          </div>
+          <div>
+            <dt><code>ls</code></dt>
+            <dd>lista o que há na pasta (no Prompt de Comando do Windows, <code>dir</code>)</dd>
+          </div>
+          <div>
+            <dt><code>pwd</code></dt>
+            <dd>mostra em que pasta você está</dd>
+          </div>
+          <div>
+            <dt>Tab</dt>
+            <dd>completa o nome de uma pasta ou arquivo começado</dd>
+          </div>
+          <div>
+            <dt>↑</dt>
+            <dd>traz de volta o comando anterior</dd>
+          </div>
+          <div>
+            <dt>Ctrl + C</dt>
+            <dd>interrompe o que está rodando, como o servidor do Vite</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="editor" aria-labelledby="editor-title">
+        <h2 id="editor-title">O editor</h2>
+        <p>
+          O <a href="https://code.visualstudio.com" rel="noopener">VS Code</a> é gratuito e funciona nos três sistemas.
+          Ele colore o código, completa os nomes do three.js enquanto você digita e tem um terminal embutido.
+        </p>
+        <p>
+          Para trabalhar num projeto, abra a pasta inteira (Arquivo → Abrir Pasta), e não um arquivo solto: assim o
+          editor enxerga todos os arquivos, e o terminal dele já começa na pasta do projeto.
+        </p>
+      </section>
+
+      <section id="rodar" aria-labelledby="rodar-title">
+        <h2 id="rodar-title">Rodar um projeto baixado</h2>
+        <ol class="guide-steps">
+          <li>
+            No código vivo, use <strong>Baixar → Projeto Vite (.zip)</strong> na barra de ferramentas, ou o botão de
+            baixar de um passo de projeto.
+          </li>
+          <li>
+            Descompacte o arquivo. No Windows, clique nele com o botão direito e escolha <strong>Extrair Tudo</strong>:
+            abrir o .zip com dois cliques só mostra o que tem dentro, e os comandos não funcionam lá.
+          </li>
+          <li>Abra a pasta que saiu do .zip no VS Code, e o terminal dele.</li>
+          <li>
+            Instale as bibliotecas que o projeto pede. Elas vão para a pasta <code>node_modules</code>; só é preciso
+            rodar de novo quando o <code>package.json</code> mudar.
+            <pre class="guide-cmd"><code>npm install</code></pre>
+          </li>
+          <li>
+            Ligue o servidor. Ele mostra o endereço da página, <code>http://localhost:5173</code>: abra no navegador.
+            Deixe o terminal aberto enquanto programa, porque cada arquivo salvo atualiza a página. Ctrl + C desliga.
+            <pre class="guide-cmd"><code>npm run dev</code></pre>
+          </li>
+        </ol>
+
+        <h3>Os arquivos do projeto</h3>
+        <dl class="guide-files">
+          <div>
+            <dt><code>index.html</code></dt>
+            <dd>a página, com o <code>&lt;canvas&gt;</code> onde a cena aparece</dd>
+          </div>
+          <div>
+            <dt><code>src/cena.js</code></dt>
+            <dd>a cena, com o código escrito no VisuGraph</dd>
+          </div>
+          <div>
+            <dt><code>src/main.js</code></dt>
+            <dd>o que o visor do VisuGraph fazia: o renderer, o tamanho da janela, os controles do mouse e o laço que desenha cada quadro</dd>
+          </div>
+          <div>
+            <dt><code>package.json</code></dt>
+            <dd>o nome do projeto, os comandos e as bibliotecas, com as versões</dd>
+          </div>
+          <div>
+            <dt><code>vite.config.js</code></dt>
+            <dd>a configuração do Vite para publicar</dd>
+          </div>
+          <div>
+            <dt><code>node_modules</code></dt>
+            <dd>as bibliotecas baixadas pelo npm; não se edita, e o <code>npm install</code> refaz</dd>
+          </div>
+        </dl>
+
+        <h3>Publicar</h3>
+        <pre class="guide-cmd"><code>npm run build
+npm run preview</code></pre>
+        <p>
+          O <code>npm run build</code> gera a pasta <code>dist</code>, com o site pronto, e o
+          <code>npm run preview</code> mostra essa versão antes de publicar. Para pôr no ar, envie o conteúdo da pasta
+          <code>dist</code> a uma hospedagem de sites estáticos, como o GitHub Pages ou o Netlify (no Netlify, dá até
+          para arrastar a pasta para a página).
+        </p>
+      </section>
+
+      <section id="zero" aria-labelledby="zero-title">
+        <h2 id="zero-title">Começar do zero</h2>
+        <p>
+          Os projetos baixados do VisuGraph são projetos Vite comuns. Para criar um novo, sem baixar nada, o próprio
+          Vite monta a estrutura:
+        </p>
+        <pre class="guide-cmd"><code>npm create vite@latest minha-cena -- --template vanilla
+cd minha-cena
+npm install
+npm install three
+npm run dev</code></pre>
+        <p>
+          Se ele perguntar se deve instalar e começar agora (<em>Install and start now?</em>), responda que não, para
+          seguir os comandos acima. O modelo <code>vanilla</code> é JavaScript puro, sem frameworks, e vem com um exemplo de contador no
+          <code>src/main.js</code>. É ali que entra a cena, como no <code>main.js</code> e no <code>cena.js</code> de um
+          projeto baixado.
+        </p>
+      </section>
+
+      <section id="problemas" aria-labelledby="problemas-title">
+        <h2 id="problemas-title">Problemas comuns</h2>
+        <div class="guide-faq">
+          <details>
+            <summary>“node não é reconhecido como comando” ou “command not found: node”</summary>
+            <p>
+              O terminal não acha o Node. Feche e abra o terminal (e o VS Code) depois de instalar: um terminal aberto
+              antes da instalação não fica sabendo dela. Se continuar, instale de novo, com as opções que vêm marcadas.
+            </p>
+          </details>
+          <details>
+            <summary>No PowerShell: “a execução de scripts foi desabilitada neste sistema”</summary>
+            <p>
+              O Windows bloqueia por padrão os scripts que o npm usa no PowerShell. Rode uma vez o comando abaixo, que
+              libera os scripts criados no computador para o seu usuário, e abra o terminal de novo. Outra saída é usar
+              o Prompt de Comando (cmd) em vez do PowerShell.
+            </p>
+            <pre class="guide-cmd"><code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code></pre>
+          </details>
+          <details>
+            <summary>“ENOENT” e “package.json” no erro do npm</summary>
+            <p>
+              O terminal não está na pasta do projeto. Rode <code>ls</code> e veja se o <code>package.json</code>
+              aparece; se não, entre na pasta certa com <code>cd</code>. Se dentro da pasta houver outra com o mesmo
+              nome, entre nela também.
+            </p>
+          </details>
+          <details>
+            <summary>A página fica em branco ao abrir o index.html com dois cliques</summary>
+            <p>
+              Aberta direto do disco (um endereço <code>file://</code>), a página não carrega módulos. Abra pelo
+              endereço que o <code>npm run dev</code> mostra, <code>http://localhost:5173</code>.
+            </p>
+          </details>
+          <details>
+            <summary>“Port 5173 is in use”</summary>
+            <p>
+              Não é um erro: outro servidor, talvez de outro terminal, já usa a porta, e o Vite pega a seguinte. Use o
+              endereço que ele mostrar, ou desligue o outro servidor com Ctrl + C.
+            </p>
+          </details>
+          <details>
+            <summary>A página abre, mas a cena não aparece</summary>
+            <p>
+              Abra o console do navegador (F12, aba Console): o erro diz o arquivo e a linha. Os mais comuns são um
+              nome digitado errado (<code>ReferenceError: … is not defined</code>) e um <code>import</code> com o
+              caminho errado. Erros de sintaxe, o Vite mostra por cima da própria página.
+            </p>
+          </details>
+          <details>
+            <summary>O npm install falha ou não termina</summary>
+            <p>
+              Ele precisa de internet para baixar as bibliotecas. Tente de novo; numa rede com proxy, como a de algumas
+              empresas e universidades, o npm precisa ser configurado para ela.
+            </p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="home-foot">
+      <p>
+        VisuGraph é código aberto, no
+        <a href="https://github.com/AlbuquerqueMatheus/VisuGraph3D" rel="noopener">GitHub</a>. Feito com Three.js,
+        CodeMirror e p5.js.
+      </p>
+    </footer>
+  </body>
+</html>

@@ -37,7 +37,17 @@
         <span class="lv-sep" aria-hidden="true"></span>
 
         <button type="button" id="lv-copy">Copiar código</button>
-        <button type="button" id="lv-download" title="Página HTML que roda a cena sozinha">Baixar HTML</button>
+        <details class="lv-menu" id="lv-download">
+          <summary title="Leve a cena para fora do VisuGraph">Baixar</summary>
+          <div class="lv-menu__list lv-menu__list--end" role="menu" aria-label="Baixar a cena">
+            <button type="button" role="menuitem" data-download="html">
+              Página HTML <span class="lv-menu__about">um arquivo que abre no navegador</span>
+            </button>
+            <button type="button" role="menuitem" data-download="vite">
+              Projeto Vite (.zip) <span class="lv-menu__about">para rodar com Node.js no seu computador</span>
+            </button>
+          </div>
+        </details>
         <button type="button" id="lv-reset" title="Volta ao código inicial (Ctrl+Z desfaz)">Restaurar exemplo</button>
       </div>
     </header>

@@ -1,4 +1,5 @@
-// galaxia.js — o projeto "Gerador de galáxias": 50 mil estrelas num objeto só, em 10 passos.
+// galaxia.js — o projeto "Gerador de galáxias": 50 mil estrelas num objeto só, em 10 passos no
+// VisuGraph e 2 no seu computador, com Node.js, Vite, OrbitControls e lil-gui.
 //
 // O código de cada passo sai de codeAt(n), que monta o texto linha a linha: cada linha diz a
 // partir de qual passo aparece (`from`) ou como muda de um passo para outro (`by`). Assim o
@@ -7,6 +8,7 @@
 // `after`, quando o trecho se repete).
 
 import { armsOf, check, extent, fmt, int, luminance, maxRadius, radius } from "./checks.js";
+import { VERSIONS, cenaJs, indexHtml, mainJs, packageJson, viteConfig } from "../export.js";
 
 /** Linhas que existem a partir do passo n. */
 const from = (n, ...lines) => ({ from: n, lines });
@@ -141,13 +143,495 @@ function meanColor(obj, pick) {
 }
 
 // ---------------------------------------------------------------------------
+// No seu computador: o projeto Vite que o Baixar projeto monta (src/live/export.js), com o
+// código do fim do passo 10 em src/cena.js. Os arquivos mostrados saem das mesmas funções.
+
+const END = codeAt(10);
+const OPTIONS = { scene: "cena", camera: "camera", perspective: true, animar: true, background: true, shadows: false, target: null };
+const CENA = cenaJs(END, OPTIONS);
+
+/** O src/cena.js do passo 12: a galáxia numa função, gerada de novo pelo painel do lil-gui. */
+const PAINEL = `import * as THREE from "three";
+import GUI from "lil-gui";
+
+// Gerador de galáxias
+
+const cena = new THREE.Scene();
+cena.background = new THREE.Color("#05060a");
+
+const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 100);
+camera.position.set(0, 8, 14);
+camera.lookAt(0, 0, 0);
+
+// Parâmetros da galáxia
+const parametros = {
+  quantidade: 50000,
+  raio: 5,
+  bracos: 3,
+  curvatura: 1,
+  dispersao: 0.3,
+  corNucleo: "#ffb46b",
+  corBorda: "#4b6bff",
+};
+
+// Um número sorteado em torno de 0, com a distribuição normal (a curva do sino)
+function gaussiana() {
+  const u = 1 - Math.random(); // nunca 0: o logaritmo de 0 não existe
+  const v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+let galaxia = null;
+
+// Monta a galáxia com os parâmetros de agora, no lugar da que havia
+function gerarGalaxia() {
+  if (galaxia) {
+    galaxia.geometry.dispose();
+    galaxia.material.dispose();
+    cena.remove(galaxia);
+  }
+
+  const { quantidade, raio, bracos, curvatura, dispersao } = parametros;
+  const corNucleo = new THREE.Color(parametros.corNucleo);
+  const corBorda = new THREE.Color(parametros.corBorda);
+
+  const posicoes = new Float32Array(quantidade * 3);
+  const cores = new Float32Array(quantidade * 3);
+  const cor = new THREE.Color();
+
+  for (let i = 0; i < quantidade; i++) {
+    const i3 = i * 3;
+    const r = Math.random() * raio;
+    const braco = i % bracos;
+    const angulo = (braco / bracos) * Math.PI * 2 + r * curvatura;
+
+    posicoes[i3] = Math.cos(angulo) * r + gaussiana() * dispersao;
+    posicoes[i3 + 1] = gaussiana() * dispersao * 0.3;
+    posicoes[i3 + 2] = Math.sin(angulo) * r + gaussiana() * dispersao;
+
+    cor.lerpColors(corNucleo, corBorda, r / raio);
+    cores[i3] = cor.r;
+    cores[i3 + 1] = cor.g;
+    cores[i3 + 2] = cor.b;
+  }
+
+  const geometria = new THREE.BufferGeometry();
+  geometria.setAttribute("position", new THREE.BufferAttribute(posicoes, 3));
+  geometria.setAttribute("color", new THREE.BufferAttribute(cores, 3));
+
+  const material = new THREE.PointsMaterial({
+    size: 0.03,
+    sizeAttenuation: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    vertexColors: true,
+  });
+
+  galaxia = new THREE.Points(geometria, material);
+  cena.add(galaxia);
+}
+
+gerarGalaxia();
+
+// O painel: cada controle muda um parâmetro e, ao soltar, gera a galáxia de novo
+const painel = new GUI({ title: "Galáxia" });
+painel.add(parametros, "quantidade", 1000, 200000, 1000).onFinishChange(gerarGalaxia);
+painel.add(parametros, "raio", 1, 20, 0.1).onFinishChange(gerarGalaxia);
+painel.add(parametros, "bracos", 1, 10, 1).name("braços").onFinishChange(gerarGalaxia);
+painel.add(parametros, "curvatura", -5, 5, 0.01).onFinishChange(gerarGalaxia);
+painel.add(parametros, "dispersao", 0, 2, 0.01).name("dispersão").onFinishChange(gerarGalaxia);
+painel.addColor(parametros, "corNucleo").name("cor do núcleo").onFinishChange(gerarGalaxia);
+painel.addColor(parametros, "corBorda").name("cor da borda").onFinishChange(gerarGalaxia);
+
+// O céu: estrelas longe, espalhadas por igual em todas as direções
+const quantidadeEstrelas = 2000;
+const posicoesCeu = new Float32Array(quantidadeEstrelas * 3);
+const direcao = new THREE.Vector3();
+
+for (let i = 0; i < quantidadeEstrelas; i++) {
+  direcao.set(gaussiana(), gaussiana(), gaussiana()).normalize().multiplyScalar(40);
+  direcao.toArray(posicoesCeu, i * 3);
+}
+
+const geometriaCeu = new THREE.BufferGeometry();
+geometriaCeu.setAttribute("position", new THREE.BufferAttribute(posicoesCeu, 3));
+
+const materialCeu = new THREE.PointsMaterial({
+  color: "#9aa4c7",
+  size: 1.5,
+  sizeAttenuation: false,
+  blending: THREE.AdditiveBlending,
+});
+
+const ceu = new THREE.Points(geometriaCeu, materialCeu);
+cena.add(ceu);
+
+function animar(tempo) {
+  galaxia.rotation.y = tempo * 0.1;
+}
+
+// O main.js importa daqui a cena, a câmera e a função animar()
+export { cena, camera, animar };
+`;
+
+const COMPUTER = [
+  {
+    id: "computador",
+    title: "No seu computador",
+    kind: "computador",
+    view: "camera",
+    goal:
+      "Até aqui, o VisuGraph fazia uma parte do trabalho por você: criava o renderer, ajustava o desenho ao tamanho do visor, girava a vista com o mouse e chamava `animar` a cada quadro. Neste passo, a galáxia vira um projeto no seu computador, com o Node.js e o Vite, as ferramentas de quem faz sites com three.js. O código da cena vai quase igual para o arquivo `src/cena.js`, e o que o VisuGraph fazia fica escrito no `src/main.js`, junto com os OrbitControls, que giram a câmera com o mouse.",
+    setup: [
+      {
+        text: "Instale o Node.js, versão 22.12 ou mais nova (a LTS do site nodejs.org serve). Ele roda JavaScript fora do navegador e traz o npm, que baixa as bibliotecas. Para conferir, abra um terminal e rode os dois comandos: cada um responde com um número de versão.",
+        commands: ["node -v", "npm -v"],
+        link: { href: "./computador.html#node", text: "Como instalar o Node.js e abrir o terminal" },
+      },
+      {
+        text: "Baixe o projeto. Ele leva o código que está no editor, a sua galáxia, com os arquivos de um projeto Vite em volta.",
+        download: { file: "galaxia.zip" },
+      },
+      {
+        text: "Descompacte o arquivo: sai a pasta `galaxia`. Abra essa pasta no VS Code (Arquivo → Abrir Pasta) e abra o terminal dele (Terminal → Novo Terminal), que já começa dentro da pasta. Num terminal fora do VS Code, entre na pasta com `cd`, o comando que troca a pasta onde os outros rodam:",
+        commands: ["cd Downloads/galaxia"],
+      },
+      {
+        text: "Instale as bibliotecas que o `package.json` pede, o three.js e o Vite. Elas vão para uma pasta nova, `node_modules`; na primeira vez, leva um minuto.",
+        commands: ["npm install"],
+      },
+      {
+        text: "Ligue o servidor do Vite. Ele mostra o endereço da página, http://localhost:5173: abra no navegador. O terminal fica ocupado com o servidor enquanto ele roda; para desligar, aperte Ctrl+C.",
+        commands: ["npm run dev"],
+      },
+    ],
+    files: [
+      {
+        path: "package.json",
+        about: "A ficha do projeto: o nome, os comandos e as bibliotecas. É o arquivo que o npm lê.",
+        code: packageJson("galaxia"),
+        lines: [
+          {
+            code: '"type": "module",',
+            text: "Os arquivos `.js` do projeto são módulos: usam `import` e `export` para um arquivo usar o que outro oferece.",
+          },
+          {
+            code: '"dev": "vite",',
+            text: "`npm run dev` roda o comando `vite`, que liga o servidor. `build` e `preview` são para publicar o site, no Experimente.",
+          },
+          {
+            code: `"three": "${VERSIONS.three}"`,
+            text: "O three.js, na versão em que o projeto foi testado. O `^` aceita as correções (0.186.2, 0.186.3), mas não a 0.187: no three.js, cada versão nova pode mudar coisas, e uma atualização sem querer quebraria o código.",
+          },
+          {
+            code: `"vite": "${VERSIONS.vite}"`,
+            text: "O Vite fica em `devDependencies`: é uma ferramenta para desenvolver e não vai para a página publicada. O three.js fica em `dependencies` porque vai: o código da galáxia precisa dele no navegador.",
+          },
+        ],
+      },
+      {
+        path: "vite.config.js",
+        about: "A configuração do Vite. Para o servidor, nada precisa mudar; as duas opções são para o `npm run build`.",
+        code: viteConfig(),
+        lines: [
+          {
+            code: 'base: "./",',
+            text: "Os caminhos dos arquivos ficam relativos à página. Sem isso, a página publicada procura os arquivos na raiz do site e fica em branco numa subpasta, como a do GitHub Pages (`seu-nome.github.io/galaxia/`).",
+          },
+          {
+            code: "chunkSizeWarningLimit: 1000,",
+            text: "O Vite avisa quando um arquivo passa de 500 kB, porque um site pesado demora a abrir. O three.js sozinho tem uns 550 kB (uns 140 kB, comprimido pelo servidor), e aqui isso é esperado.",
+          },
+        ],
+      },
+      {
+        path: "index.html",
+        about: "A página que o navegador abre. Ela só tem o canvas, onde a cena aparece, e chama o `main.js`.",
+        code: indexHtml("Gerador de galáxias"),
+        lines: [
+          {
+            code: '<canvas id="visor"></canvas>',
+            text: "A tela de desenho. O CSS do `<style>` faz o canvas ocupar a janela inteira, e o `id` é como o `main.js` encontra ele.",
+          },
+          {
+            code: '<script type="module" src="/src/main.js"></script>',
+            text: 'Carrega o `main.js` como módulo, o que permite `import`. O Vite entrega esse arquivo ao navegador já trocando o `"three"` dos imports pelo caminho do three.js na `node_modules`, o que o navegador sozinho não sabe fazer.',
+          },
+        ],
+      },
+      {
+        path: "src/cena.js",
+        about: "O código do editor, com duas linhas a mais no começo e duas no fim.",
+        from: END,
+        code: CENA,
+        lines: [
+          {
+            code: 'import * as THREE from "three";',
+            text: "No VisuGraph, `THREE` já existia. Aqui, o arquivo importa o three.js com esse nome: `* as THREE` junta tudo o que a biblioteca exporta num objeto só, e o resto do código continua igual.",
+          },
+          {
+            code: "export { cena, camera, animar };",
+            text: "Deixa o `main.js` usar a cena, a câmera e a função `animar`. O que um módulo não exporta fica só dele: `galaxia`, `gaussiana` e o resto continuam visíveis só aqui dentro.",
+          },
+        ],
+      },
+      {
+        path: "src/main.js",
+        about: "O que o visor do VisuGraph fazia por você, agora escrito.",
+        code: mainJs(OPTIONS),
+        lines: [
+          {
+            code: 'import { OrbitControls } from "three/addons/controls/OrbitControls.js";',
+            text: "Os OrbitControls não vêm no `THREE`: ficam nos complementos (addons) do three.js, com carregadores de modelos, efeitos e outros controles. Cada complemento é importado do seu arquivo, e só o que é importado vai para a página.",
+          },
+          {
+            code: 'import { cena, camera, animar } from "./cena.js";',
+            text: 'Pega o que o `cena.js` exporta. O `./` diz que é um arquivo do projeto, na mesma pasta; sem ele, como em `"three"`, o nome é de uma biblioteca da `node_modules`.',
+          },
+          {
+            code: "const renderizador = new THREE.WebGLRenderer({ canvas, antialias: true });",
+            text: "O renderer do passo 1, que o VisuGraph criava: transforma a cena em pixels no canvas, pelo WebGL. `antialias` suaviza as bordas serrilhadas.",
+          },
+          {
+            code: "renderizador.setPixelRatio(Math.min(window.devicePixelRatio, 2));",
+            text: "Em telas de alta densidade, cada ponto da página tem 2 ou 3 pixels de verdade. O desenho acompanha até 2: fica nítido sem pintar 9 pixels por ponto numa tela de celular.",
+          },
+          {
+            code: "renderizador.setSize(largura, altura, false);",
+            text: "Ajusta o número de pixels do desenho ao tamanho do canvas na página. O `false` deixa o tamanho na tela por conta do CSS.",
+          },
+          {
+            code: "camera.aspect = largura / altura;",
+            text: "A proporção da câmera acompanha a da janela, senão a galáxia sai esticada ou achatada. É o que o visor fazia com o `16 / 9` do passo 1.",
+          },
+          {
+            code: "camera.updateProjectionMatrix();",
+            text: "A câmera guarda a matriz de projeção já calculada. Depois de mudar `aspect`, `fov`, `near` ou `far`, é preciso pedir a conta de novo.",
+          },
+          {
+            code: 'window.addEventListener("resize", redimensionar);',
+            text: "Chama `redimensionar` sempre que a janela muda de tamanho. A linha de baixo chama uma vez já no começo.",
+          },
+          {
+            code: "const controles = new OrbitControls(camera, canvas);",
+            text: "Liga os controles à câmera e ao canvas: arrastar gira a câmera em volta de um centro, a roda aproxima e o botão direito desloca a vista. Eles mudam a posição da câmera, como o seu `camera.position.set` fazia.",
+          },
+          {
+            code: "controles.enableDamping = true;",
+            text: "Dá inércia: ao soltar o mouse, a câmera ainda anda um pouco e para devagar.",
+          },
+          {
+            code: "const relogio = new THREE.Timer();",
+            text: "Mede o tempo que passa entre um quadro e o seguinte.",
+          },
+          {
+            code: "renderizador.setAnimationLoop((agora) => {",
+            text: "Chama a função a cada quadro da tela, em geral 60 vezes por segundo, e para enquanto a aba está escondida. `agora` é o instante do quadro, em milissegundos.",
+          },
+          {
+            code: "const delta = Math.min(relogio.getDelta(), 0.1);",
+            text: "Os segundos desde o quadro anterior, com um teto de 0,1. Com a aba escondida, o laço para; na volta, sem o teto, o primeiro `delta` seria de minutos, e a galáxia daria um salto.",
+          },
+          {
+            code: "animar(tempo, delta);",
+            text: "A sua função do passo 9, chamada como o VisuGraph chamava: com o tempo em segundos e o `delta`.",
+          },
+          {
+            code: "controles.update();",
+            text: "Com a inércia ligada, os controles precisam andar um pouco a cada quadro, mesmo com o mouse parado.",
+          },
+          {
+            code: "renderizador.render(cena, camera);",
+            text: "Desenha a cena vista pela câmera: é esta linha que faz a imagem aparecer, a cada quadro.",
+          },
+        ],
+      },
+    ],
+    why: [
+      {
+        title: "Por que um servidor, e não abrir o index.html com dois cliques?",
+        text: 'Aberta direto do disco (um endereço `file://`), a página não carrega módulos: o navegador bloqueia por segurança. E ele não saberia o que é `"three"` num `import`, porque o nome de uma biblioteca não é um endereço. O Vite serve a página por `http://localhost`, como um site de verdade, e troca esses nomes pelo arquivo certo na `node_modules`. A página do Baixar HTML resolve isso de outro jeito: um mapa de imports aponta `"three"` para um endereço na internet.',
+      },
+      {
+        title: "Por que o Vite?",
+        text: "Ele faz duas coisas. No desenvolvimento, serve os arquivos e recarrega a página a cada arquivo salvo. Para publicar, o `npm run build` junta o seu código e a parte do three.js que ele usa num arquivo só, menor, na pasta `dist`. É a ferramenta que o manual de instalação do three.js usa; outras, como o webpack e o Parcel, fazem o mesmo papel.",
+      },
+      {
+        title: "Por que a cena num arquivo e o resto noutro?",
+        text: "O `cena.js` é a cena, que muda o tempo todo; o `main.js` é a máquina em volta dela, que quase nunca muda. Separados, dá para colar ali outro código vindo do VisuGraph sem mexer no resto, e o mesmo `main.js` serve para outras cenas.",
+      },
+      {
+        title: "Por que os controles mexem na câmera, e não na galáxia?",
+        text: "Girar a câmera em volta da galáxia e girar a galáxia na frente da câmera dão a mesma imagem. Os OrbitControls mudam só a câmera, então a cena continua do jeito que o seu código deixou: a galáxia ainda gira pelo `animar`, enquanto o mouse leva a câmera para onde você quiser.",
+      },
+    ],
+    try: [
+      "No `main.js`, depois do `enableDamping`, acrescente `controles.autoRotate = true;`: a câmera passa a dar voltas sozinha, e o mouse continua funcionando.",
+      "Limite a distância da câmera com `controles.minDistance = 5;` e `controles.maxDistance = 30;`.",
+      "Mude `bracos` no `src/cena.js` e salve: a página recarrega sozinha, sem rodar nada no terminal.",
+      "Desligue o servidor (Ctrl+C) e rode `npm run build` e depois `npm run preview`: é o site pronto para publicar, na pasta `dist`.",
+    ],
+    confirm: [
+      "O terminal mostra o endereço http://localhost:5173, e a galáxia aparece nele, girando",
+      "Arrastar com o mouse gira a câmera em volta da galáxia, e a roda aproxima",
+      "Mudar um número no `src/cena.js` e salvar atualiza a página sozinho",
+    ],
+  },
+  {
+    id: "painel",
+    title: "Um painel de controle",
+    kind: "computador",
+    view: "camera",
+    goal:
+      "Até agora, cada número da galáxia estava escrito no código: para ver 5 braços, era preciso editar e salvar. Neste passo, um painel no canto da página muda os parâmetros com o mouse, e a galáxia é gerada de novo a cada mudança. O painel vem do lil-gui, uma biblioteca que você instala com o npm. Para gerar de novo, a construção da galáxia vira uma função, e a galáxia antiga precisa sair da cena e devolver a memória que ocupava na placa de vídeo.",
+    setup: [
+      {
+        text: "Num segundo terminal (no VS Code, o + do painel do terminal), dentro da pasta `galaxia`, instale o lil-gui. O servidor do primeiro terminal pode continuar ligado.",
+        commands: ["npm install lil-gui"],
+      },
+      {
+        text: "Faça no `src/cena.js` as mudanças abaixo e salve: a página recarrega com o painel. Para comparar, ou se algo não funcionar, baixe o projeto pronto deste passo.",
+        download: { file: "galaxia-painel.zip", cena: PAINEL, extra: ["lil-gui"] },
+      },
+    ],
+    files: [
+      {
+        path: "package.json",
+        about: "O `npm install lil-gui` baixa a biblioteca para a `node_modules` e acrescenta uma linha às dependências, na ordem alfabética.",
+        from: packageJson("galaxia"),
+        code: packageJson("galaxia", ["lil-gui"]),
+        lines: [
+          {
+            code: `"lil-gui": "${VERSIONS["lil-gui"]}",`,
+            text: "Com a linha no `package.json`, quem baixar o projeto e rodar `npm install` recebe o lil-gui junto, sem precisar saber que ele existe.",
+          },
+        ],
+      },
+      {
+        path: "src/cena.js",
+        about: "As linhas de antes que entram na função `gerarGalaxia` também ganham dois espaços de recuo, o que a lista não mostra. O JavaScript não liga para o recuo, mas ele mostra o que está dentro da função: no VS Code, selecione as linhas e aperte Tab.",
+        from: CENA,
+        code: PAINEL,
+        ignoreIndent: true,
+        lines: [
+          {
+            code: 'import GUI from "lil-gui";',
+            text: "O lil-gui exporta a classe `GUI` como padrão (`export default`), então o import vai sem chaves, e o nome é escolha de quem importa.",
+          },
+          {
+            code: "const parametros = {",
+            text: 'Os parâmetros viram propriedades de um objeto. O painel muda uma propriedade pelo nome (`"raio"`), e não teria como mudar uma variável `const`.',
+          },
+          {
+            code: "let galaxia = null;",
+            text: "A galáxia agora é trocada a cada mudança, então a variável é `let`. Ela fica fora da função para `animar` achar sempre a galáxia da vez, e começa `null`: ainda não há galáxia.",
+          },
+          {
+            code: "function gerarGalaxia() {",
+            text: "Tudo o que monta a galáxia entra numa função, para rodar de novo a cada mudança no painel.",
+          },
+          {
+            code: "galaxia.geometry.dispose();",
+            text: "Libera a memória da placa de vídeo ocupada pelas posições e cores da galáxia antiga. O coletor de lixo do JavaScript não alcança essa memória: sem o `dispose`, cada galáxia nova deixaria a antiga ocupando a placa.",
+          },
+          {
+            code: "galaxia.material.dispose();",
+            text: "O mesmo para o material.",
+          },
+          {
+            code: "cena.remove(galaxia);",
+            text: "Tira a galáxia antiga da cena: o contrário de `cena.add`.",
+          },
+          {
+            code: "const { quantidade, raio, bracos, curvatura, dispersao } = parametros;",
+            text: "Desestruturação: cria constantes com os nomes das propriedades e os valores de agora. Assim o laço de baixo continua igual, lendo `raio` e `bracos`.",
+          },
+          {
+            code: "const corNucleo = new THREE.Color(parametros.corNucleo);",
+            text: 'O painel guarda as cores como texto, `"#ffb46b"`, que é o que o seletor de cor entende; `THREE.Color` converte.',
+          },
+          {
+            code: "galaxia = new THREE.Points(geometria, material);",
+            text: "Sem `const`: guarda a galáxia nova na variável de fora, a que `animar` gira.",
+          },
+          {
+            code: "gerarGalaxia();",
+            after: "\n}\n",
+            text: "A primeira galáxia, com os valores iniciais.",
+          },
+          {
+            code: 'const painel = new GUI({ title: "Galáxia" });',
+            text: "Cria o painel, no canto de cima da página, à direita.",
+          },
+          {
+            code: 'painel.add(parametros, "quantidade", 1000, 200000, 1000)',
+            text: "Um controle deslizante para a propriedade `quantidade`, com o mínimo, o máximo e o passo. O passo de 1.000 deixa a quantidade sempre inteira, como `Float32Array` precisa.",
+          },
+          {
+            code: ".onFinishChange(gerarGalaxia)",
+            after: "painel.add(",
+            text: "Chama `gerarGalaxia` quando a pessoa solta o controle. Repare que vai `gerarGalaxia`, sem parênteses: a própria função, para o painel chamar depois, e não o resultado dela.",
+          },
+          {
+            code: '.name("braços")',
+            text: "O nome que aparece no painel. A propriedade continua `bracos`, sem acento, como as variáveis.",
+          },
+          {
+            code: 'painel.addColor(parametros, "corNucleo")',
+            text: "Um seletor de cor, que troca o texto da cor no objeto.",
+          },
+        ],
+      },
+    ],
+    why: [
+      {
+        title: "Por que o dispose()?",
+        text: "As posições e cores de 50 mil estrelas ocupam 1,2 MB na placa de vídeo, fora do alcance do coletor de lixo do JavaScript: o three.js só libera essa memória quando você chama `dispose()`. Sem ele, a página funciona, mas cada galáxia gerada deixa a anterior ocupando a placa, e depois de muitas mudanças a página fica lenta.",
+      },
+      {
+        title: "Por que onFinishChange, e não onChange?",
+        text: "O `onChange` chama a função a cada movimento do mouse, dezenas de vezes por segundo. Gerar 50 mil estrelas leva alguns centésimos de segundo, e 200 mil, bem mais: arrastando, a página engasgaria. Com o `onFinishChange`, a galáxia é gerada uma vez, quando a pessoa solta.",
+      },
+      {
+        title: "Por que um objeto de parâmetros?",
+        text: "O lil-gui precisa de um objeto e do nome da propriedade para ler e mudar o valor. Com todos os parâmetros num lugar só, também dá para guardar uma galáxia de que você gostou: `painel.save()` devolve os valores de todos os controles, e `painel.load()` traz de volta.",
+      },
+      {
+        title: "Por que o lil-gui?",
+        text: "Ele é pequeno, não depende de outras bibliotecas e é o que os exemplos do three.js usam (ele substituiu o antigo dat.GUI). Para painéis mais elaborados existe o Tweakpane, e nada impede de fazer o seu com HTML.",
+      },
+    ],
+    try: [
+      'No fim do arquivo, depois de `cena.add(ceu);`, acrescente `painel.add(materialCeu, "size", 0.5, 5).name("estrelas do fundo");`: o tamanho muda na hora, sem gerar nada de novo, porque o renderer lê o material a cada quadro.',
+      'Acrescente um botão: `painel.add({ sortear: gerarGalaxia }, "sortear").name("sortear de novo");`. Para o lil-gui, uma função vira um botão.',
+      "Troque o `onFinishChange` da curvatura por `onChange` e arraste: a espiral se enrola enquanto você arrasta. Com 200 mil estrelas, dá para sentir por que soltar primeiro é melhor.",
+    ],
+    confirm: [
+      "O painel Galáxia aparece no canto de cima, à direita",
+      "Soltar um controle gera uma galáxia nova, com o número escolhido",
+      "A galáxia nova continua girando, e o mouse continua girando a câmera",
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
 
 export const GALAXIA = {
   id: "galaxia",
   title: "Gerador de galáxias",
   level: "intermediario",
   summary: "50 mil estrelas num objeto só, girando em espiral, com o núcleo alaranjado e os braços azuis.",
-  concepts: ["THREE.Points e BufferGeometry", "Coordenadas polares", "Espiral de Arquimedes", "Distribuição normal", "Mistura aditiva", "Cor por vértice", "Animação pelo tempo"],
+  concepts: [
+    "THREE.Points e BufferGeometry",
+    "Coordenadas polares",
+    "Espiral de Arquimedes",
+    "Distribuição normal",
+    "Mistura aditiva",
+    "Cor por vértice",
+    "Animação pelo tempo",
+    "Node.js e Vite",
+    "OrbitControls e lil-gui",
+  ],
   start: codeAt(0),
   steps: [
     {
@@ -828,5 +1312,7 @@ export const GALAXIA = {
         },
       ],
     },
-  ].map((step, i) => ({ ...step, code: codeAt(i + 1) })),
+  ]
+    .map((step, i) => ({ ...step, code: codeAt(i + 1) }))
+    .concat(COMPUTER.map((step) => ({ ...step, code: END }))),
 };

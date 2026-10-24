@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { TOPICS, labById, labsOfTrail, topicOfLab, topicOfTrail } from "../../src/js/topics.js";
 import { CHALLENGES, TRAILS, challengeById, trailById, trailOf } from "../../src/live/challenges.js";
+import { LEVELS, projectById } from "../../src/live/projects/index.js";
 
 const page = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), "utf8");
 const captures = (text, pattern) => [...text.matchAll(pattern)].map((m) => m[1]);
@@ -29,6 +30,19 @@ describe("temas", () => {
       for (const lab of captures(html, /index-2d\.html#([\w-]+)/g)) expect(labById(lab), `${file}: #${lab}`).not.toBeNull();
       for (const trail of captures(html, /index-3d\.html\?trilha=([\w-]+)/g)) expect(trailById(trail), `${file}: ${trail}`).not.toBeNull();
       for (const id of captures(html, /index-3d\.html\?desafio=([\w-]+)/g)) expect(challengeById(id), `${file}: ${id}`).not.toBeNull();
+      for (const id of captures(html, /index-3d\.html\?projeto=([\w-]+)/g)) expect(projectById(id), `${file}: ${id}`).not.toBeNull();
+    }
+  });
+
+  it("os projetos da tela inicial existem, e as trilhas de projetos dela são os níveis do código vivo", () => {
+    const html = page("index.html");
+    const cards = captures(html, /data-project="([\w-]+)"/g);
+    expect(cards.length).toBeGreaterThan(0);
+    for (const id of cards) expect(projectById(id), id).not.toBeNull();
+    expect(captures(html, /<h3 id="level-([\w-]+)">/g)).toEqual(LEVELS.map((l) => l.id));
+    for (const level of LEVELS) {
+      expect(html, level.id).toContain(`<p>${level.about}</p>`);
+      for (const soon of level.soon) expect(html, soon.title).toContain(`<span>${soon.title}</span>`);
     }
   });
 

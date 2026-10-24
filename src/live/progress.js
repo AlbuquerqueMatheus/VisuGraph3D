@@ -12,3 +12,23 @@ export function readProgress() {
     return { done: [], current: null };
   }
 }
+
+export const PROJECTS_KEY = "visugraph.projetos.v1"; // { feitos: { projeto: [ids de passo] }, atual: { projeto, passo } }
+
+/**
+ * O guia de projetos: os passos feitos de cada projeto e o passo aberto ({ project, step },
+ * ou null), sem conferir se os ids existem. Sem armazenamento (ou com lixo), nada feito.
+ */
+export function readProjects() {
+  try {
+    const data = JSON.parse(localStorage.getItem(PROJECTS_KEY) ?? "null");
+    const done = {};
+    if (data?.feitos && typeof data.feitos === "object") {
+      for (const [id, steps] of Object.entries(data.feitos)) if (Array.isArray(steps)) done[id] = steps;
+    }
+    const current = typeof data?.atual?.projeto === "string" ? { project: data.atual.projeto, step: data.atual.passo ?? null } : null;
+    return { done, current };
+  } catch {
+    return { done: {}, current: null };
+  }
+}

@@ -19,6 +19,7 @@ const RULES = [
   [/^too much recursion$/, () => "Uma função chama a si mesma sem parar (recursão infinita)."],
   [/^Invalid array length$/, () => "Tamanho de lista inválido (negativo ou grande demais)."],
   [/^Identifier '(.+)' has already been declared$/, (m) => `O nome '${m[1]}' já foi declarado antes.`],
+  [/^Nenhuma cena foi criada: .+$/, (m) => m[0]], // o próprio visor avisa, já em português
 ];
 
 /** Mensagem em português para um erro do código do aluno. */

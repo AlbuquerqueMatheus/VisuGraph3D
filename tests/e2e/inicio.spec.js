@@ -40,6 +40,24 @@ test("o progresso guardado nos desafios aparece em cada tema", async ({ page }) 
   await expect(progress(page, "phong")).toHaveText("3 desafios");
 });
 
+test("a tela inicial mostra o projeto pronto e as trilhas de projetos, e o botão retoma o passo em que a pessoa parou", async ({ page }) => {
+  await page.goto("index.html");
+  await expect(page.locator(".project h3")).toHaveText("Gerador de galáxias");
+  await expect(page.locator(".project-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
+  await expect(page.locator(".project__progress")).toHaveText("10 passos");
+  await page.locator(".project__shot").scrollIntoViewIfNeeded();
+  await expect.poll(() => page.locator(".project__shot").evaluate((img) => img.naturalWidth), "a foto da galáxia carrega").toBe(960);
+
+  await page.evaluate(() =>
+    localStorage.setItem("visugraph.projetos.v1", JSON.stringify({ feitos: { galaxia: ["palco", "pontos", "brilho"] }, atual: { projeto: "galaxia", passo: "disco" } }))
+  );
+  await page.reload();
+  await expect(page.locator(".project__progress")).toHaveText("3 de 10 passos");
+  await page.getByRole("link", { name: "Continuar o projeto" }).click();
+  await expect(page.locator("#lv-project .lv-pj-title")).toHaveText("4. Um disco", { timeout: 30_000 });
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+});
+
 test.describe("no celular", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 

@@ -331,7 +331,7 @@
   .lv-grid[data-panel="project"] { grid-template-columns: minmax(320px, 32%) minmax(0, 1fr) 400px; }
 }
 .lv-project { padding: var(--space-3); display: grid; gap: var(--space-3); align-content: start; }
-.lv-pj-title { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: 0; text-transform: none; color: var(--text-color); }
+.lv-project .lv-pj-title { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: 0; text-transform: none; color: var(--text-color); }
 .lv-project code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; padding: 0 3px; border-radius: 3px; background: #ffffff12; white-space: pre-wrap; }
 .lv-pj-level { display: grid; gap: 6px; border-top: 1px solid var(--lv-line); padding-top: var(--space-2); }
 .lv-pj-level h3 { font-size: 13px; font-weight: 600; }

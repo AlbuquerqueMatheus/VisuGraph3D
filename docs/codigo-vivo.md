@@ -2,14 +2,14 @@
 
 No modo 3D (`index-3d.html`) a cena é um programa JavaScript com Three.js, e o código é a única fonte da verdade: o que aparece no visor é exatamente o que o código diz. Tudo o que se faz pela cena (arrastar o gizmo, mexer no painel, arrastar um número) vira uma edição no próprio texto, e cada edição no texto aparece na cena.
 
-Esta página descreve o subconjunto do Three.js que o VisuGraph entende, o que pode ser editado pela cena e o que só pode ser editado pelo código, e também a aba Matemática, os desafios e o modo de estudo.
+Esta página descreve o subconjunto do Three.js que o VisuGraph entende, o que pode ser editado pela cena e o que só pode ser editado pelo código, e também a aba Matemática, os desafios, os projetos e o modo de estudo.
 
 ## A página
 
 - **Barra** (no alto): o tema do desafio aberto, que troca de trilha sem recarregar a página, e **Explorar | Programar**, que leva ao laboratório 2D do mesmo tema. O menu do tema também volta ao **editor livre**, sem desafio. O nome VisuGraph volta à tela inicial.
 - **Código** (à esquerda): editor com destaque de sintaxe, autocompletar (`Ctrl+Espaço`) e explicações ao passar o mouse sobre uma palavra (`THREE.Mesh`, `roughness`, `animar`…).
 - **Visor** (no centro): a cena rodando. Clique num objeto para selecioná-lo; as linhas que o criam e alteram ficam destacadas no código. No sentido contrário, o objeto da linha onde está o cursor (ou o mouse) fica destacado no visor. Pontos e linhas não têm superfície: o clique vale a uns 6 pixels deles.
-- **Painel** (à direita), em três abas: **Propriedades** (a lista de objetos e as propriedades do objeto selecionado), **Matemática** (as contas que põem o objeto selecionado na tela) e **Desafios**.
+- **Painel** (à direita), em quatro abas: **Propriedades** (a lista de objetos e as propriedades do objeto selecionado), **Matemática** (as contas que põem o objeto selecionado na tela), **Desafios** e **Projetos**.
 - **Barra de status** (embaixo): o resultado da última execução ou o erro, com um link para a linha.
 
 O código roda sozinho 300 ms depois que você para de digitar. `Ctrl+Enter` (ou `Ctrl+S`) roda na hora, e **↻ Rodar** roda de novo e zera o tempo da animação. Se o código tiver um erro, a cena anterior continua no visor até o erro ser corrigido.
@@ -142,6 +142,38 @@ A aba **Desafios** tem 10 desafios em três trilhas. Cada desafio troca o códig
 - **Links**: `index-3d.html?trilha=matriz`, `?trilha=camera` e `?trilha=phong` abrem a trilha no desafio que estava aberto, se ele é dessa trilha e ainda não foi feito, ou no primeiro desafio ainda não feito dela. `?desafio=<id>` abre um desafio pelo nome, como `?desafio=cor`. Os laboratórios de coordenadas e de Phong do modo 2D terminam com o link da trilha, e o de Sistemas de cores com o do desafio da cor. O parâmetro sai da URL ao abrir, então recarregar a página volta ao desafio que estava aberto. `index-3d.html?livre` abre o editor livre, sem o desafio que estava aberto.
 - **Rever no laboratório**: cada trilha da lista e cada desafio levam ao laboratório 2D do tema deles (o desafio da cor leva a Sistemas de cores). De lá, **Programar** na barra volta ao desafio que estava aberto. No modo de estudo esses links não aparecem, para a sessão não sair do código vivo.
 
+## Projetos
+
+A aba **Projetos** é um guia de projetos: cada projeto constrói uma cena completa do zero, em passos, e explica cada linha e o porquê de cada decisão. Os projetos se dividem em três níveis: **Fácil** (cena, malhas, materiais e luz), **Intermediário** (geometria feita à mão, milhares de objetos, curvas e animação) e **Avançado** (shaders). Por enquanto há um projeto pronto, o **Gerador de galáxias** (intermediário, 10 passos), e os outros aparecem na lista como "em breve".
+
+| Passo | O que entra |
+| --- | --- |
+| 1. O palco | a cena com fundo escuro e a câmera olhando para o centro |
+| 2. Mil pontos | `THREE.Points`, uma `BufferGeometry` e um `Float32Array` com as posições |
+| 3. Brilho de estrela | 50 mil pontos, `AdditiveBlending` e `depthWrite: false` |
+| 4. Um disco | raio e ângulo sorteados (coordenadas polares) |
+| 5. Braços | `i % bracos` reparte os pontos entre os braços |
+| 6. A espiral | o ângulo cresce com o raio (espiral de Arquimedes) |
+| 7. Dispersão | a distribuição normal (Box–Muller) dá espessura aos braços |
+| 8. Cores | `lerpColors` do núcleo à borda e `vertexColors` |
+| 9. Movimento | `animar(tempo)` gira a galáxia |
+| 10. Céu estrelado | 2.000 estrelas à mesma distância, em direções sorteadas por igual, com o tamanho em pixels |
+
+Cada passo tem:
+
+- **O código**: o que muda no editor, com as linhas que entram (+) e saem (−) e duas linhas iguais em volta. **Usar o código deste passo** troca o editor pelo código do fim do passo, e **Voltar ao começo do passo** pelo do começo (`Ctrl+Z` desfaz os dois). Uma nota diz o que o editor tem: o começo do passo, o fim dele, o fim de outro passo ou um código próprio.
+- **Linha por linha**: cada trecho novo com a explicação. Passar o mouse num trecho marca onde ele está no editor, e clicar leva até lá.
+- **Por que assim**: as decisões do passo, como "por que um objeto com mil pontos, e não mil objetos?".
+- **Experimente**: mudanças para fazer e ver o que acontece.
+- **Confira na cena**: como nos desafios, a conferência olha a cena que está rodando, não o texto, então qualquer código que chegue ao resultado vale. De uma nuvem de pontos o visor manda uma amostra de até 1.024 pontos, com as cores deles, espalhados pela razão áurea para não caírem sempre no mesmo braço. Na amostra, a conferência mede a altura e o contorno do disco, os braços e a curvatura da espiral (desenrolando os ângulos pela espiral e procurando o número de braços que mais se repete), a espessura e as cores do centro e da borda. Ela também olha o fundo da cena e o que `animar()` muda.
+
+A faixa acima do código mostra o projeto, o passo e quantas conferências já passaram. Os passos feitos ficam marcados na fila de passos do alto do painel, e o quadro de "feito" leva ao próximo.
+
+- **Código e progresso**: cada projeto guarda o próprio código no navegador, separado do editor livre e dos desafios. Abrir um passo adiante leva o editor ao começo dele quando o código é o de um passo anterior do guia; voltar a um passo anterior mantém o código e avisa que o editor está adiantado. Os passos feitos e o passo aberto ficam guardados, e recarregar a página volta ao passo aberto. **← Todos os projetos** volta à lista e ao editor livre, e abrir o projeto de novo retoma o primeiro passo ainda não feito.
+- **Links**: `index-3d.html?projeto=galaxia` abre o projeto no passo aberto da última vez ou no primeiro ainda não feito, e `?projeto=galaxia&passo=4` (ou `&passo=disco`) abre um passo pelo número ou pelo nome. O parâmetro sai da URL ao abrir, como nos desafios. A seção **Projetos** da tela inicial mostra o projeto pronto, quantos passos já foram feitos e os níveis.
+
+Depois dos passos no navegador vem levar o projeto para o computador, com Node, Vite, `OrbitControls` e `lil-gui` (em breve).
+
 ## Modo de estudo
 
 Para comparar o código vivo com um editor comum numa pesquisa, a página tem dois grupos, escolhidos pela URL:
@@ -151,7 +183,7 @@ Para comparar o código vivo com um editor comum numa pesquisa, a página tem do
 
 Os parâmetros se combinam: `index-3d.html?estudo=controle&trilha=matriz` abre o grupo controle já no primeiro desafio da trilha.
 
-No modo de estudo, a barra do alto fica só com o nome, sem os temas e sem a volta à tela inicial, para a sessão registrada não sair do código vivo, e uma faixa logo abaixo mostra o grupo e o **código da sessão** (como `K7QM-2XPA`), que liga o registro ao questionário do aluno sem identificar ninguém. **Exportar registro** baixa `visugraph-estudo-<código>.json`. **Nova sessão**, para o próximo aluno no mesmo computador, começa um registro com outro código, apaga o progresso e o código guardados e recarrega a página, que volta como recém-aberta: sem desafio aberto, pela câmera do editor e sem a caixa de vidro. Exporte antes: o registro anterior sai do navegador. A primeira sessão num navegador também começa sem o progresso e o código de quem usou o VisuGraph nele antes.
+No modo de estudo, a barra do alto fica só com o nome, sem os temas e sem a volta à tela inicial, para a sessão registrada não sair do código vivo, e uma faixa logo abaixo mostra o grupo e o **código da sessão** (como `K7QM-2XPA`), que liga o registro ao questionário do aluno sem identificar ninguém. **Exportar registro** baixa `visugraph-estudo-<código>.json`. **Nova sessão**, para o próximo aluno no mesmo computador, começa um registro com outro código, apaga o progresso e o código guardados e recarrega a página, que volta como recém-aberta: sem desafio aberto, pela câmera do editor e sem a caixa de vidro. Exporte antes: o registro anterior sai do navegador. A primeira sessão num navegador também começa sem o progresso e o código de quem usou o VisuGraph nele antes. A aba **Projetos** não aparece no modo de estudo (e `?projeto=` é ignorado), para todas as sessões terem as mesmas tarefas.
 
 O registro fica no navegador (`localStorage`) até ser exportado. Ele guarda só o tipo de cada evento, alguns detalhes e o tempo `t` em milissegundos desde o início da sessão: nunca o código, nomes ou dados pessoais. Eventos em rajada (digitar, passar o mouse na aba Matemática, erros seguidos) viram um só, com a contagem em `n` e o tempo do último em `ate`.
 
@@ -264,8 +296,12 @@ src/live/editor/   editor CodeMirror 6: destaque das linhas, números arrastáve
 src/live/runtime/  o visor (roda dentro do iframe): execução, gizmo, seleção, proteção contra laços,
                    o shader caixa de vidro (glass.js) e os fatos da cena para a correção (facts.js)
 src/live/app.js    liga editor, visor (bridge.js, via postMessage) e as abas do painel: Propriedades
-                   (inspector.js), Matemática (mathPanel.js, com as contas de mathModel.js) e
-                   Desafios (challengesPanel.js, com os desafios e a correção de challenges.js)
+                   (inspector.js), Matemática (mathPanel.js, com as contas de mathModel.js),
+                   Desafios (challengesPanel.js, com os desafios e a correção de challenges.js) e
+                   Projetos (projectPanel.js)
+src/live/projects/ o guia de projetos: os níveis, os projetos e a diferença entre passos (index.js),
+                   cada projeto com os seus passos (galaxia.js) e as medidas da cena que as
+                   conferências usam, como os braços de uma galáxia (checks.js)
 src/live/study.js  o modo de estudo e o registro de uso; studySummary.js e studyPage.js, o resumo
                    do estudo (estudo.html)
 src/lib/           as contas 3D da aba Matemática e da caixa de vidro (transform3d.js e phong3d.js)
@@ -273,4 +309,4 @@ src/lib/           as contas 3D da aba Matemática e da caixa de vidro (transfor
 
 A cada mudança no texto, `analyze()` lê o código e gera um id para cada `new THREE.X(...)`, com os trechos que o criam e alteram e, para cada propriedade, o literal que a define ou o motivo de não ser editável. `instrument()` acrescenta ao código, sem mudar as linhas, o registro de cada objeto criado e a verificação de tempo em cada laço. Uma edição pela cena vira `planEdit()` ou `planTransform()`, que devolvem as trocas de texto aplicadas no editor como uma transação comum (por isso `Ctrl+Z` desfaz). Durante um arraste, o visor muda a propriedade direto e o código é atualizado sem rodar; ao soltar, o código roda uma vez para confirmar que a cena é o que ele diz.
 
-Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node, e o dos desafios resolve cada um com a cena de verdade), e os da página em `tests/e2e/modo-3d.spec.js`, `matematica.spec.js` (as contas do painel contra o Three.js e contra os pixels da tela), `desafios.spec.js`, `estudo.spec.js` e `resumo-estudo.spec.js`.
+Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node, o dos desafios resolve cada um com a cena de verdade, e o dos projetos confere que o código de cada passo passa nas conferências dele e que o código de antes não passa), e os da página em `tests/e2e/modo-3d.spec.js`, `matematica.spec.js` (as contas do painel contra o Three.js e contra os pixels da tela), `desafios.spec.js`, `projetos.spec.js`, `estudo.spec.js` e `resumo-estudo.spec.js`.

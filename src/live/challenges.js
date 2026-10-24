@@ -41,13 +41,13 @@ const norm = (v) => {
 const sub = (a, b) => a.map((c, i) => c - b[i]);
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const deg = (rad) => (rad * 180) / Math.PI;
-const fmt = (v, d = 2) => (Math.abs(v) < 0.5 * 10 ** -d ? 0 : v).toFixed(d).replace("-", "−").replace(".", ",");
+export const fmt = (v, d = 2) => (Math.abs(v) < 0.5 * 10 ** -d ? 0 : v).toFixed(d).replace("-", "−").replace(".", ",");
 const vec = (v, d = 2) => `(${v.map((c) => fmt(c, d)).join("; ")})`;
 const size = (box) => sub(box.max, box.min);
 const round = (m) => m.map((row) => row.map((v) => Math.round(v * 1e9) / 1e9 + 0)); // sem −0 nem 6e-17
 
 /** Resultado de uma verificação: `ok` e, se falhou, o que se viu. */
-const check = (ok, seen) => ({ ok, seen: ok ? null : seen });
+export const check = (ok, seen) => ({ ok, seen: ok ? null : seen });
 
 /** Matriz alvo do desafio "Reproduza a matriz": T(1, 2, 0) · Rz(90°) · S(2, 1, 1). */
 export const TARGET_MATRIX = round(multiply(multiply(translation(1, 2, 0), rotationZ(Math.PI / 2)), scaling(2, 1, 1)));

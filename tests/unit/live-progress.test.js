@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PROGRESS_KEY, readProgress } from "../../src/live/progress.js";
+import { PROGRESS_KEY, PROJECTS_KEY, readProgress, readProjects } from "../../src/live/progress.js";
 
 /** Um localStorage mínimo, só com o que readProgress usa. */
 const storage = (items) => ({ getItem: (key) => items[key] ?? null });
@@ -31,5 +31,23 @@ describe("readProgress", () => {
       },
     });
     expect(readProgress()).toEqual({ done: [], current: null });
+  });
+});
+
+describe("readProjects", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("lê os passos feitos de cada projeto e o passo aberto", () => {
+    vi.stubGlobal("localStorage", storage({ [PROJECTS_KEY]: JSON.stringify({ feitos: { galaxia: ["palco", "pontos"] }, atual: { projeto: "galaxia", passo: "brilho" } }) }));
+    expect(readProjects()).toEqual({ done: { galaxia: ["palco", "pontos"] }, current: { project: "galaxia", step: "brilho" } });
+  });
+
+  it("sem nada guardado, ou com lixo, nada feito e nenhum projeto aberto", () => {
+    vi.stubGlobal("localStorage", storage({}));
+    expect(readProjects()).toEqual({ done: {}, current: null });
+    vi.stubGlobal("localStorage", storage({ [PROJECTS_KEY]: "[1, 2" }));
+    expect(readProjects()).toEqual({ done: {}, current: null });
+    vi.stubGlobal("localStorage", storage({ [PROJECTS_KEY]: JSON.stringify({ feitos: { galaxia: "palco" }, atual: "galaxia" }) }));
+    expect(readProjects()).toEqual({ done: {}, current: null });
   });
 });

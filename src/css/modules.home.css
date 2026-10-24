@@ -67,7 +67,8 @@
 
 /* ====== Como funciona: os três passos ====== */
 .home-how,
-.home-topics { padding-block: 40px; border-top: 1px solid var(--surface-line); }
+.home-topics,
+.home-projects { padding-block: 40px; border-top: 1px solid var(--surface-line); }
 .home-steps { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: passo; }
 .home-steps li {
   padding: 20px;
@@ -120,13 +121,52 @@
 .topic__progress[data-state="started"] { color: var(--text-color); }
 .topic__progress[data-state="done"] { color: var(--ok-color); }
 
+/* ====== Projetos: o projeto pronto em destaque e as três trilhas, do fácil ao avançado ====== */
+.home-intro { color: var(--text-2); max-width: 46rem; margin: -8px 0 20px; }
+.project {
+  display: grid;
+  grid-template-columns: minmax(0, 11fr) minmax(0, 9fr);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-3);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+.project__shot { display: block; width: 100%; height: 100%; object-fit: cover; background: #05060a; } /* o fundo da cena */
+.project__text { display: flex; flex-direction: column; gap: 12px; padding: 24px; }
+.project__level { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.project h3 { font-size: 1.3rem; }
+.project__text > p { color: var(--text-2); }
+.project__concepts { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.project__concepts li {
+  padding: 2px 10px;
+  border: 1px solid var(--surface-line);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 0.85rem;
+}
+.project__go { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: auto; padding-top: 8px; }
+.project__progress { color: var(--text-2); font-size: 0.9rem; }
+.project__progress[data-state="started"] { color: var(--text-color); }
+.project__progress[data-state="done"] { color: var(--ok-color); }
+
+.project-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.project-level { padding: 20px; border: 1px solid var(--surface-line); border-radius: var(--radius-3); }
+.project-level h3 { font-size: 1.05rem; }
+.project-level > p { color: var(--text-2); font-size: 0.9rem; margin: 4px 0 12px; }
+.project-level ul { list-style: none; display: grid; gap: 8px; }
+.project-level li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; }
+.project-level a { color: var(--accent-color); font-weight: 600; }
+.project-level a:hover { text-decoration: underline; }
+.project-level__soon { color: var(--text-2); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+
 .home-foot { padding-bottom: 32px; color: var(--text-2); font-size: 0.9rem; }
 .home-foot p { padding-top: 24px; border-top: 1px solid var(--surface-line); } /* a linha na largura do conteúdo, como nas seções */
 .home-foot a { color: var(--accent-color); }
 
 @media (max-width: 900px) {
   .home-hero { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-top: 16px; }
-  .home-steps, .topic-grid { grid-template-columns: minmax(0, 1fr); }
+  .home-steps, .topic-grid, .project, .project-levels { grid-template-columns: minmax(0, 1fr); }
+  .project__shot { height: auto; aspect-ratio: 16 / 10; }
 }
 @media (max-width: 520px) {
   .page-home main, .home-top, .home-foot { padding-inline: 16px; }

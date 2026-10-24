@@ -1,0 +1,136 @@
+// index.js — o guia de projetos: os níveis, os projetos de cada um e o que a aba Projetos
+// calcula sobre o código de um passo (de onde ele parte e o que muda).
+//
+// Um projeto é uma sequência de passos que constroem uma cena completa. Cada passo tem o código
+// inteiro como fica no fim dele (`code`), o objetivo, a explicação linha a linha (`lines`), o
+// porquê das decisões (`why`), sugestões para mexer (`try`) e conferências da cena (`needs` e
+// `checks`, como nos desafios: src/live/challenges.js).
+
+import { GALAXIA } from "./galaxia.js";
+
+export const LEVELS = [
+  {
+    id: "facil",
+    title: "Fácil",
+    about: "Cena, malhas, materiais e luz.",
+    soon: [
+      { title: "Sistema solar", about: "Hierarquia: a Lua gira em volta da Terra, que gira em volta do Sol." },
+      { title: "Vitrine de materiais", about: "Lambert, Phong e Standard lado a lado, sob as mesmas luzes." },
+      { title: "Cidade ao entardecer", about: "Luz direcional, sombras e neblina." },
+    ],
+  },
+  {
+    id: "intermediario",
+    title: "Intermediário",
+    about: "Geometria feita à mão, milhares de objetos, curvas e animação.",
+    soon: [
+      { title: "Montanha-russa", about: "Uma curva suave pelos pontos, um trilho em tubo e a câmera andando nele." },
+      { title: "Floresta de 10 mil árvores", about: "InstancedMesh: milhares de cópias numa só chamada de desenho." },
+    ],
+  },
+  {
+    id: "avancado",
+    title: "Avançado",
+    about: "Shaders: o código que roda na placa de vídeo.",
+    soon: [
+      { title: "Phong escrito à mão", about: "A iluminação de Phong num ShaderMaterial, em GLSL." },
+      { title: "Mar com ondas na GPU", about: "Um shader de vértices que move a superfície a cada quadro." },
+      { title: "Galáxia viva", about: "A galáxia num shader: cada estrela gira na sua própria velocidade." },
+    ],
+  },
+];
+
+export const PROJECTS = [GALAXIA];
+
+export const projectById = (id) => PROJECTS.find((p) => p.id === id) ?? null;
+export const levelOf = (project) => LEVELS.find((l) => l.id === project.level);
+
+/** Índice do passo pelo id ou pelo número (1 a n); -1 se não existe. */
+export function stepIndex(project, step) {
+  const n = Number(step);
+  if (Number.isInteger(n) && n >= 1 && n <= project.steps.length) return n - 1;
+  return project.steps.findIndex((s) => s.id === step);
+}
+
+/** O código com que o passo começa: o do passo anterior, ou o de partida do projeto. */
+export const startCode = (project, index) => (index === 0 ? project.start : project.steps[index - 1].code);
+
+const normalize = (code) =>
+  code
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim();
+
+/**
+ * De qual passo o código é o fim, ignorando espaços no fim das linhas: 0 para o código de
+ * partida, k para o fim do passo k, null se é outro código.
+ */
+export function guideStep(project, code) {
+  const mine = normalize(code);
+  const ends = [project.start, ...project.steps.map((s) => s.code)];
+  for (let k = ends.length - 1; k >= 0; k--) if (normalize(ends[k]) === mine) return k;
+  return null;
+}
+
+/**
+ * O código no editor em relação ao passo `index`: "start" (o começo dele), "done" (o fim),
+ * { guide: k } (o fim de outro passo k) ou "mine" (um código fora do guia).
+ */
+export function codeState(project, index, code) {
+  const k = guideStep(project, code);
+  if (k === index) return "start";
+  if (k === index + 1) return "done";
+  return k == null ? "mine" : { guide: k };
+}
+
+/**
+ * Diferença linha a linha entre dois textos, pela maior subsequência comum: uma lista de
+ * { op, text }, com op "same", "del" (só no primeiro) ou "add" (só no segundo).
+ */
+export function diffLines(before, after) {
+  const a = before.replace(/\n$/, "").split("\n");
+  const b = after.replace(/\n$/, "").split("\n");
+  // lcs[i][j]: tamanho da maior subsequência comum de a[i..] e b[j..]
+  const lcs = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1));
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  }
+  const out = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      out.push({ op: "same", text: a[i] });
+      i++;
+      j++;
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) out.push({ op: "del", text: a[i++] });
+    else out.push({ op: "add", text: b[j++] });
+  }
+  while (i < a.length) out.push({ op: "del", text: a[i++] });
+  while (j < b.length) out.push({ op: "add", text: b[j++] });
+  return out;
+}
+
+/**
+ * Os trechos da diferença que mudam, com até `context` linhas iguais em volta de cada um.
+ * As linhas iguais que ficam de fora viram { op: "skip", count }.
+ */
+export function hunks(diff, context = 2) {
+  const keep = diff.map((d, i) => d.op !== "same" || diff.slice(Math.max(0, i - context), i + context + 1).some((x) => x.op !== "same"));
+  const out = [];
+  diff.forEach((d, i) => {
+    if (keep[i]) out.push(d);
+    else if (out.at(-1)?.op === "skip") out.at(-1).count++;
+    else out.push({ op: "skip", count: 1 });
+  });
+  return out;
+}
+
+/** Onde está o trecho `code` (depois de `after`, se houver) no texto; null se não está. */
+export function findSnippet(text, { code, after }) {
+  const start = after ? text.indexOf(after) : 0;
+  if (start < 0) return null;
+  const from = text.indexOf(code, start);
+  return from < 0 ? null : { from, to: from + code.length };
+}

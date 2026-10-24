@@ -20,6 +20,7 @@
       </a>
       <nav class="home-nav" aria-label="Atalhos">
         <a href="#temas">Temas</a>
+        <a href="#projetos">Projetos</a>
         <a href="./index-3d.html?livre">Editor livre</a>
         <a href="https://github.com/AlbuquerqueMatheus/VisuGraph3D" rel="noopener">Código-fonte</a>
       </nav>
@@ -112,6 +113,72 @@
             </dl>
           </li>
         </ul>
+      </section>
+
+      <section class="home-projects" id="projetos" aria-labelledby="projects-title">
+        <h2 id="projects-title">Projetos</h2>
+        <p class="home-intro">
+          Uma cena completa, construída do zero, passo a passo: cada linha explicada, o porquê de cada decisão e a cena
+          conferida no fim de cada passo.
+        </p>
+        <article class="project" data-project="galaxia">
+          <img
+            class="project__shot"
+            src="./src/img/projeto-galaxia.webp"
+            width="960"
+            height="600"
+            loading="lazy"
+            alt="A galáxia pronta: um disco de estrelas em três braços de espiral, com o núcleo alaranjado, as bordas azuis e um céu de estrelas ao fundo."
+          />
+          <div class="project__text">
+            <p class="project__level">Intermediário</p>
+            <h3>Gerador de galáxias</h3>
+            <p>50 mil estrelas num objeto só, girando em espiral, com o núcleo alaranjado e os braços azuis.</p>
+            <ul class="project__concepts" aria-label="O que o projeto ensina">
+              <li>THREE.Points e BufferGeometry</li>
+              <li>Coordenadas polares</li>
+              <li>Espiral de Arquimedes</li>
+              <li>Distribuição normal</li>
+              <li>Mistura aditiva</li>
+              <li>Cor por vértice</li>
+              <li>Animação pelo tempo</li>
+            </ul>
+            <p class="project__go">
+              <a class="home-btn home-btn--primary" href="./index-3d.html?projeto=galaxia">Começar o projeto</a>
+              <span class="project__progress"></span>
+            </p>
+          </div>
+        </article>
+
+        <div class="project-levels">
+          <section class="project-level" aria-labelledby="level-facil">
+            <h3 id="level-facil">Fácil</h3>
+            <p>Cena, malhas, materiais e luz.</p>
+            <ul>
+              <li><span>Sistema solar</span> <span class="project-level__soon">em breve</span></li>
+              <li><span>Vitrine de materiais</span> <span class="project-level__soon">em breve</span></li>
+              <li><span>Cidade ao entardecer</span> <span class="project-level__soon">em breve</span></li>
+            </ul>
+          </section>
+          <section class="project-level" aria-labelledby="level-intermediario">
+            <h3 id="level-intermediario">Intermediário</h3>
+            <p>Geometria feita à mão, milhares de objetos, curvas e animação.</p>
+            <ul>
+              <li><a href="./index-3d.html?projeto=galaxia">Gerador de galáxias</a></li>
+              <li><span>Montanha-russa</span> <span class="project-level__soon">em breve</span></li>
+              <li><span>Floresta de 10 mil árvores</span> <span class="project-level__soon">em breve</span></li>
+            </ul>
+          </section>
+          <section class="project-level" aria-labelledby="level-avancado">
+            <h3 id="level-avancado">Avançado</h3>
+            <p>Shaders: o código que roda na placa de vídeo.</p>
+            <ul>
+              <li><span>Phong escrito à mão</span> <span class="project-level__soon">em breve</span></li>
+              <li><span>Mar com ondas na GPU</span> <span class="project-level__soon">em breve</span></li>
+              <li><span>Galáxia viva</span> <span class="project-level__soon">em breve</span></li>
+            </ul>
+          </section>
+        </div>
       </section>
     </main>
 

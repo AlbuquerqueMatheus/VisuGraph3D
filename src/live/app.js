@@ -16,7 +16,10 @@ import { isDrawableKind, isObject3DKind } from "./engine/catalog.js";
 import { Inspector } from "./inspector.js";
 import { MathPanel } from "./mathPanel.js";
 import { CHALLENGES, challengeById, firstOpen, grade, nextChallenge, trailById, trailOf } from "./challenges.js";
-import { PROGRESS_KEY, readProgress } from "./progress.js";
+import { PROGRESS_KEY, PROJECTS_KEY, readProgress, readProjects } from "./progress.js";
+import { PROJECTS, codeState, findSnippet, guideStep, projectById, startCode, stepIndex } from "./projects/index.js";
+import { animatedKeys } from "./projects/checks.js";
+import { ProjectPanel } from "./projectPanel.js";
 import { topicOfTrail } from "../js/topics.js";
 import { mountTopicBar } from "../js/topicbar.js";
 import { ChallengesPanel } from "./challengesPanel.js";
@@ -26,6 +29,7 @@ import { exportHtml } from "./export.js";
 
 const STORAGE_KEY = "visugraph.codigo.v1";
 const challengeKey = (id) => `visugraph.desafio.${id}.v1`; // o código de cada desafio
+const projectKey = (id) => `visugraph.projeto.${id}.v1`; // o código de cada projeto, um só para todos os passos
 const RUNNING_KEY = "visugraph.rodando"; // presente enquanto um código roda: se a página travar, fica lá
 const NEW_SESSION_KEY = "visugraph.estudo.nova"; // sessionStorage: "Nova sessão" recarregou a página
 const TYPING_DELAY_MS = 300;
@@ -50,12 +54,14 @@ try {
   // sem sessionStorage: a faixa mostra o código mesmo assim
 }
 
-/** Apaga o progresso nos desafios e o código guardado (o livre e o de cada desafio). */
+/** Apaga o progresso nos desafios e nos projetos e o código guardado (o livre e o de cada um). */
 function forgetStudent() {
   try {
     for (const c of CHALLENGES) localStorage.removeItem(challengeKey(c.id));
+    for (const p of PROJECTS) localStorage.removeItem(projectKey(p.id));
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(PROJECTS_KEY);
     localStorage.removeItem(RUNNING_KEY); // o código que travou também foi embora
   } catch {
     // sem armazenamento: não há o que apagar
@@ -66,25 +72,48 @@ function forgetStudent() {
 // a barra e os laboratórios) abre o primeiro desafio ainda não feito da trilha, ou continua no
 // desafio aberto, se ele é dessa trilha e não foi feito: quem foi rever o laboratório volta para
 // ele. ?desafio=<id> abre um desafio (o laboratório de cores leva ao da cor) e ?livre abre o
-// editor sem desafio.
+// editor sem desafio. ?projeto=<id>&passo=<n> abre um passo do guia de projetos (sem passo, o
+// passo em que a pessoa parou); o modo de estudo não tem projetos.
 function loadProgress() {
   const { done, current } = readProgress();
   return { done: new Set(done.filter((id) => challengeById(id))), current: challengeById(current) };
 }
 const progress = loadProgress();
+
+function loadProjects() {
+  const { done, current } = readProjects();
+  const steps = Object.fromEntries(PROJECTS.map((p) => [p.id, new Set((done[p.id] ?? []).filter((id) => p.steps.some((s) => s.id === id)))]));
+  const project = group ? null : projectById(current?.project);
+  return { done: steps, current: project ? { project, index: Math.max(0, stepIndex(project, current.step)) } : null };
+}
+const projects = loadProjects();
+
+/** O passo em que a pessoa parou no projeto: o aberto da última vez, ou o primeiro não feito. */
+function resumeIndex(project) {
+  if (projects.current?.project === project) return projects.current.index;
+  const open = project.steps.findIndex((s) => !projects.done[project.id].has(s.id));
+  return Math.max(0, open);
+}
+
 const asked = new URLSearchParams(location.search);
-const challengeAsked = challengeById(asked.get("desafio"));
-const trailAsked = challengeAsked ? null : trailById(asked.get("trilha"));
-const freeAsked = !challengeAsked && !trailAsked && asked.has("livre");
+const projectAsked = group ? null : projectById(asked.get("projeto"));
+const challengeAsked = projectAsked ? null : challengeById(asked.get("desafio"));
+const trailAsked = projectAsked || challengeAsked ? null : trailById(asked.get("trilha"));
+const freeAsked = !projectAsked && !challengeAsked && !trailAsked && asked.has("livre");
 const resumeAsked = trailAsked && progress.current && trailOf(progress.current.id) === trailAsked && !progress.done.has(progress.current.id);
-if (challengeAsked || trailAsked || freeAsked) {
-  // ao recarregar, vale o desafio que estava aberto, não o começo da trilha
+const URL_KEYS = ["desafio", "trilha", "livre", "projeto", "passo"];
+if (URL_KEYS.some((key) => asked.has(key))) {
+  // ao recarregar, vale o desafio ou o passo que estava aberto, não o começo da trilha
   const url = new URL(location.href);
-  url.searchParams.delete("desafio");
-  url.searchParams.delete("trilha");
-  url.searchParams.delete("livre");
+  for (const key of URL_KEYS) url.searchParams.delete(key);
   history.replaceState(history.state, "", url);
 }
+const stepAsked = projectAsked ? stepIndex(projectAsked, asked.get("passo")) : -1;
+const projectOpen = projectAsked
+  ? { project: projectAsked, index: stepAsked >= 0 ? stepAsked : resumeIndex(projectAsked) }
+  : challengeAsked || trailAsked || freeAsked
+    ? null
+    : projects.current;
 
 const state = {
   analysis: null, // análise do texto atual do editor
@@ -105,11 +134,13 @@ const state = {
   runTimer: null,
   liveTimer: null,
   liveDirty: false,
-  tab: "props", // aba do painel da direita: props, math ou challenges
+  tab: "props", // aba do painel da direita: props, math, challenges ou project
   glass: null, // caixa de vidro: null, "phong" ou "blinn"
   vertex: 0, // vértice que o painel Matemática acompanha
   probeSeq: null,
-  challenge: challengeAsked ?? (trailAsked && !resumeAsked ? firstOpen(trailAsked, progress.done) : freeAsked ? null : progress.current), // desafio aberto: o editor tem o código dele
+  // desafio aberto ou passo de projeto aberto ({ project, index }): o editor tem o código dele
+  challenge: projectOpen ? null : challengeAsked ?? (trailAsked && !resumeAsked ? firstOpen(trailAsked, progress.done) : freeAsked ? null : progress.current),
+  project: projectOpen,
   challengeOpenedAt: Date.now(),
   hints: 0, // dicas mostradas no desafio aberto
   gradeKey: null, // verificações que passaram na última correção (o registro guarda só as mudanças)
@@ -130,7 +161,8 @@ const topicBar = group
       },
       onFree: () => openChallenge(null, "barra"),
     });
-const showTopic = () => topicBar?.update({ step: "programar", topic: topicOfTrail(trailOf(state.challenge?.id)?.id) });
+const showTopic = () =>
+  topicBar?.update({ step: "programar", topic: topicOfTrail(trailOf(state.challenge?.id)?.id), label: state.project ? state.project.project.title : null });
 showTopic();
 
 // ---------------------------------------------------------------------------
@@ -181,9 +213,10 @@ function selectedId() {
 
 let startedAfterCrash = false;
 
-// Cada desafio guarda o próprio código; fora deles, o editor tem o código livre do aluno.
-const codeKey = () => (state.challenge ? challengeKey(state.challenge.id) : STORAGE_KEY);
-const starterCode = () => state.challenge?.starter ?? STARTER_CODE;
+// Cada desafio e cada projeto guardam o próprio código; fora deles, o editor tem o código livre
+// do aluno. O código inicial de um projeto é o do começo do passo aberto.
+const codeKey = () => (state.project ? projectKey(state.project.project.id) : state.challenge ? challengeKey(state.challenge.id) : STORAGE_KEY);
+const starterCode = () => (state.project ? startCode(state.project.project, state.project.index) : state.challenge?.starter ?? STARTER_CODE);
 
 function loadCode() {
   try {
@@ -192,7 +225,10 @@ function loadCode() {
   } catch {
     // sem armazenamento: começa do código inicial
   }
-  return storedCode();
+  const code = storedCode();
+  // aberto num passo adiante (?passo=), o código de um passo anterior do guia vira o começo dele
+  const k = state.project ? guideStep(state.project.project, code) : null;
+  return k != null && k < state.project.index ? starterCode() : code;
 }
 
 function storedCode() {
@@ -261,6 +297,7 @@ function onChange(update) {
   queueMicrotask(refreshEditor);
   inspector.update(state.analysis, selectedId(), runtimeForCurrent());
   updateMathContext();
+  if (state.project) projectPanel.setCodeState(codeState(state.project.project, state.project.index, code));
   const kind = update.transactions.map((tr) => tr.annotation(sceneEdit)).find(Boolean);
   if (!kind && update.transactions.some((tr) => tr.isUserEvent("input") || tr.isUserEvent("delete"))) study.log("digitacao");
   if (kind === "cena") return; // quem editou decide quando rodar
@@ -693,6 +730,7 @@ const tabs = [...document.querySelectorAll('.lv-tabs [role="tab"]')];
 function setTab(tab) {
   if (tab !== state.tab) study.log("aba", { aba: tab });
   state.tab = tab;
+  $(".lv-grid").dataset.panel = tab; // a aba Projetos alarga o painel
   for (const t of tabs) {
     const on = t.dataset.tab === tab;
     t.setAttribute("aria-selected", String(on));
@@ -749,10 +787,11 @@ function saveProgress() {
  * sai fica guardado, e o que entra é o guardado daquele desafio ou o inicial dele.
  */
 function openChallenge(challenge, origin = "lista", { keepCode = true, quiet = false } = {}) {
-  if (challenge === state.challenge && keepCode) return;
+  if (challenge === state.challenge && !state.project && keepCode) return;
   clearTimeout(saveTimer);
   if (keepCode) save(view.state.doc.toString());
   if (state.challenge) study.log("desafio.sair", { id: state.challenge.id, feito: progress.done.has(state.challenge.id) });
+  if (state.project) closeProject();
   state.challenge = challenge;
   saveProgress();
   if (challenge) study.log("desafio.abrir", { id: challenge.id, origem: origin });
@@ -773,7 +812,7 @@ function showChallenge() {
   state.hints = 0;
   state.gradeKey = null;
   challengesPanel.show(c);
-  updateChallengeBar(null);
+  updateCodebar(null);
   showTopic();
   sendGhosts();
   if (!c) return;
@@ -787,24 +826,33 @@ function sendGhosts() {
 }
 
 function requestFacts() {
-  if (state.challenge) bridge.send({ type: "facts", seq: ++state.factsSeq });
+  if (state.challenge || state.project) bridge.send({ type: "facts", seq: ++state.factsSeq });
 }
 
-/** Corrige o desafio aberto com os fatos da cena, pelos nomes das variáveis do código que rodou. */
+/**
+ * Corrige o desafio ou o passo aberto com os fatos da cena, pelos nomes das variáveis do código
+ * que rodou. Os passos de projeto também olham o fundo da cena e o que animar() muda.
+ */
 function onFacts(msg) {
-  const challenge = state.challenge;
   const analysis = state.runs.get(msg.runId)?.analysis;
-  if (!challenge || !analysis || msg.seq !== state.factsSeq) return;
+  const target = state.project ? state.project.project.steps[state.project.index] : state.challenge;
+  if (!target || !analysis || msg.seq !== state.factsSeq) return;
   const objects = Object.create(null);
   for (const [id, facts] of Object.entries(msg.objects)) {
     const name = analysis.objects[id]?.name;
     if (name && !objects[name]) objects[name] = facts;
   }
   const nameOf = (id) => analysis.objects[id]?.name ?? null;
-  const result = grade(challenge, { objects, camera: msg.camera, lights: msg.lights, nameOf });
-  challengesPanel.setResult(result);
+  const facts = { objects, camera: msg.camera, lights: msg.lights, nameOf, background: msg.background, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar };
+  const result = grade(target, facts);
   const passed = result.results.filter((r) => r.ok).length;
-  updateChallengeBar({ passed, total: result.results.length, ok: result.ok });
+  updateCodebar({ passed, total: result.results.length, ok: result.ok });
+  if (state.project) {
+    onStepResult(result);
+    return;
+  }
+  const challenge = state.challenge;
+  challengesPanel.setResult(result);
   const key = result.results.map((r) => (r.ok ? 1 : 0)).join("");
   if (key !== state.gradeKey) {
     if (state.gradeKey != null || passed) study.log("desafio.conferir", { id: challenge.id, ok: result.ok, passou: passed, total: result.results.length });
@@ -819,21 +867,129 @@ function onFacts(msg) {
   }
 }
 
-// Faixa sobre o código: lembra que o editor tem o código do desafio, e como ele vai.
+// Faixa sobre o código: lembra que o editor tem o código do desafio ou do projeto, e como ele vai.
 const codebar = $("#lv-codebar");
+const codebarKind = document.createTextNode(""); // texto solto: os spans da faixa ficam verdes quando o passo está feito
 const codebarTitle = document.createElement("strong");
 const codebarStatus = document.createElement("span");
-const codebarOpen = Object.assign(document.createElement("button"), { type: "button", className: "lv-link", textContent: "ver desafio" });
-codebarOpen.addEventListener("click", () => setTab("challenges"));
-codebar.append("Desafio: ", codebarTitle, codebarStatus, codebarOpen);
+const codebarOpen = Object.assign(document.createElement("button"), { type: "button", className: "lv-link" });
+codebarOpen.addEventListener("click", () => setTab(state.project ? "project" : "challenges"));
+codebar.append(codebarKind, codebarTitle, codebarStatus, codebarOpen);
 
-function updateChallengeBar(grading) {
+function updateCodebar(grading) {
   const c = state.challenge;
-  codebar.hidden = !c;
-  if (!c) return;
-  codebarTitle.textContent = c.title;
+  const p = state.project;
+  codebar.hidden = !c && !p;
+  if (!c && !p) return;
+  codebarKind.data = p ? "" : "Desafio: "; // o nome do projeto já diz o que é, e a faixa é estreita
+  codebarTitle.textContent = p ? `${p.project.title} · passo ${p.index + 1} de ${p.project.steps.length}` : c.title;
+  codebarOpen.textContent = p ? "ver passo" : "ver desafio";
   codebar.dataset.ok = String(!!grading?.ok);
-  codebarStatus.textContent = !grading ? "" : grading.ok ? "✓ feito" : `${grading.passed} de ${grading.total} ${grading.total === 1 ? "verificação" : "verificações"}`;
+  const checks = p ? ["conferência", "conferências"] : ["verificação", "verificações"];
+  codebarStatus.textContent = !grading ? "" : grading.ok ? "✓ feito" : `${grading.passed} de ${grading.total} ${grading.total === 1 ? checks[0] : checks[1]}`;
+}
+
+// ---------------------------------------------------------------------------
+// Guia de projetos: abrir um passo, trocar o código e conferir a cena
+
+const projectPanel = new ProjectPanel($("#lv-project"), {
+  open: (id, index) => openProject(projectById(id), index),
+  leave: () => openChallenge(null, "projeto"),
+  apply: () => replaceCode(state.project.project.steps[state.project.index].code),
+  restart: () => replaceCode(starterCode()),
+  locate: (line) => findSnippet(view.state.doc.toString(), line),
+  mark: (range) => showMathLinks(view, range ? [range] : [], true),
+  reveal(range) {
+    revealPosition(view, range.from, true);
+    showMathLinks(view, [range]);
+  },
+});
+projectPanel.setDone(projects.done);
+
+function saveProjects() {
+  if (group) return; // o modo de estudo não tem projetos
+  const p = state.project;
+  const feitos = Object.fromEntries(Object.entries(projects.done).filter(([, steps]) => steps.size).map(([id, steps]) => [id, [...steps]]));
+  try {
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify({ feitos, atual: p ? { projeto: p.project.id, passo: p.project.steps[p.index].id } : null }));
+  } catch {
+    // sem armazenamento: o progresso vale até fechar a página
+  }
+}
+
+/** Troca todo o código do editor (Ctrl+Z desfaz) e roda. */
+function replaceCode(code) {
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: code }, userEvent: "input.cena" });
+  state.selectedKey = null;
+  runNow({ force: true, resetTime: true });
+}
+
+/**
+ * Abre o passo `index` de um projeto (null: o passo em que a pessoa parou). Ao entrar no projeto,
+ * o editor troca de documento, como num desafio. Entre passos do mesmo projeto o código continua,
+ * e só vira o começo do passo novo se ainda for o código de um passo anterior do guia: o que a
+ * pessoa escreveu não se perde, e Ctrl+Z desfaz a troca.
+ */
+function openProject(project, index = null) {
+  if (index == null) index = resumeIndex(project);
+  const same = state.project?.project === project;
+  if (same && state.project.index === index) return;
+  clearTimeout(saveTimer);
+  save(view.state.doc.toString());
+  if (state.challenge) {
+    study.log("desafio.sair", { id: state.challenge.id, feito: progress.done.has(state.challenge.id) });
+    state.challenge = null;
+    showChallenge();
+  }
+  state.project = { project, index };
+  projects.current = state.project;
+  saveProgress();
+  saveProjects();
+  if (!same) {
+    resetDoc(view, storedCode());
+    state.analysis = analyze(view.state.doc.toString());
+    state.runtimeDiagnostics = [];
+    state.stuckCode = null;
+    select(null);
+  }
+  const k = guideStep(project, view.state.doc.toString());
+  if (k != null && k < index) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: starterCode() }, userEvent: "input.cena" });
+  showProject();
+  if (hasBlockingError(state.analysis)) showBlockingError();
+  else runNow({ force: true, resetTime: true });
+}
+
+function closeProject() {
+  state.project = null;
+  projects.current = null; // quem sai e volta retoma do primeiro passo não feito, como depois de recarregar
+  saveProjects();
+  projectPanel.show(null);
+  showMathLinks(view, []);
+  setView("editor"); // como o editor livre abre; um desafio troca depois pela vista dele
+}
+
+/** Painel, faixa sobre o código e vista do passo aberto. */
+function showProject() {
+  const { project, index } = state.project;
+  state.gradeKey = null;
+  projectPanel.show(project, index);
+  projectPanel.setCodeState(codeState(project, index, view.state.doc.toString()));
+  updateCodebar(null);
+  showTopic();
+  setView(project.steps[index].view);
+}
+
+function onStepResult(result) {
+  projectPanel.setResult(result);
+  const { project, index } = state.project;
+  const step = project.steps[index];
+  const done = projects.done[project.id];
+  if (result.ok && !done.has(step.id)) {
+    done.add(step.id);
+    saveProjects();
+    projectPanel.setDone(projects.done);
+    setStatus("ok", `Passo feito: ${index + 1}. ${step.title}.`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -924,7 +1080,10 @@ $("#lv-reset").addEventListener("click", () => {
   state.selectedKey = null;
   study.log("restaurar", { desafio: state.challenge?.id ?? null });
   runNow({ force: true, resetTime: true });
-  setStatus("ok", state.challenge ? "Código inicial do desafio restaurado. Ctrl+Z desfaz." : "Exemplo restaurado. Ctrl+Z desfaz.");
+  setStatus(
+    "ok",
+    state.project ? "Código do começo do passo restaurado. Ctrl+Z desfaz." : state.challenge ? "Código inicial do desafio restaurado. Ctrl+Z desfaz." : "Exemplo restaurado. Ctrl+Z desfaz.",
+  );
 });
 
 function updateToolbar() {
@@ -968,6 +1127,7 @@ if (group) {
   $("#vg-nav").hidden = true;
   $(".vg-brand").removeAttribute("href");
   $(".vg-brand").removeAttribute("title");
+  $("#lv-tab-project").hidden = true; // os projetos ficam fora da sessão registrada
   if (!sync) {
     // sem gizmo e sem inserir código pela cena
     $("#lv-add").hidden = true;
@@ -1015,12 +1175,21 @@ if (group) {
   $(".lv-top").append(banner);
 }
 
-if (state.challenge) {
+if (state.project) {
+  saveProgress(); // ao recarregar, vale o passo, não um desafio aberto antes
+  saveProjects();
+  showProject();
+  setTab("project");
+} else if (state.challenge) {
   study.log("desafio.abrir", { id: state.challenge.id, origem: challengeAsked ? "endereco" : trailAsked ? "trilha" : "retomar" });
   saveProgress();
+  saveProjects();
   showChallenge();
   setTab("challenges");
-} else if (freeAsked) saveProgress(); // ao recarregar, continua sem desafio
+} else if (freeAsked) {
+  saveProgress(); // ao recarregar, continua sem desafio
+  saveProjects();
+}
 
 queueMicrotask(refreshEditor);
 if (hasBlockingError(state.analysis)) showBlockingError();

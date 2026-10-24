@@ -10,6 +10,25 @@ import { rgbArray } from "./glass.js";
 
 const worldPositionOf = (obj) => new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld).toArray();
 
+/** Quantos vértices de cada geometria vão como amostra, para conferir a forma de uma nuvem de pontos. */
+const SAMPLE_SIZE = 1024;
+
+/**
+ * Até SAMPLE_SIZE valores do atributo (x, y, z ou r, g, b), espalhados entre os vértices pela
+ * razão áurea. Um passo fixo cairia sempre no mesmo braço de uma galáxia que reparte os pontos
+ * com `i % bracos`: com 25.600 pontos e 4 braços, de 100 em 100 só se veem os do braço 0.
+ * As mesmas contagens dão os mesmos índices, então a cor j da amostra é a do ponto j.
+ */
+function sampleOf(attribute) {
+  if (!attribute || attribute.itemSize < 3) return null;
+  const count = attribute.count;
+  const n = Math.min(count, SAMPLE_SIZE);
+  return Array.from({ length: n }, (_, j) => {
+    const i = n === count ? j : Math.floor(((j * 0.6180339887498949) % 1) * count);
+    return [attribute.getX(i), attribute.getY(i), attribute.getZ(i)];
+  });
+}
+
 /** Nome da constante de mistura do material, como no código (THREE.AdditiveBlending → "AdditiveBlending"). */
 const BLENDING_NAMES = Object.fromEntries(
   ["NoBlending", "NormalBlending", "AdditiveBlending", "SubtractiveBlending", "MultiplyBlending", "CustomBlending"].map((name) => [THREE[name], name]),
@@ -38,6 +57,7 @@ function objectFacts(obj, idOf) {
       shininess: typeof material.shininess === "number" ? material.shininess : null,
       specular: rgbArray(material.specular) ?? null,
       size: typeof material.size === "number" ? material.size : null, // só PointsMaterial tem
+      sizeAttenuation: typeof material.sizeAttenuation === "boolean" ? material.sizeAttenuation : null,
       vertexColors: !!material.vertexColors,
       transparent: !!material.transparent,
       opacity: material.opacity,
@@ -47,8 +67,15 @@ function objectFacts(obj, idOf) {
   }
   const geometry = drawn && obj.geometry?.isBufferGeometry ? obj.geometry : null;
   if (geometry) {
-    // vértices: em THREE.Points, cada vértice é um ponto desenhado
-    facts.geometry = { type: geometry.type, vertices: geometry.getAttribute("position")?.count ?? 0, attributes: Object.keys(geometry.attributes) };
+    // vértices: em THREE.Points, cada vértice é um ponto desenhado; a amostra fica no espaço do objeto
+    const position = geometry.getAttribute("position");
+    facts.geometry = {
+      type: geometry.type,
+      vertices: position?.count ?? 0,
+      attributes: Object.keys(geometry.attributes),
+      sample: sampleOf(position),
+      colors: sampleOf(geometry.getAttribute("color")),
+    };
   }
   if (obj.isInstancedMesh) facts.instances = obj.count;
   if (obj.isLight) {
@@ -83,12 +110,13 @@ function cameraFacts(camera) {
 }
 
 /**
- * Fatos da cena: os objetos do código (`entries`, pares [id, objeto]), as luzes acesas e a
- * câmera do código.
+ * Fatos da cena: os objetos do código (`entries`, pares [id, objeto]), as luzes acesas, a
+ * câmera do código e a cor de fundo.
  */
 export function sceneFacts({ scene, camera, entries, idOf }) {
   scene.updateMatrixWorld(); // como o desenho faz a cada quadro: alvos de luz na cena inclusive
   const objects = {};
   for (const [id, obj] of entries) if (obj && obj.isObject3D && !obj.isScene) objects[id] = objectFacts(obj, idOf);
-  return { objects, lights: sceneLights(scene), camera: camera ? cameraFacts(camera) : null };
+  const background = scene.background?.isColor ? "#" + scene.background.getHexString() : null;
+  return { objects, lights: sceneLights(scene), camera: camera ? cameraFacts(camera) : null, background };
 }

@@ -22,8 +22,9 @@ function stepLink(name, href, current, missing) {
 }
 
 /**
- * Liga a barra ao `nav` da página. update({ step, topic, lab }) a redesenha a cada troca de
- * laboratório ou de desafio: step é "explorar" ou "programar", topic é null no editor livre.
+ * Liga a barra ao `nav` da página. update({ step, topic, lab, label }) a redesenha a cada troca de
+ * laboratório ou de desafio: step é "explorar" ou "programar", topic é null no editor livre e
+ * num projeto do guia, que aparece pelo nome (label).
  * Na página do código vivo, onTopic(topic) abre a trilha sem recarregar (false segue o link)
  * e onFree() volta ao editor livre.
  */
@@ -39,7 +40,7 @@ export function mountTopicBar(nav, { onTopic, onFree } = {}) {
     open.querySelector("summary").focus();
   });
 
-  function update({ step, topic = null, lab = null }) {
+  function update({ step, topic = null, lab = null, label = null }) {
     const list = el("ul", { class: "vg-topic__list" });
     for (const t of TOPICS) {
       const link = el("a", { href: topicHref(t, step), "aria-current": t === topic ? "true" : null }, t.name);
@@ -51,7 +52,7 @@ export function mountTopicBar(nav, { onTopic, onFree } = {}) {
       list.append(el("li", {}, link));
     }
     if (step === "programar") {
-      const free = el("a", { href: FREE_EDITOR_URL, "aria-current": topic ? null : "true" }, "Editor livre, sem desafio");
+      const free = el("a", { href: FREE_EDITOR_URL, "aria-current": topic || label ? null : "true" }, "Editor livre, sem desafio");
       free.addEventListener("click", (e) => {
         close();
         if (onFree) {
@@ -64,8 +65,8 @@ export function mountTopicBar(nav, { onTopic, onFree } = {}) {
     const summary = el(
       "summary",
       { title: "Trocar de tema" },
-      el("span", { class: "vg-topic__kicker" }, "Tema"),
-      el("span", { class: "vg-topic__name" }, topic?.name ?? "Editor livre"),
+      el("span", { class: "vg-topic__kicker" }, label && !topic ? "Projeto" : "Tema"),
+      el("span", { class: "vg-topic__name" }, topic?.name ?? label ?? "Editor livre"),
     );
     const parts = [el("details", { class: "vg-topic" }, summary, list)];
 

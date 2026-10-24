@@ -191,11 +191,11 @@
 .lv-study button:first-of-type { margin-left: auto; }
 .lv-study button:hover { border-color: var(--accent-color); }
 
-/* ====== Abas do painel: Propriedades | Matemática | Desafios ====== */
-.lv-tabs { display: flex; border-bottom: 1px solid var(--lv-line); padding: 0 var(--space-2); gap: 2px; position: sticky; top: 0; z-index: 2; background: var(--lv-panel); }
+/* ====== Abas do painel: Propriedades | Matemática | Desafios | Projetos ====== */
+.lv-tabs { display: flex; border-bottom: 1px solid var(--lv-line); padding: 0 var(--space-1); gap: 2px; position: sticky; top: 0; z-index: 2; background: var(--lv-panel); }
 .lv-tabs [role="tab"] {
   flex: 1;
-  padding: 7px 4px 6px;
+  padding: 7px 3px 6px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -324,6 +324,82 @@
 .lv-ch__done strong { color: var(--lv-ok); }
 .lv-hints { display: grid; gap: 6px; justify-items: start; }
 .lv-hints__list { display: grid; gap: 6px; padding-left: 18px; font-size: 13px; line-height: 1.45; }
+
+/* ====== Aba Projetos: os níveis, o passo aberto e o que muda no código ====== */
+/* o passo tem texto e código: o painel alarga, e o código cede espaço */
+@media (min-width: 901px) {
+  .lv-grid[data-panel="project"] { grid-template-columns: minmax(320px, 32%) minmax(0, 1fr) 400px; }
+}
+.lv-project { padding: var(--space-3); display: grid; gap: var(--space-3); align-content: start; }
+.lv-project .lv-pj-title { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: 0; text-transform: none; color: var(--text-color); }
+.lv-project code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; padding: 0 3px; border-radius: 3px; background: #ffffff12; white-space: pre-wrap; }
+.lv-pj-level { display: grid; gap: 6px; border-top: 1px solid var(--lv-line); padding-top: var(--space-2); }
+.lv-pj-level h3 { font-size: 13px; font-weight: 600; }
+.lv-pj-list { list-style: none; display: grid; gap: 4px; }
+.lv-pj-card {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--lv-line);
+  border-radius: var(--radius-2);
+  background: var(--lv-panel-2);
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+}
+.lv-pj-card:hover { border-color: var(--accent-color); }
+.lv-pj-card__title { font-size: 14px; font-weight: 600; }
+.lv-pj-card__about { font-size: 12px; line-height: 1.4; color: var(--lv-text-2); }
+.lv-pj-card__progress { font-size: 11px; color: var(--accent-color); }
+.lv-pj-card__progress[data-state="done"] { color: var(--lv-ok); }
+.lv-pj-soon { display: grid; gap: 2px; padding: 4px 10px; }
+.lv-pj-soon .lv-pj-card__title { font-size: 13px; font-weight: 500; color: var(--lv-text-2); }
+.lv-pj-soon__tag { margin-left: 6px; padding: 0 6px; border-radius: 999px; background: #ffffff12; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: 1px; }
+.lv-pj-steps { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; }
+.lv-pj-steps button {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid var(--lv-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lv-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.lv-pj-steps button:hover { border-color: var(--accent-color); color: var(--text-color); }
+.lv-pj-steps button[data-done="true"] { border-color: color-mix(in oklab, var(--lv-ok) 60%, transparent); color: var(--lv-ok); }
+.lv-pj-steps button[aria-current="step"] { background: var(--accent-color); border-color: var(--accent-color); color: #0b1220; font-weight: 600; }
+.lv-pj-goal, .lv-pj-lines p, .lv-pj-why p, .lv-pj-try li { font-size: 13px; line-height: 1.5; }
+.lv-pj-sec { display: grid; gap: 8px; border-top: 1px solid var(--lv-line); padding-top: var(--space-2); }
+.lv-pj-diff {
+  margin: 0;
+  padding: 6px 0;
+  border: 1px solid var(--lv-line);
+  border-radius: var(--radius-2);
+  background: #0f1116;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.lv-pj-diff__line { display: grid; grid-template-columns: 1.4em minmax(0, 1fr); padding: 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--lv-text-2); }
+.lv-pj-diff__line[data-op="add"] { background: color-mix(in oklab, var(--lv-ok) 14%, transparent); color: var(--text-color); }
+.lv-pj-diff__line[data-op="del"] { background: color-mix(in oklab, var(--lv-error) 14%, transparent); }
+.lv-pj-diff__line[data-op="add"] .lv-pj-diff__mark { color: var(--lv-ok); }
+.lv-pj-diff__line[data-op="del"] .lv-pj-diff__mark { color: var(--lv-error); }
+.lv-pj-diff__line[data-op="skip"] { display: block; padding-left: calc(8px + 1.4em); font-style: italic; opacity: 0.7; }
+.lv-pj-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lv-pj-lines { list-style: none; display: grid; gap: 10px; }
+.lv-pj-lines li { display: grid; gap: 4px; }
+.lv-pj-snippet { justify-self: start; max-width: 100%; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.lv-project .lv-pj-snippet code { display: block; padding: 3px 6px; border: 1px solid var(--lv-line); border-radius: var(--radius-1); background: #0f1116; color: #e6e9ef; }
+.lv-project .lv-pj-snippet:hover code, .lv-project .lv-pj-snippet:focus-visible code { border-color: #ff5fd2aa; background: #ff5fd21f; }
+.lv-pj-why { display: grid; gap: 2px; }
+.lv-pj-why h4 { font-size: 13px; font-weight: 600; color: #ffcb6b; }
+.lv-pj-try { display: grid; gap: 6px; padding-left: 18px; }
+.lv-pj-nav { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--lv-line); padding-top: var(--space-2); }
+.lv-pj-nav .lv-mini { padding: 2px 10px; font-size: 12px; }
+.lv-mini:disabled { opacity: 0.4; cursor: default; }
+.lv-mini:disabled:hover { border-color: var(--lv-line); }
 
 /* ====== Status ====== */
 .lv-status {

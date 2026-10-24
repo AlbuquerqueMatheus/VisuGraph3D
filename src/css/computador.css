@@ -1,0 +1,6 @@
+/* computador.css — capítulo Seu computador: a barra e o rodapé da tela inicial, e o texto do guia */
+@import url("base.reset.css") layer(reset);
+@import url("base.tokens.css") layer(tokens);
+@import url("base.global.css") layer(base);
+@import url("modules.home.css") layer(components);
+@import url("modules.guide.css") layer(components);

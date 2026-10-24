@@ -158,6 +158,9 @@
 .project-level a { color: var(--accent-color); font-weight: 600; }
 .project-level a:hover { text-decoration: underline; }
 .project-level__soon { color: var(--text-2); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.home-note { color: var(--text-2); margin-top: 20px; }
+.home-note a { color: var(--accent-color); font-weight: 600; }
+.home-note a:hover { text-decoration: underline; }
 
 .home-foot { padding-bottom: 32px; color: var(--text-2); font-size: 0.9rem; }
 .home-foot p { padding-top: 24px; border-top: 1px solid var(--surface-line); } /* a linha na largura do conteúdo, como nas seções */

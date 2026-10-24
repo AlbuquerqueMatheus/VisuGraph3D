@@ -30,6 +30,7 @@ export default defineConfig({
         threeD: page("./index-3d.html"),
         viewport: page("./viewport.html"),
         study: page("./estudo.html"),
+        computer: page("./computador.html"),
       },
       output: {
         codeSplitting: {

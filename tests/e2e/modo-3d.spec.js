@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { test, expect } from "./fixtures.js";
 import { code, inPage, objectId, openLive, pasteCode, sceneValue, status, viewport } from "./live.js";
+import { unzip } from "../../src/lib/zip.js";
 
 // ---------------------------------------------------------------------------
 // Modo 3D (código vivo): o código é a fonte da verdade e a cena escreve nele.
@@ -279,12 +280,31 @@ test("modo 3D: pontos e cópias de uma malha são objetos da cena, com o tamanho
   await expect(page.locator("#lv-math .lv-vsel")).toContainText("origem do objeto");
 });
 
-test("modo 3D: Baixar HTML gera uma página com o código da cena", async ({ page }) => {
+test("modo 3D: Baixar gera uma página HTML ou um projeto Vite com o código da cena", async ({ page }) => {
   await openLive(page);
-  const [download] = await Promise.all([page.waitForEvent("download"), page.click("#lv-download")]);
+  const menu = page.locator("#lv-download");
+  await menu.locator("summary").click();
+  const [download] = await Promise.all([page.waitForEvent("download"), menu.locator('[data-download="html"]').click()]);
   expect(download.suggestedFilename()).toBe("cena-visugraph.html");
+  await expect(menu, "o menu fecha depois de escolher").not.toHaveAttribute("open");
   const html = await readFile(await download.path(), "utf8");
   expect(html).toContain('<script type="importmap">');
   expect(html).toContain("cubo.position.set(0, 0.5, 0);");
   expect(html).toContain("return { cena: cena, camera: camera, animar:");
+
+  await menu.locator("summary").click();
+  const [zipped] = await Promise.all([page.waitForEvent("download"), menu.locator('[data-download="vite"]').click()]);
+  expect(zipped.suggestedFilename()).toBe("cena-visugraph.zip");
+  const files = Object.fromEntries(unzip(new Uint8Array(await readFile(await zipped.path()))).map((f) => [f.path, new TextDecoder().decode(f.content)]));
+  expect(Object.keys(files)).toEqual(["README.md", "package.json", "vite.config.js", "index.html", "src/main.js", "src/cena.js", ".gitignore"]);
+  expect(files["src/cena.js"]).toContain("cubo.position.set(0, 0.5, 0);");
+  expect(files["src/main.js"]).toContain('import { OrbitControls } from "three/addons/controls/OrbitControls.js";');
+  expect(files["README.md"]).toMatch(/\[Seu computador\]\(http:\/\/localhost:\d+\/visugraph3d\/computador\.html\)/);
+  await expect(status(page)).toContainText("Projeto baixado: descompacte cena-visugraph.zip");
+
+  // um clique fora fecha o menu
+  await menu.locator("summary").click();
+  await expect(menu).toHaveAttribute("open");
+  await page.locator("#lv-editor").click();
+  await expect(menu).not.toHaveAttribute("open");
 });

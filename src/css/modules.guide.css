@@ -1,0 +1,52 @@
+@layer components {
+/* ====== Capítulo Seu computador: uma coluna de leitura, com comandos e perguntas que abrem ====== */
+.guide { max-width: 760px; padding-bottom: 24px; }
+.guide section { padding-block: 32px; border-top: 1px solid var(--surface-line); }
+.guide section section { padding-block: 0; border-top: 0; }
+.guide h1 { font-size: clamp(2rem, 4vw, 2.6rem); line-height: 1.15; letter-spacing: -0.01em; }
+.guide h3 { font-size: 1.05rem; margin: 20px 0 8px; }
+.guide p, .guide li, .guide dd { color: var(--text-2); line-height: 1.6; }
+.guide p + p { margin-top: 12px; }
+.guide strong { color: var(--text-color); }
+.guide a:not(.home-btn) { color: var(--accent-color); }
+.guide a:not(.home-btn):hover { text-decoration: underline; }
+.guide code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; padding: 1px 4px; border-radius: 4px; background: var(--surface-2); color: var(--text-color); }
+
+.guide-head { padding-block: 24px 32px; }
+.guide-head .home-lead { max-width: none; }
+.guide-toc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 24px; }
+.guide-toc a { padding: 4px 12px; border: 1px solid var(--surface-line); border-radius: 999px; font-size: 0.9rem; }
+.guide-toc a:hover { border-color: var(--accent-color); text-decoration: none !important; }
+
+.guide-cmd {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-2);
+  background: #0f1116;
+  overflow-x: auto;
+}
+.guide .guide-cmd code { padding: 0; background: none; font-size: 0.9rem; line-height: 1.7; }
+
+.guide-tools, .guide-keys, .guide-files { display: grid; gap: 10px; }
+.guide-tools > div, .guide-keys > div, .guide-files > div { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 4px 16px; align-items: baseline; }
+.guide-tools dt, .guide-keys dt, .guide-files dt { color: var(--text-color); font-weight: 600; }
+.guide-os { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-block: 16px; }
+.guide .guide-os > section { padding: 16px; border: 1px solid var(--surface-line); border-radius: var(--radius-3); background: var(--surface-1); }
+.guide-os h3 { margin-top: 0; }
+.guide-steps { display: grid; gap: 12px; padding-left: 22px; }
+.guide-steps li::marker { color: var(--accent-color); font-weight: 700; }
+
+.guide-faq { display: grid; gap: 8px; }
+.guide-faq details { border: 1px solid var(--surface-line); border-radius: var(--radius-3); background: var(--surface-1); }
+.guide-faq summary { padding: 12px 16px; cursor: pointer; color: var(--text-color); font-weight: 600; }
+.guide-faq summary:hover { color: var(--accent-color); }
+.guide-faq details > :not(summary) { margin: 0 16px 12px; }
+
+@media (max-width: 900px) {
+  .guide-os { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .guide-tools > div, .guide-keys > div, .guide-files > div { grid-template-columns: minmax(0, 1fr); }
+}
+}

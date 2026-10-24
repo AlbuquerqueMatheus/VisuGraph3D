@@ -180,6 +180,10 @@ class Analysis {
             context: this.contextOf(ancestors),
             topStmt: top,
             name: null,
+            // a variável do `const nome = new …` mesmo fora do topo (num laço, numa função): ela não
+            // vira `name`, porque ali a linha pode criar vários objetos, mas a lista de objetos e a
+            // correção dos projetos acham o objeto por ela
+            local: parent?.type === "VariableDeclarator" && parent.init === node && parent.id.type === "Identifier" ? parent.id.name : null,
             links: {},
             owner: null,
             users: [],

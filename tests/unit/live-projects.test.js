@@ -3,21 +3,51 @@ import * as THREE from "three";
 import { grade } from "../../src/live/challenges.js";
 import { sceneFacts } from "../../src/live/runtime/facts.js";
 import { analyze, hasBlockingError } from "../../src/live/engine/analyze.js";
+import { instrument } from "../../src/live/engine/instrument.js";
 import { LEVELS, PROJECTS, behind, codeState, diffLines, findSnippet, guideStep, hunks, isComputer, liveSteps, projectById, startCode, stepIndex } from "../../src/live/projects/index.js";
 import { animatedKeys, armsOf } from "../../src/live/projects/checks.js";
 import { exportProject } from "../../src/live/export.js";
 
-// Roda o código com o Three.js de verdade e monta os fatos como o app monta para um projeto:
-// os objetos pelo nome da variável, o fundo, e o que animar() muda, pela análise do código.
-// Sem cena no código, o visor usa uma vazia (e avisa na barra de status).
+// Roda o código instrumentado com o Three.js de verdade, como o visor roda, e monta os fatos como
+// o app monta para um projeto: cada `new` do código guarda os objetos que criou (num laço, vários),
+// os objetos vão pelo nome da variável (a local, se foram criados num laço), com o fundo e o que
+// animar() muda, pela análise do código. Sem cena no código, o visor usa uma vazia (e avisa na
+// barra de status).
 function factsOf(code) {
-  const names = [...code.matchAll(/^(?:const|let|var)\s+(\w+)\s*=/gm)].map((m) => m[1]);
-  const scope = new Function("THREE", `${code}\nreturn { ${names.join(", ")} };`)(THREE);
-  const idOf = (obj) => names.find((n) => scope[n] === obj);
-  const entries = names.map((n) => [n, scope[n]]);
-  const facts = sceneFacts({ scene: scope.cena ?? new THREE.Scene(), camera: scope.camera, entries, idOf });
   const analysis = analyze(code);
-  return { ...facts, nameOf: (id) => id, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar };
+  const registry = new Map();
+  const ids = new Map();
+  let error = null;
+  globalThis.__vg = {
+    THREE,
+    t(id, obj) {
+      if (!registry.has(id)) registry.set(id, []);
+      registry.get(id).push(obj);
+      if (obj && typeof obj === "object") ids.set(obj, id);
+      return obj;
+    },
+    l() {},
+    end() {},
+    fail(e) {
+      error = e;
+    },
+    timers: { setTimeout, setInterval, clearTimeout, clearInterval, requestAnimationFrame: () => 0, cancelAnimationFrame: () => {} },
+  };
+  try {
+    (0, eval)(instrument(analysis).script);
+  } finally {
+    delete globalThis.__vg;
+  }
+  if (error) throw error;
+  const first = (obj) => (obj ? registry.get(obj.id)?.[0] : undefined);
+  const facts = sceneFacts({ scene: first(analysis.scene) ?? new THREE.Scene(), camera: first(analysis.camera), entries: [...registry], idOf: (obj) => ids.get(obj) });
+  const nameOf = (id) => analysis.objects[id]?.name ?? analysis.objects[id]?.local ?? null;
+  const objects = Object.create(null);
+  for (const [id, f] of Object.entries(facts.objects)) {
+    const name = nameOf(id);
+    if (name && !objects[name]) objects[name] = f;
+  }
+  return { ...facts, objects, nameOf, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar };
 }
 
 const galaxia = projectById("galaxia");
@@ -45,14 +75,15 @@ describe("guia de projetos: o catálogo", () => {
   it("tem os três níveis, e cada projeto está num deles", () => {
     expect(LEVELS.map((l) => l.id)).toEqual(["facil", "intermediario", "avancado"]);
     for (const p of PROJECTS) expect(LEVELS.map((l) => l.id)).toContain(p.level);
-    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(7);
+    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(6);
     const soon = LEVELS.flatMap((l) => l.soon.map((s) => s.title));
     for (const p of PROJECTS) expect(soon, `${p.title} já existe`).not.toContain(p.title);
   });
 
-  it("o Sistema solar vem primeiro, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2", () => {
+  it("os fáceis vêm primeiro: Sistema solar e Vitrine de materiais, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2", () => {
     expect(PROJECTS.map((p) => [p.id, liveSteps(p).length, p.steps.filter(isComputer).length])).toEqual([
       ["sistema-solar", 8, 1],
+      ["vitrine", 8, 1],
       ["galaxia", 10, 2],
     ]);
   });
@@ -245,6 +276,124 @@ describe("conferências do sistema solar", () => {
     expect(failing(variant("caminhos", ["  transparent: true,\n", ""]))).toEqual([
       "Os caminhos são transparentes (transparent: true e opacity menor que 1) (caminhoTerra e caminhoSaturno sem transparent: true)",
     ]);
+  });
+});
+
+describe("conferências da vitrine", () => {
+  const variant = variantOf(projectById("vitrine"));
+
+  it("a câmera sem lookAt, de lado, perto ou com o campo de visão aberto, e o fundo claro, a conferência avisa", () => {
+    expect(failing(variant("palco", ["camera.lookAt(0, 1, 0);", ""]))).toEqual(["Ela olha para o centro da vitrine, de um pouco acima (5° a 35°) (a câmera olha 14° para fora do centro)"]);
+    expect(failing(variant("palco", ["camera.position.set(0, 5, 16);", "camera.position.set(12, 5, 10);"]))).toEqual([
+      "A câmera fica de frente para a vitrine, longe o bastante para ela caber no visor (a câmera está 50° para o lado: as esferas ficariam umas atrás das outras)",
+    ]);
+    expect(failing(variant("palco", ["camera.position.set(0, 5, 16);", "camera.position.set(0, 3.6, 10);"]))).toEqual([
+      "A câmera fica de frente para a vitrine, longe o bastante para ela caber no visor (a câmera está a 10,3 do centro: com 40° de campo de visão, as esferas das pontas só cabem num visor estreito de 14,9 para trás)",
+    ]);
+    expect(failing(variant("palco", ["PerspectiveCamera(40,", "PerspectiveCamera(30,"]))).toEqual([
+      "A câmera fica de frente para a vitrine, longe o bastante para ela caber no visor (a câmera está a 16,5 do centro: com 30° de campo de visão, as esferas das pontas só cabem num visor estreito de 20,3 para trás)",
+    ]);
+    expect(failing(variant("palco", ["PerspectiveCamera(40,", "PerspectiveCamera(50,"], ["camera.position.set(0, 5, 16);", "camera.position.set(0, 4, 12);"])), "com um ângulo maior, cabe mais perto").toEqual([]);
+    expect(failing(variant("palco", ["PerspectiveCamera(40,", "PerspectiveCamera(90,"]))).toEqual(["O campo de visão é fechado, de no máximo 50° (o campo de visão é de 90°: as esferas das pontas sairiam ovais)"]);
+    expect(failing(variant("palco", ['new THREE.Color("#111317")', 'new THREE.Color("#f0f0f0")']))).toEqual(["A cena tem um fundo escuro (o fundo é #f0f0f0, claro demais para uma vitrine à noite)"]);
+  });
+
+  it("as três esferas: a mesma geometria, a mesma cor, na ordem e sem se encostar", () => {
+    expect(failing(variant("esferas", ["  forma,", "  new THREE.SphereGeometry(1, 64, 32),"]))).toEqual(["As três usam a mesma geometria (lambert tem uma geometria só dela)"]);
+    expect(failing(variant("esferas", ["  forma,", "  new THREE.SphereGeometry(1, 64, 32),"], ["  forma,", "  new THREE.SphereGeometry(1, 64, 32),"], ["  forma,", "  new THREE.SphereGeometry(1, 64, 32),"]))).toEqual([
+      "As três usam a mesma geometria (cada esfera tem a sua geometria)",
+    ]);
+    expect(failing(variant("esferas", ['new THREE.MeshBasicMaterial({ color: "#e0533d" })\n);\nphong', 'new THREE.MeshBasicMaterial({ color: "#3d7be0" })\n);\nphong']))).toEqual([
+      "As três têm a mesma cor (phong é #3d7be0, e lambert, #e0533d)",
+    ]);
+    expect(failing(variant("esferas", ["lambert.position.set(-2.6, 1.6, 0);", "lambert.position.set(2.6, 1.6, 0);"], ["standard.position.set(2.6, 1.6, 0);", "standard.position.set(-2.6, 1.6, 0);"]))).toEqual([
+      "Da esquerda para a direita: lambert, phong e standard, sem encostar uma na outra (da esquerda para a direita, estão standard, phong e lambert)",
+    ]);
+    expect(failing(variant("esferas", ["lambert.position.set(-2.6, 1.6, 0);", "lambert.position.set(-1.9, 1.6, 0);"]))).toEqual([
+      "Da esquerda para a direita: lambert, phong e standard, sem encostar uma na outra (lambert e phong se encostam)",
+    ]);
+    expect(failing(variant("esferas", ["new THREE.SphereGeometry(1, 64, 32)", "new THREE.BoxGeometry(2, 2, 2)"]))).toEqual([
+      "As três são esferas do mesmo tamanho, lado a lado, à mesma altura (lambert não é redonda)",
+    ]);
+  });
+
+  it("o sol fraco, de trás ou fora da cena, a luz ambiente no lugar da do céu e o Lambert sem luz, a conferência avisa", () => {
+    expect(failing(variant("luz", ['new THREE.DirectionalLight("#ffffff", 2.2)', 'new THREE.DirectionalLight("#ffffff", 0.5)']))).toEqual([
+      "Ele ilumina sem estourar: intensidade entre 1 e 5 (a intensidade é 0,50: fraca demais, as esferas ficam escuras)",
+    ]);
+    expect(failing(variant("luz", ["sol.position.set(-4, 6, 5);", "sol.position.set(-4, 6, -5);"]))).toEqual([
+      "O sol é uma luz direcional, na cena, que vem de cima e da frente (a luz vem de trás das esferas: o lado que a câmera vê fica no escuro)",
+    ]);
+    expect(failing(variant("luz", ["cena.add(sol);", ""]))).toEqual(["O sol é uma luz direcional, na cena, que vem de cima e da frente (o sol não foi adicionado à cena)"]);
+    expect(failing(variant("luz", ['new THREE.HemisphereLight("#cfe0ff", "#4a3b2f", 1)', 'new THREE.AmbientLight("#cfe0ff", 1)']))).toEqual([
+      "Uma luz do céu (HemisphereLight) clareia o lado da sombra (não há HemisphereLight acesa na cena)",
+    ]);
+    expect(failing(variant("luz", ['new THREE.HemisphereLight("#cfe0ff", "#4a3b2f", 1)', 'new THREE.HemisphereLight("#4a3b2f", "#cfe0ff", 1)']))).toEqual([
+      "Uma luz do céu (HemisphereLight) clareia o lado da sombra (o chão (a segunda cor) está mais claro que o céu)",
+    ]);
+    expect(failing(variant("luz", ["new THREE.MeshLambertMaterial(", "new THREE.MeshBasicMaterial("]))).toEqual([
+      "A esfera da esquerda é de MeshLambertMaterial (é MeshBasicMaterial, que ignora a luz)",
+    ]);
+  });
+
+  it("o Phong com o specular padrão ou um shininess fora da faixa, a conferência avisa", () => {
+    expect(failing(variant("phong", [', specular: "#ffffff"', ""]))).toEqual(["A cor do brilho (specular) é clara (specular é #111111, o padrão: o brilho quase não aparece)"]);
+    expect(failing(variant("phong", ["shininess: 60", "shininess: 5"]))).toEqual(["O shininess fica entre 20 e 300 (shininess 5: a mancha se espalha pela esfera inteira)"]);
+    expect(failing(variant("phong", ["shininess: 60", "shininess: 1000"]))).toEqual(["O shininess fica entre 20 e 300 (shininess 1000: a mancha vira um ponto)"]);
+  });
+
+  it("o Standard de metal, sem roughness ou liso demais, a conferência avisa", () => {
+    expect(failing(variant("standard", ["metalness: 0 ", "metalness: 1 "]))).toEqual(["Ela não é metal (metalness perto de 0) (metalness 1,00: sem nada em volta para refletir, o metal fica escuro)"]);
+    expect(failing(variant("standard", ["roughness: 0.35, ", ""]))).toEqual([
+      "A aspereza (roughness) fica entre 0,2 e 0,6 (roughness 1,00, o padrão: o brilho se espalha tanto que some)",
+    ]);
+    expect(failing(variant("standard", ["roughness: 0.35", "roughness: 0.05"]))).toEqual(["A aspereza (roughness) fica entre 0,2 e 0,6 (roughness 0,05: o brilho vira um ponto)"]);
+  });
+
+  it("o chão de costas ou em pé, os pedestais enterrados e uma esfera sem pedestal, a conferência avisa", () => {
+    expect(failing(variant("chao", ["chao.rotation.x = -Math.PI / 2;", "chao.rotation.x = Math.PI / 2;"]))).toEqual([
+      "O chão é plano, deitado na altura 0 e virado para cima (o chão está de costas: a câmera, de cima, vê o verso, que não é pintado)",
+    ]);
+    expect(failing(variant("chao", ["chao.rotation.x = -Math.PI / 2;\n", ""]))).toEqual(["O chão é plano, deitado na altura 0 e virado para cima (o chão não está deitado: falta girar 90° em x)"]);
+    expect(failing(variant("chao", ["pedestal.position.set(esfera.position.x, 0.3, 0);", "pedestal.position.set(esfera.position.x, 0, 0);"]))).toEqual([
+      "Cada esfera está em cima de um pedestal, encostada nele (lambert flutua 0,30 acima do pedestal)",
+      "Os pedestais ficam apoiados no chão (um pedestal começa a −0,30 do chão)",
+    ]);
+    expect(failing(variant("chao", ["[lambert, phong, standard]", "[lambert, phong]"]))).toEqual(["Cada esfera está em cima de um pedestal, encostada nele (standard não tem pedestal embaixo)"]);
+    expect(failing(variant("chao", ["const pedra = new THREE.MeshStandardMaterial(", "const pedra = new THREE.MeshBasicMaterial("]))).toEqual([
+      "O chão e os pedestais reagem à luz (o chão é MeshBasicMaterial, que não reage à luz)",
+    ]);
+  });
+
+  it("a escala de aspereza conta as cinco amostras do laço, na ordem", () => {
+    expect(failing(variant("aspereza", ["i < 5", "i < 4"]))).toEqual([
+      "São 5 amostras redondas, numa fila na frente dos pedestais (há 4 amostras)",
+      "Da esquerda para a direita, a aspereza vai de 0 a 1, subindo (a aspereza vai de 0,00 a 0,75)",
+    ]);
+    expect(failing(variant("aspereza", ["roughness: i / 4", "roughness: 1 - i / 4"]))).toEqual([
+      "Da esquerda para a direita, a aspereza vai de 0 a 1, subindo (da esquerda para a direita, a aspereza é 1,00; 0,75; 0,50; 0,25; 0,00)",
+    ]);
+    expect(failing(variant("aspereza", ["amostra.position.set(-2.4 + i * 1.2, 0.4, 3.6);", "amostra.position.set(-2.4 + i * 1.2, 1, 3.6);"]))).toEqual([
+      "Elas ficam apoiadas no chão (uma amostra começa a 0,60 do chão)",
+    ]);
+  });
+
+  it("a lâmpada fraca, o bulbo fora dela ou com luz e o animar sem o z, a conferência avisa; com position.set no animar, vale", () => {
+    expect(failing(variant("lampada", ['new THREE.PointLight("#ffd9a0", 12)', 'new THREE.PointLight("#ffd9a0", 1)']))).toEqual([
+      "A luz da lâmpada chega à esfera do meio (chega 0,05 de luz na esfera do meio, quase nada: a luz pontual enfraquece com o quadrado da distância)",
+    ]);
+    expect(failing(variant("lampada", ["lampada.add(bulbo);", "cena.add(bulbo);"]))).toEqual([
+      "O bulbo vai junto com a lâmpada e brilha com a própria cor (o bulbo está direto na cena e não vai com a lâmpada)",
+    ]);
+    expect(failing(variant("lampada", ['new THREE.MeshBasicMaterial({ color: "#ffd9a0" })', 'new THREE.MeshStandardMaterial({ color: "#ffd9a0" })']))).toEqual([
+      "O bulbo vai junto com a lâmpada e brilha com a própria cor (o bulbo é MeshStandardMaterial: com a luz dentro dele, ele fica escuro)",
+    ]);
+    expect(failing(variant("lampada", ["  lampada.position.z = Math.sin(tempo) * 4;\n", ""]))).toEqual([
+      "Ela dá voltas em torno do centro, a uns 4 dele (animar() não muda o x e o z da lâmpada)",
+    ]);
+    expect(
+      failing(variant("lampada", ["  lampada.position.x = Math.cos(tempo) * 4;\n  lampada.position.z = Math.sin(tempo) * 4;", "  lampada.position.set(Math.cos(tempo) * 4, 3.5, Math.sin(tempo) * 4);"])),
+    ).toEqual([]);
   });
 });
 

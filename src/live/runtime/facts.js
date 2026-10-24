@@ -59,6 +59,9 @@ function objectFacts(obj, idOf) {
       hex: material.color?.isColor ? "#" + material.color.getHexString() : null,
       shininess: typeof material.shininess === "number" ? material.shininess : null,
       specular: rgbArray(material.specular) ?? null,
+      // só os materiais com base física (Standard e Physical) têm
+      roughness: typeof material.roughness === "number" ? material.roughness : null,
+      metalness: typeof material.metalness === "number" ? material.metalness : null,
       size: typeof material.size === "number" ? material.size : null, // só PointsMaterial tem
       sizeAttenuation: typeof material.sizeAttenuation === "boolean" ? material.sizeAttenuation : null,
       vertexColors: !!material.vertexColors,
@@ -74,6 +77,7 @@ function objectFacts(obj, idOf) {
     // vértices: em THREE.Points, cada vértice é um ponto desenhado; a amostra fica no espaço do objeto
     const position = geometry.getAttribute("position");
     facts.geometry = {
+      id: idOf(geometry) ?? null, // malhas com a mesma geometria têm o mesmo id
       type: geometry.type,
       vertices: position?.count ?? 0,
       attributes: Object.keys(geometry.attributes),
@@ -114,14 +118,24 @@ function cameraFacts(camera) {
   };
 }
 
+/** Quantos objetos a mais de uma mesma linha do código (criados num laço) vão nos fatos, como `copies`. */
+const MAX_COPIES = 31;
+
 /**
- * Fatos da cena: os objetos do código (`entries`, pares [id, objeto]), as luzes acesas, a
- * câmera do código e a cor de fundo.
+ * Fatos da cena: os objetos do código (`entries`, pares [id, objeto] ou [id, objetos], os que
+ * aquela linha criou, na ordem), as luzes acesas, a câmera do código e a cor de fundo. Os fatos
+ * de um id são os do primeiro objeto, e os dos outros vão em `copies`.
  */
 export function sceneFacts({ scene, camera, entries, idOf }) {
   scene.updateMatrixWorld(); // como o desenho faz a cada quadro: alvos de luz na cena inclusive
   const objects = {};
-  for (const [id, obj] of entries) if (obj && obj.isObject3D && !obj.isScene) objects[id] = objectFacts(obj, idOf);
+  const object3D = (obj) => obj && obj.isObject3D && !obj.isScene;
+  for (const [id, value] of entries) {
+    const [first, ...rest] = [].concat(value).filter(object3D);
+    if (!first) continue;
+    objects[id] = objectFacts(first, idOf);
+    if (rest.length) objects[id].copies = rest.slice(0, MAX_COPIES).map((obj) => objectFacts(obj, idOf));
+  }
   const background = scene.background?.isColor ? "#" + scene.background.getHexString() : null;
   return { objects, lights: sceneLights(scene), camera: camera ? cameraFacts(camera) : null, background };
 }

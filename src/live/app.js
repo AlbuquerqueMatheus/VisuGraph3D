@@ -694,11 +694,11 @@ function updateMathContext() {
     obj && isObject3DKind(obj.kind)
       ? {
         id,
-        name: obj.name,
+        name: obj.name ?? obj.local,
         className: obj.className,
         ids: fromScreen,
         material: (meshId) => state.analysis.objects[meshId]?.links.material ?? null,
-        nameOf: (objId) => state.analysis.objects[objId]?.name ?? null,
+        nameOf: (objId) => state.analysis.objects[objId]?.name ?? state.analysis.objects[objId]?.local ?? null,
         links: sync,
       }
       : null,
@@ -842,11 +842,12 @@ function onFacts(msg) {
   const target = state.project ? projectStep() : state.challenge;
   if (!target || isComputer(target) || !analysis || msg.seq !== state.factsSeq) return;
   const objects = Object.create(null);
+  // os objetos criados num laço não têm `name`, mas têm a variável local (`local`)
+  const nameOf = (id) => analysis.objects[id]?.name ?? analysis.objects[id]?.local ?? null;
   for (const [id, facts] of Object.entries(msg.objects)) {
-    const name = analysis.objects[id]?.name;
+    const name = nameOf(id);
     if (name && !objects[name]) objects[name] = facts;
   }
-  const nameOf = (id) => analysis.objects[id]?.name ?? null;
   const facts = { objects, camera: msg.camera, lights: msg.lights, nameOf, background: msg.background, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar };
   const result = grade(target, facts);
   const passed = result.results.filter((r) => r.ok).length;

@@ -5,6 +5,7 @@ import { test, expect } from "./fixtures.js";
 import { code, pasteCode, status } from "./live.js";
 import { GALAXIA } from "../../src/live/projects/galaxia.js";
 import { SISTEMA_SOLAR } from "../../src/live/projects/sistemaSolar.js";
+import { VITRINE } from "../../src/live/projects/vitrine.js";
 import { unzip } from "../../src/lib/zip.js";
 
 const panel = (page) => page.locator("#lv-project");
@@ -95,8 +96,9 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
   await page.click("#lv-tab-project");
   await expect(panel(page).locator(".lv-pj-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
-  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(7);
+  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(6);
   await expect(panel(page).locator('.lv-pj-card[data-project="sistema-solar"] .lv-pj-card__progress')).toHaveText("9 passos");
+  await expect(panel(page).locator('.lv-pj-card[data-project="vitrine"] .lv-pj-card__progress')).toHaveText("9 passos");
   const card = panel(page).locator('.lv-pj-card[data-project="galaxia"]');
   await expect(card.locator(".lv-pj-card__progress")).toHaveText("12 passos");
 
@@ -201,6 +203,38 @@ test("projetos: no Sistema solar, a Terra entra em órbita dentro de um grupo, e
   const files = await zipFiles(download);
   for (const file of SISTEMA_SOLAR.steps[8].files) expect(files[file.path], file.path).toBe(file.code);
   expect(JSON.parse(files["package.json"]).name).toBe("sistema-solar");
+});
+
+test("projetos: na Vitrine de materiais, a conferência conta as amostras que o laço cria, e o projeto sai para o computador", async ({ page }) => {
+  await page.goto("index-3d.html?projeto=vitrine&passo=7");
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(panel(page).locator(".lv-ch__kicker")).toHaveText("Fácil · Vitrine de materiais");
+  await expect(title(page)).toHaveText("7. A escala de aspereza");
+  await expect(page.locator("#lv-codebar")).toContainText("Vitrine de materiais · passo 7 de 9");
+  await expect(result(page)).toContainText("(não achei amostra na cena)", { timeout: 30_000 });
+
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect.poll(() => code(page)).toContain("for (let i = 0; i < 5; i++) {");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // com quatro voltas, o laço cria quatro amostras, e a conferência vê todas
+  await pasteCode(page, VITRINE.steps[6].code.replace("i < 5", "i < 4"));
+  await expect(result(page)).toContainText("(há 4 amostras)", { timeout: 30_000 });
+  await page.click("#lv-tab-props");
+  await expect(page.locator("#lv-objects .lv-object", { hasText: "amostra" }), "o objeto do laço aparece pela variável dele").toContainText("laço");
+
+  // de volta ao código do passo, o passo no computador começa do fim do passo 8 e baixa o projeto com ele
+  await page.click("#lv-tab-project");
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+  await stepButton(page, 9).click();
+  await expect(title(page)).toHaveText("9. No seu computador");
+  await expect.poll(() => code(page)).toContain("lampada.position.z = Math.sin(tempo) * 4;");
+  const [download] = await Promise.all([page.waitForEvent("download"), panel(page).locator('[data-download="vitrine.zip"]').click()]);
+  expect(download.suggestedFilename()).toBe("vitrine.zip");
+  const files = await zipFiles(download);
+  for (const file of VITRINE.steps[8].files) expect(files[file.path], file.path).toBe(file.code);
+  expect(JSON.parse(files["package.json"]).name).toBe("vitrine");
 });
 
 test("projetos: o modo de estudo não tem a aba Projetos", async ({ page }) => {

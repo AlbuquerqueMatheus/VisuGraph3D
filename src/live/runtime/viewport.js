@@ -1194,11 +1194,11 @@ function showArrows(point, result) {
 // ---------------------------------------------------------------------------
 // Desafios: os fatos que a correção confere e o contorno do alvo
 
-/** Fatos dos objetos da execução na tela, da câmera do código e das luzes acesas. */
+/** Fatos dos objetos da execução na tela (os de um laço também), da câmera do código e das luzes acesas. */
 function factsInfo(msg) {
   const run = state.current;
   if (!run) return { type: "facts", seq: msg.seq, runId: null };
-  const entries = [...run.registry].map(([id, list]) => [id, list[0]]);
+  const entries = [...run.registry];
   return { type: "facts", seq: msg.seq, runId: run.id, ...sceneFacts({ scene: run.scene, camera: run.camera, entries, idOf: (obj) => run.idOf.get(obj) }) };
 }
 

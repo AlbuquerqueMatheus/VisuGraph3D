@@ -206,4 +206,20 @@ cena.add(orbita);`);
     });
     expect(facts.objects.orbita).toMatchObject({ type: "LineLoop", geometry: { vertices: 3 }, material: { type: "LineBasicMaterial", hex: "#ffcc00" } });
   });
+
+  it("dizem que lado dos triângulos o material pinta e como a luz pontual enfraquece com a distância", () => {
+    const facts = factsOf(`const cena = new THREE.Scene();
+const anel = new THREE.Mesh(new THREE.RingGeometry(1, 2), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }));
+cena.add(anel);
+const bola = new THREE.Mesh(new THREE.SphereGeometry(), new THREE.MeshBasicMaterial());
+cena.add(bola);
+const lampada = new THREE.PointLight("#ffffff", 80, 20, 1);
+cena.add(lampada);
+const ambiente = new THREE.AmbientLight("#ffffff", 0.2);
+cena.add(ambiente);`);
+    expect(facts.objects.anel.material.side).toBe("DoubleSide");
+    expect(facts.objects.bola.material.side).toBe("FrontSide");
+    expect(facts.objects.lampada.light).toMatchObject({ intensity: 80, distance: 20, decay: 1 });
+    expect(facts.objects.ambiente.light).toMatchObject({ intensity: 0.2, distance: null, decay: null });
+  });
 });

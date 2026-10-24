@@ -21,15 +21,40 @@ function factsOf(code) {
 }
 
 const galaxia = projectById("galaxia");
-const live = liveSteps(galaxia);
+const solar = projectById("sistema-solar");
 const computer = galaxia.steps.filter(isComputer);
 const failing = (result) => result.results.filter((r) => !r.ok).map((r) => `${r.text} (${r.seen})`);
+const fileOf = (files, path) => files.find((f) => f.path === path);
+/** Para describe.each: [título, projeto]. */
+const EACH = PROJECTS.map((p) => [p.title, p]);
+
+/** Confere o código de um passo com trocas [de, para], pelas conferências do próprio passo. */
+function variantOf(project) {
+  return (id, ...swaps) => {
+    const step = project.steps[stepIndex(project, id)];
+    let code = step.code;
+    for (const [from, to] of swaps) {
+      expect(code, `${id}: ${from}`).toContain(from);
+      code = code.replace(from, to);
+    }
+    return grade(step, factsOf(code));
+  };
+}
 
 describe("guia de projetos: o catálogo", () => {
   it("tem os três níveis, e cada projeto está num deles", () => {
     expect(LEVELS.map((l) => l.id)).toEqual(["facil", "intermediario", "avancado"]);
     for (const p of PROJECTS) expect(LEVELS.map((l) => l.id)).toContain(p.level);
-    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(8);
+    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(7);
+    const soon = LEVELS.flatMap((l) => l.soon.map((s) => s.title));
+    for (const p of PROJECTS) expect(soon, `${p.title} já existe`).not.toContain(p.title);
+  });
+
+  it("o Sistema solar vem primeiro, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2", () => {
+    expect(PROJECTS.map((p) => [p.id, liveSteps(p).length, p.steps.filter(isComputer).length])).toEqual([
+      ["sistema-solar", 8, 1],
+      ["galaxia", 10, 2],
+    ]);
   });
 
   it("acha o passo pelo número ou pelo id", () => {
@@ -39,14 +64,17 @@ describe("guia de projetos: o catálogo", () => {
     expect(stepIndex(galaxia, "painel")).toBe(11);
     expect(stepIndex(galaxia, "13")).toBe(-1);
     expect(stepIndex(galaxia, "nada")).toBe(-1);
+    expect(stepIndex(solar, "lua")).toBe(5);
+    expect(stepIndex(solar, "computador")).toBe(8);
   });
 });
 
-describe("Gerador de galáxias", () => {
-  it("tem 10 passos no VisuGraph, cada um com objetivo, linhas, porquês, sugestões e conferências", () => {
-    expect(galaxia.steps).toHaveLength(12);
-    expect(new Set(galaxia.steps.map((s) => s.id)).size).toBe(12);
-    expect(live).toHaveLength(10);
+describe.each(EACH)("%s", (_, project) => {
+  const live = liveSteps(project);
+
+  it("cada passo no VisuGraph tem objetivo, linhas, porquês, sugestões e conferências, e os do computador vêm no fim", () => {
+    expect(new Set(project.steps.map((s) => s.id)).size).toBe(project.steps.length);
+    expect(project.steps.slice(live.length).every(isComputer)).toBe(true);
     for (const s of live) {
       expect(s.goal.length, s.id).toBeGreaterThan(80);
       expect(s.lines.length, s.id).toBeGreaterThan(0);
@@ -62,7 +90,7 @@ describe("Gerador de galáxias", () => {
       const a = analyze(s.code);
       expect(hasBlockingError(a), s.id).toBe(false);
       expect(a.diagnostics.filter((d) => d.severity === "error"), s.id).toEqual([]);
-      expect(diffLines(startCode(galaxia, i), s.code).some((d) => d.op !== "same"), s.id).toBe(true);
+      expect(diffLines(startCode(project, i), s.code).some((d) => d.op !== "same"), s.id).toBe(true);
     });
   });
 
@@ -82,22 +110,14 @@ describe("Gerador de galáxias", () => {
 
   it("o código do começo de cada passo ainda não passa: o passo tem o que fazer", () => {
     live.forEach((s, i) => {
-      expect(grade(s, factsOf(startCode(galaxia, i))).ok, s.id).toBe(false);
+      expect(grade(s, factsOf(startCode(project, i))).ok, s.id).toBe(false);
     });
   });
 });
 
 describe("conferências da galáxia", () => {
   const stepOf = (id) => galaxia.steps[stepIndex(galaxia, id)];
-  /** O código do passo com trocas [de, para], conferido pelo próprio passo. */
-  const variant = (id, ...swaps) => {
-    let code = stepOf(id).code;
-    for (const [from, to] of swaps) {
-      expect(code, `${id}: ${from}`).toContain(from);
-      code = code.replace(from, to);
-    }
-    return grade(stepOf(id), factsOf(code));
-  };
+  const variant = variantOf(galaxia);
 
   it("um disco quadrado não passa por redondo", () => {
     const result = variant(
@@ -141,6 +161,89 @@ describe("conferências da galáxia", () => {
   it("girar a galáxia em x não conta como girar em y", () => {
     expect(failing(variant("movimento", ["galaxia.rotation.y = tempo * 0.1;", "galaxia.rotation.x = tempo * 0.1;"]))).toEqual([
       "A galáxia gira em torno do eixo y em animar() (animar() não muda galaxia.rotation.y)",
+    ]);
+  });
+});
+
+describe("conferências do sistema solar", () => {
+  const variant = variantOf(solar);
+
+  it("um cubo não passa por esfera, mesmo com os cantos à mesma distância do centro", () => {
+    expect(failing(variant("sol", ["new THREE.SphereGeometry(1.5, 48, 24)", "new THREE.BoxGeometry(2, 2, 2)"]))).toEqual(["O Sol é uma esfera no centro da cena (sol não é redondo)"]);
+    expect(failing(variant("sol", ["new THREE.SphereGeometry(1.5, 48, 24)", "new THREE.SphereGeometry(1.5, 8, 4)"])), "uma esfera grosseira ainda é esfera").toEqual([]);
+  });
+
+  it("a Terra pede um material que reaja à luz", () => {
+    const result = variant("terra", ['new THREE.MeshStandardMaterial({ color: "#3d7bff" })', 'new THREE.MeshBasicMaterial({ color: "#3d7bff" })']);
+    expect(failing(result)).toEqual(["O material dela reage à luz (a Terra usa MeshBasicMaterial, que não reage à luz)"]);
+  });
+
+  it("a luz de código antigo, com intensidade 1, quase não chega à Terra; com 30 ou com a Terra a 9, chega", () => {
+    expect(failing(variant("luz", ['new THREE.PointLight("#ffffff", 80)', 'new THREE.PointLight("#ffffff", 1)']))).toEqual([
+      "Chega luz bastante na Terra (chega 0,05 de luz na Terra, quase nada: a luz enfraquece com o quadrado da distância)",
+    ]);
+    expect(failing(variant("luz", ['new THREE.PointLight("#ffffff", 80)', 'new THREE.PointLight("#ffffff", 30)']))).toEqual([]);
+    expect(failing(variant("luz", ["terra.position.set(4.5, 0, 0);", "terra.position.set(9, 0, 0);"]))).toEqual([]);
+    expect(failing(variant("luz", ['new THREE.PointLight("#ffffff", 80)', 'new THREE.PointLight("#ffffff", 80, 4)'])), "o distance corta a luz antes da Terra").toEqual([
+      "Chega luz bastante na Terra (chega 0,00 de luz na Terra, quase nada: a luz enfraquece com o quadrado da distância)",
+    ]);
+  });
+
+  it("a luz pontual tem de estar no Sol e na cena, e a ambiente, fraca", () => {
+    expect(failing(variant("luz", ["cena.add(luzDoSol);", "luzDoSol.position.set(3, 0, 0);\ncena.add(luzDoSol);"]))).toEqual([
+      "Uma luz pontual sai do centro do Sol (a luz pontual está a 3,00 do centro do Sol, fora dele)",
+    ]);
+    expect(failing(variant("luz", ["cena.add(luzDoSol);", ""]))[0]).toBe("Uma luz pontual sai do centro do Sol (a luz pontual não foi adicionada à cena)");
+    expect(failing(variant("luz", ['new THREE.AmbientLight("#ffffff", 0.2)', 'new THREE.AmbientLight("#ffffff", 3)']))).toEqual([
+      "Uma luz ambiente fraca clareia o lado da noite (a intensidade é 3,00, forte demais: a noite fica quase tão clara quanto o dia)",
+    ]);
+  });
+
+  it("a Terra fora do grupo não está em órbita, e girar o grupo em z não conta", () => {
+    expect(failing(variant("orbita", ["orbitaTerra.add(terra);", "cena.add(terra);"]))).toEqual(["A Terra está dentro do grupo orbitaTerra (está direto na cena)"]);
+    expect(failing(variant("orbita", ["orbitaTerra.rotation.y = tempo * 0.5;", "orbitaTerra.rotation.z = tempo * 0.5;"]))).toEqual([
+      "animar() gira o grupo em volta do eixo y (animar() não muda orbitaTerra.rotation.y)",
+    ]);
+  });
+
+  it("a órbita da Lua na cena não vai com a Terra; dentro de orbitaTerra, na posição da Terra, vai", () => {
+    expect(failing(variant("lua", ["terra.add(orbitaLua);", "cena.add(orbitaLua);"]))[0]).toBe(
+      "A órbita da Lua fica no centro da Terra e vai com ela (orbitaLua está direto na cena e não vai com a Terra)",
+    );
+    expect(failing(variant("lua", ["terra.add(orbitaLua);", "orbitaLua.position.set(4.5, 0, 0);\norbitaTerra.add(orbitaLua);"]))).toEqual([]);
+    expect(failing(variant("lua", ["lua.position.set(0.8, 0, 0);", "lua.position.set(0.5, 0, 0);"]))).toEqual([
+      "A Lua é menor que a Terra e fica perto dela, sem encostar (a Lua está a 0,50 do centro da Terra: encosta nela)",
+    ]);
+  });
+
+  it("o anel em pé, sem DoubleSide ou fora de Saturno, e Saturno deitado, a conferência avisa", () => {
+    expect(failing(variant("saturno", ["anel.rotation.x = -Math.PI / 2;\n", ""]))).toEqual([
+      "O anel é filho de Saturno e fica em volta do equador dele (o anel sai 1,50 do plano do equador: falta deitar o anel)",
+    ]);
+    expect(failing(variant("saturno", ["side: THREE.DoubleSide ", ""]))).toEqual(["O anel aparece dos dois lados (side: THREE.DoubleSide) (o anel pinta só a frente)"]);
+    expect(failing(variant("saturno", ["saturno.add(anel);", "anel.position.set(7.5, 0, 0);\norbitaSaturno.add(anel);"]))).toEqual([
+      "O anel é filho de Saturno e fica em volta do equador dele (o pai é orbitaSaturno)",
+    ]);
+    expect(failing(variant("saturno", ["THREE.MathUtils.degToRad(27)", "THREE.MathUtils.degToRad(98)"]))).toEqual([
+      "O eixo de Saturno é inclinado, entre 10° e 45° (o eixo está inclinado 98°)",
+    ]);
+    expect(failing(variant("saturno", ["THREE.MathUtils.degToRad(27)", "THREE.MathUtils.degToRad(-27)"])), "inclinado para o outro lado vale").toEqual([]);
+  });
+
+  it("o eixo fixo do Experimente continua inclinado", () => {
+    expect(failing(variant("saturno", ["  orbitaSaturno.rotation.y = tempo * 0.2;", "  orbitaSaturno.rotation.y = tempo * 0.2;\n  saturno.rotation.y = -tempo * 0.2;"]))).toEqual([]);
+  });
+
+  it("o caminho em pé ou com outro raio não passa, e um anel fino no lugar do toro vale", () => {
+    expect(failing(variant("caminhos", ["caminhoTerra.rotation.x = Math.PI / 2;\n", ""]))).toEqual([
+      "O caminho da Terra é um círculo deitado em volta do Sol, por onde a Terra passa (ele sai 4,52 do plano das órbitas: está em pé ou inclinado)",
+    ]);
+    expect(failing(variant("caminhos", ["new THREE.TorusGeometry(4.5, 0.02, 8, 160)", "new THREE.TorusGeometry(5, 0.02, 8, 160)"]))).toEqual([
+      "O caminho da Terra é um círculo deitado em volta do Sol, por onde a Terra passa (o raio dele é 5,00, e o planeta está a 4,50 do Sol)",
+    ]);
+    expect(failing(variant("caminhos", ["new THREE.TorusGeometry(4.5, 0.02, 8, 160)", "new THREE.RingGeometry(4.45, 4.55, 128)"]))).toEqual([]);
+    expect(failing(variant("caminhos", ["  transparent: true,\n", ""]))).toEqual([
+      "Os caminhos são transparentes (transparent: true e opacity menor que 1) (caminhoTerra e caminhoSaturno sem transparent: true)",
     ]);
   });
 });
@@ -212,15 +315,14 @@ function runPanel(code) {
   return { ...new Function("THREE", "GUI", body)(THREE, FakeGUI), controllers };
 }
 
-describe("Gerador de galáxias: no seu computador", () => {
-  const stepOf = (id) => galaxia.steps[stepIndex(galaxia, id)];
-  const fileOf = (files, path) => files.find((f) => f.path === path);
+describe.each(EACH)("%s: no seu computador", (_, project) => {
+  const live = liveSteps(project);
+  const computer = project.steps.filter(isComputer);
 
-  it("os dois últimos passos são no computador, com comandos, arquivos explicados, porquês e o que conferir", () => {
-    expect(computer.map((s) => s.id)).toEqual(["computador", "painel"]);
-    expect(galaxia.steps.slice(live.length)).toEqual(computer);
+  it("os passos no computador têm comandos, arquivos explicados, porquês e o que conferir, e partem do último passo no VisuGraph", () => {
+    expect(computer[0].id).toBe("computador");
     for (const s of computer) {
-      expect(s.code, `${s.id} parte do fim do passo 10`).toBe(live.at(-1).code);
+      expect(s.code, `${s.id} parte do fim do último passo no VisuGraph`).toBe(live.at(-1).code);
       expect(s.goal.length, s.id).toBeGreaterThan(80);
       expect(s.setup.length, s.id).toBeGreaterThan(0);
       expect(s.setup.filter((item) => item.download), s.id).toHaveLength(1);
@@ -245,12 +347,22 @@ describe("Gerador de galáxias: no seu computador", () => {
     }
   });
 
-  it("o projeto baixado no passo 11 tem os arquivos que o passo explica, e o passo 12 parte deles", () => {
-    const step = stepOf("computador");
-    const { files } = exportProject(analyze(step.code), { name: "galaxia", title: galaxia.title });
+  it("o projeto baixado no primeiro passo no computador tem os arquivos que o passo explica", () => {
+    const step = computer[0];
+    expect(step.setup.find((item) => item.download).download.file).toBe(`${project.id}.zip`);
+    const { files } = exportProject(analyze(step.code), { name: project.id, title: project.title });
     for (const file of step.files) expect(fileOf(files, file.path).content, file.path).toBe(file.code);
     expect(fileOf(step.files, "src/cena.js").from, "o cena.js é o código do editor com o import e o export").toBe(step.code);
-    for (const file of stepOf("painel").files) expect(file.from, file.path).toBe(fileOf(step.files, file.path).code);
+    expect(JSON.parse(fileOf(files, "package.json").content).name).toBe(project.id);
+  });
+});
+
+describe("Gerador de galáxias: o painel do passo 12", () => {
+  const stepOf = (id) => galaxia.steps[stepIndex(galaxia, id)];
+
+  it("os dois passos no computador são o projeto e o painel, e o passo 12 parte dos arquivos do 11", () => {
+    expect(computer.map((s) => s.id)).toEqual(["computador", "painel"]);
+    for (const file of stepOf("painel").files) expect(file.from, file.path).toBe(fileOf(stepOf("computador").files, file.path).code);
   });
 
   it("o projeto pronto do passo 12 tem o lil-gui no package.json e o cena.js do passo", () => {

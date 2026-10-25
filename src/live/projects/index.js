@@ -13,6 +13,7 @@
 
 import { CIDADE } from "./cidade.js";
 import { GALAXIA } from "./galaxia.js";
+import { MONTANHA_RUSSA } from "./montanhaRussa.js";
 import { SISTEMA_SOLAR } from "./sistemaSolar.js";
 import { VITRINE } from "./vitrine.js";
 
@@ -28,7 +29,6 @@ export const LEVELS = [
     title: "Intermediário",
     about: "Geometria feita à mão, milhares de objetos, curvas e animação.",
     soon: [
-      { title: "Montanha-russa", about: "Uma curva suave pelos pontos, um trilho em tubo e a câmera andando nele." },
       { title: "Floresta de 10 mil árvores", about: "InstancedMesh: milhares de cópias numa só chamada de desenho." },
     ],
   },
@@ -44,7 +44,7 @@ export const LEVELS = [
   },
 ];
 
-export const PROJECTS = [SISTEMA_SOLAR, VITRINE, CIDADE, GALAXIA];
+export const PROJECTS = [SISTEMA_SOLAR, VITRINE, CIDADE, GALAXIA, MONTANHA_RUSSA];
 
 export const projectById = (id) => PROJECTS.find((p) => p.id === id) ?? null;
 export const levelOf = (project) => LEVELS.find((l) => l.id === project.level);

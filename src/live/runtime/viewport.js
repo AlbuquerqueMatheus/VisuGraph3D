@@ -22,6 +22,10 @@ const LOOP_LIMIT_MS = { run: 2000, frame: 1000 };
 // O navegador aceita uns 16 contextos WebGL por página e derruba o mais antigo (o do visor)
 // quando passa disso; cada WebGLRenderer criado pelo código ocupa um.
 const MAX_CODE_RENDERERS = 4;
+
+// O rastro de cada objeto: quantos segundos o visor guarda e de quanto em quanto tempo anota.
+const TRAIL_SECONDS = 20;
+const TRAIL_STEP = 1 / 30;
 const MODE_PROP = { translate: "position", rotate: "rotation", scale: "scale" };
 
 const post = (msg) => window.parent.postMessage({ source: "visugraph-viewport", ...msg }, "*");
@@ -156,6 +160,8 @@ class Run {
     this.halted = false; // um laço infinito num temporizador ou evento: o resto deles para
     this.loopError = null; // laço interrompido cujo erro o código do aluno pode ter engolido
     this.glass = new Map(); // malha → materiais da caixa de vidro (um por material dela)
+    // id → [[tempo, x, y, z], …] dos que já saíram do lugar, e id → [tempo, x, y, z] dos parados (recordTrail)
+    this.trail = { first: null, last: -Infinity, points: new Map(), still: new Map() };
   }
 
   track(id, obj) {
@@ -1239,12 +1245,57 @@ function showArrows(point, result) {
 // ---------------------------------------------------------------------------
 // Desafios: os fatos que a correção confere e o contorno do alvo
 
-/** Fatos dos objetos da execução na tela (os de um laço também), da câmera do código e das luzes acesas. */
+/**
+ * Fatos dos objetos da execução na tela (os de um laço também), da câmera do código e das luzes
+ * acesas, com o rastro de quem se moveu e se a animação está andando.
+ */
 function factsInfo(msg) {
   const run = state.current;
   if (!run) return { type: "facts", seq: msg.seq, runId: null };
   const entries = [...run.registry];
-  return { type: "facts", seq: msg.seq, runId: run.id, ...sceneFacts({ scene: run.scene, camera: run.camera, entries, idOf: (obj) => run.idOf.get(obj) }) };
+  const { trail } = run;
+  const facts = sceneFacts({ scene: run.scene, camera: run.camera, entries, idOf: (obj) => run.idOf.get(obj), trails: trail.points });
+  // `recorded`: quantos segundos de animação o rastro já cobre (quem não saiu do lugar nesse tempo, não anda)
+  const recorded = trail.first == null ? 0 : trail.last - trail.first;
+  return { type: "facts", seq: msg.seq, runId: run.id, ...facts, playing: state.playing && !!run.animar && !run.animError, recorded };
+}
+
+/**
+ * Anota onde está, no mundo, o primeiro objeto de cada trecho do código, no tempo da animação: a
+ * correção dos projetos mede por esse rastro se um objeto anda e com que velocidade (o carrinho
+ * da montanha-russa). Roda depois do desenho, que deixa as matrizes de mundo em dia, e só nos
+ * quadros em que animar() rodou; cada execução começa um rastro novo. O rastro de um objeto só
+ * começa quando ele sai do lugar (a partir da última vez em que foi visto parado): numa cena com
+ * centenas de peças paradas, só o que anda ocupa memória.
+ */
+function recordTrail(run) {
+  const trail = run.trail;
+  const now = state.elapsed;
+  if (now - trail.last < TRAIL_STEP) return;
+  trail.first ??= now;
+  trail.last = now;
+  for (const [id, list] of run.registry) {
+    const obj = list[0];
+    if (!obj?.isObject3D || obj.isScene) continue;
+    const e = obj.matrixWorld.elements;
+    const [x, y, z] = [e[12], e[13], e[14]];
+    let points = trail.points.get(id);
+    if (!points) {
+      const still = trail.still.get(id);
+      if (!still) {
+        trail.still.set(id, [now, x, y, z]);
+        continue;
+      }
+      if (Math.abs(x - still[1]) + Math.abs(y - still[2]) + Math.abs(z - still[3]) < 1e-4) {
+        still[0] = now;
+        continue;
+      }
+      trail.points.set(id, (points = [still]));
+      trail.still.delete(id);
+    }
+    points.push([now, x, y, z]);
+    if (points.length > TRAIL_SECONDS / TRAIL_STEP) points.shift();
+  }
 }
 
 function setGhosts(shapes) {
@@ -1310,7 +1361,8 @@ function frame(time) {
   const dt = Math.min(clock.getDelta(), 0.1);
   const run = state.current;
   // durante um arraste a animação espera: o que muda na cena é só o que o gizmo faz
-  if (run && state.playing && !gizmo.dragging && run.animar && !run.animError) {
+  const animating = run && state.playing && !gizmo.dragging && run.animar && !run.animError;
+  if (animating) {
     state.elapsed += dt;
     const prev = userRun;
     userRun = run;
@@ -1344,6 +1396,7 @@ function frame(time) {
       glass.restore();
       if (state.probe) measureProbe(run, camera, glass);
     }
+    if (animating && !run.animError) recordTrail(run);
   } else {
     renderer.setClearColor(background);
     renderer.clear();

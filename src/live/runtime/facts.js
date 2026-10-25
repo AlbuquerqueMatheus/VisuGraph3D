@@ -1,8 +1,9 @@
 // facts.js — o que o visor conta da cena para a correção dos desafios (src/live/challenges.js).
 //
 // Os fatos são números da cena como ela está, não do texto do código: posições de mundo,
-// matrizes, caixas, materiais, geometrias (quantos vértices e quais atributos), luzes e sombras,
-// a câmera e a neblina. As cores vão como estão no código (sRGB).
+// matrizes, caixas, materiais, geometrias (quantos vértices, quais atributos e os parâmetros),
+// luzes e sombras, a câmera e a neblina, e o rastro de quem a animação moveu. As cores vão como
+// estão no código (sRGB).
 
 import * as THREE from "three";
 import { fromColumnMajor } from "../../lib/transform3d.js";
@@ -37,15 +38,37 @@ const BLENDING_NAMES = Object.fromEntries(
 /** Qual lado dos triângulos o material pinta, como no código (THREE.DoubleSide → "DoubleSide"). */
 const SIDE_NAMES = { [THREE.FrontSide]: "FrontSide", [THREE.BackSide]: "BackSide", [THREE.DoubleSide]: "DoubleSide" };
 
+/** Quantos pontos da curva de um tubo (TubeGeometry) vão nos fatos, espaçados por igual. */
+const CURVE_POINTS = 400;
+
+/**
+ * Os parâmetros com que a geometria foi criada que são números ou sim/não (a largura de uma
+ * caixa, o raio e os segmentos de um tubo); a curva de um tubo vai à parte, como `curve`.
+ */
+function parametersOf(geometry) {
+  const out = {};
+  for (const [key, value] of Object.entries(geometry.parameters ?? {})) {
+    if (typeof value === "number" || typeof value === "boolean") out[key] = value;
+  }
+  return out;
+}
+
 /**
  * A amostra das posições e das cores de uma geometria, calculada uma vez só por geometria: as
  * malhas que dividem uma geometria (os prédios de uma cidade, num laço) levam a mesma lista, e a
- * mensagem do visor, que guarda as referências repetidas, leva essa lista uma vez só.
+ * mensagem do visor, que guarda as referências repetidas, leva essa lista uma vez só. Num tubo,
+ * também os pontos da curva que ele segue, no espaço do objeto, como a amostra (CURVE_POINTS + 1,
+ * de ponta a ponta: numa curva fechada, o último é o primeiro).
  */
 function samplesOf(geometry, cache) {
   let samples = cache.get(geometry);
   if (!samples) {
-    samples = { sample: sampleOf(geometry.getAttribute("position")), colors: sampleOf(geometry.getAttribute("color")) };
+    const path = geometry.parameters?.path;
+    samples = {
+      sample: sampleOf(geometry.getAttribute("position")),
+      colors: sampleOf(geometry.getAttribute("color")),
+      curve: path instanceof THREE.Curve ? path.getSpacedPoints(CURVE_POINTS).map((p) => p.toArray()) : null,
+    };
     cache.set(geometry, samples);
   }
   return samples;
@@ -127,7 +150,7 @@ function objectFacts(obj, idOf, cache) {
   const geometry = drawn && obj.geometry?.isBufferGeometry ? obj.geometry : null;
   if (geometry) {
     // vértices: em THREE.Points, cada vértice é um ponto desenhado; a amostra fica no espaço do objeto
-    const { sample, colors } = samplesOf(geometry, cache);
+    const { sample, colors, curve } = samplesOf(geometry, cache);
     facts.geometry = {
       // o id é o do trecho do código que criou a geometria (num laço, o mesmo para todas as que
       // ele criou), e o uuid é o da própria geometria: malhas que dividem uma têm o mesmo uuid
@@ -136,9 +159,11 @@ function objectFacts(obj, idOf, cache) {
       type: geometry.type,
       vertices: geometry.getAttribute("position")?.count ?? 0,
       attributes: Object.keys(geometry.attributes),
+      parameters: parametersOf(geometry),
       sample,
       colors,
     };
+    if (curve) facts.geometry.curve = curve;
   }
   if (obj.isInstancedMesh) facts.instances = obj.count;
   if (obj.isLight) {
@@ -186,12 +211,20 @@ function fogFacts(fog) {
  */
 const MAX_COPIES = 199;
 
+/** Se o rastro saiu do lugar: algum ponto a mais de um décimo de milésimo do primeiro. */
+function moved(trail) {
+  const [, x, y, z] = trail[0];
+  return trail.some(([, a, b, c]) => Math.hypot(a - x, b - y, c - z) > 1e-4);
+}
+
 /**
  * Fatos da cena: os objetos do código (`entries`, pares [id, objeto] ou [id, objetos], os que
  * aquela linha criou, na ordem), as luzes acesas, a câmera do código, a cor de fundo e a neblina.
- * Os fatos de um id são os do primeiro objeto, e os dos outros vão em `copies`.
+ * Os fatos de um id são os do primeiro objeto, e os dos outros vão em `copies`. `trails` (id →
+ * [[tempo, x, y, z], …], os lugares por onde o primeiro objeto passou enquanto a animação rodava)
+ * vira o `trail` de quem saiu do lugar.
  */
-export function sceneFacts({ scene, camera, entries, idOf }) {
+export function sceneFacts({ scene, camera, entries, idOf, trails = null }) {
   scene.updateMatrixWorld(); // como o desenho faz a cada quadro: alvos de luz na cena inclusive
   const objects = {};
   const cache = new Map();
@@ -201,6 +234,8 @@ export function sceneFacts({ scene, camera, entries, idOf }) {
     if (!first) continue;
     objects[id] = objectFacts(first, idOf, cache);
     if (rest.length) objects[id].copies = rest.slice(0, MAX_COPIES).map((obj) => objectFacts(obj, idOf, cache));
+    const trail = trails?.get(id);
+    if (trail?.length && moved(trail)) objects[id].trail = trail.slice();
   }
   const background = scene.background?.isColor ? "#" + scene.background.getHexString() : null;
   return { objects, lights: sceneLights(scene), camera: camera ? cameraFacts(camera) : null, background, fog: fogFacts(scene.fog) };

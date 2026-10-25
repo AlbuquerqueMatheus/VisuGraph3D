@@ -12,12 +12,15 @@ import { exportProject } from "../../src/live/export.js";
 // o app monta para um projeto: cada `new` do código guarda os objetos que criou (num laço, vários),
 // os objetos vão pelo nome da variável (a local, se foram criados num laço), com o fundo e o que
 // animar() muda, pela análise do código. Sem cena no código, o visor usa uma vazia (e avisa na
-// barra de status).
-function factsOf(code) {
+// barra de status). Com `seconds`, a animação roda esse tempo em quadros de 1/60 s (ou com os
+// tempos de `frames`, um depois do outro, de novo e de novo), e o rastro de cada objeto é anotado
+// como o visor anota: a cada 1/30 s, os últimos 20 s.
+function factsOf(code, { seconds = 0, frames = [1 / 60] } = {}) {
   const analysis = analyze(code);
   const registry = new Map();
   const ids = new Map();
   let error = null;
+  let animar = null;
   globalThis.__vg = {
     THREE,
     t(id, obj) {
@@ -27,7 +30,9 @@ function factsOf(code) {
       return obj;
     },
     l() {},
-    end() {},
+    end(fn) {
+      animar = fn;
+    },
     fail(e) {
       error = e;
     },
@@ -40,15 +45,46 @@ function factsOf(code) {
   }
   if (error) throw error;
   const first = (obj) => (obj ? registry.get(obj.id)?.[0] : undefined);
-  const facts = sceneFacts({ scene: first(analysis.scene) ?? new THREE.Scene(), camera: first(analysis.camera), entries: [...registry], idOf: (obj) => ids.get(obj) });
+  const scene = first(analysis.scene) ?? new THREE.Scene();
+  const trails = new Map();
+  let recorded = 0;
+  if (animar && seconds > 0) {
+    let last = -Infinity;
+    let tempo = 0;
+    for (let frame = 0; tempo < seconds - 1e-9; frame++) {
+      const delta = frames[frame % frames.length];
+      tempo += delta;
+      animar(tempo, delta);
+      if (tempo - last < 1 / 30 - 1e-9) continue;
+      last = tempo;
+      scene.updateMatrixWorld();
+      for (const [id, [obj]] of registry) {
+        if (!obj?.isObject3D || obj.isScene) continue;
+        obj.updateWorldMatrix(true, false);
+        const e = obj.matrixWorld.elements;
+        if (!trails.has(id)) trails.set(id, []);
+        const trail = trails.get(id);
+        trail.push([tempo, e[12], e[13], e[14]]);
+        if (trail.length > 600) trail.shift();
+      }
+    }
+    const any = trails.values().next().value;
+    recorded = any ? any.at(-1)[0] - any[0][0] : 0;
+  }
+  const facts = sceneFacts({ scene, camera: first(analysis.camera), entries: [...registry], idOf: (obj) => ids.get(obj), trails });
   const nameOf = (id) => analysis.objects[id]?.name ?? analysis.objects[id]?.local ?? null;
   const objects = Object.create(null);
   for (const [id, f] of Object.entries(facts.objects)) {
     const name = nameOf(id);
     if (name && !objects[name]) objects[name] = f;
   }
-  return { ...facts, objects, nameOf, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar };
+  return { ...facts, objects, nameOf, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar, playing: !!animar && seconds > 0, recorded };
 }
+
+/** Os segundos de animação antes de conferir um passo que mede o movimento (`motion`), como o carrinho da montanha-russa. */
+const MOTION_SECONDS = 20;
+/** Os fatos do código para as conferências do passo: com a animação rodando, se o passo mede o movimento. */
+const factsFor = (step, code) => factsOf(code, { seconds: step.motion ? MOTION_SECONDS : 0 });
 
 const galaxia = projectById("galaxia");
 const solar = projectById("sistema-solar");
@@ -67,7 +103,7 @@ function variantOf(project) {
       expect(code, `${id}: ${from}`).toContain(from);
       code = code.replace(from, to);
     }
-    return grade(step, factsOf(code));
+    return grade(step, factsFor(step, code));
   };
 }
 
@@ -75,17 +111,18 @@ describe("guia de projetos: o catálogo", () => {
   it("tem os três níveis, e cada projeto está num deles", () => {
     expect(LEVELS.map((l) => l.id)).toEqual(["facil", "intermediario", "avancado"]);
     for (const p of PROJECTS) expect(LEVELS.map((l) => l.id)).toContain(p.level);
-    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(5);
+    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(4);
     const soon = LEVELS.flatMap((l) => l.soon.map((s) => s.title));
     for (const p of PROJECTS) expect(soon, `${p.title} já existe`).not.toContain(p.title);
   });
 
-  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2", () => {
+  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2, e a Montanha-russa, 11 e 1", () => {
     expect(PROJECTS.map((p) => [p.id, liveSteps(p).length, p.steps.filter(isComputer).length])).toEqual([
       ["sistema-solar", 8, 1],
       ["vitrine", 8, 1],
       ["cidade", 8, 1],
       ["galaxia", 10, 2],
+      ["montanha-russa", 11, 1],
     ]);
   });
 
@@ -137,12 +174,12 @@ describe.each(EACH)("%s", (_, project) => {
   });
 
   it("o código de cada passo passa nas conferências do passo", () => {
-    for (const s of live) expect(failing(grade(s, factsOf(s.code))), s.id).toEqual([]);
+    for (const s of live) expect(failing(grade(s, factsFor(s, s.code))), s.id).toEqual([]);
   });
 
   it("o código do começo de cada passo ainda não passa: o passo tem o que fazer", () => {
     live.forEach((s, i) => {
-      expect(grade(s, factsOf(startCode(project, i))).ok, s.id).toBe(false);
+      expect(grade(s, factsFor(s, startCode(project, i))).ok, s.id).toBe(false);
     });
   });
 });
@@ -530,6 +567,208 @@ describe("conferências da cidade", () => {
     ]);
     expect(failing(variant("neblina", ['new THREE.Fog("#f6a26b", 25, 70)', 'new THREE.Fog("#f6a26b", 25, 40)']))).toEqual([]);
     expect(failing(variant("neblina", ['cena.fog = new THREE.Fog("#f6a26b", 25, 70);', 'cena.fog = new THREE.FogExp2("#f6a26b", 0.02);']))).toEqual([]);
+  });
+});
+
+describe("conferências da montanha-russa", () => {
+  const montanha = projectById("montanha-russa");
+  const variant = variantOf(montanha);
+  const stepOf = (id) => montanha.steps[stepIndex(montanha, id)];
+  /** Troca o ponto de animar() (os laços dos trilhos e dos dormentes têm a mesma linha). */
+  const inAnimar = (to) => ["% 1;\n  const ponto = curva.getPointAt(u);", `% 1;\n  const ponto = curva.${to}(u);`];
+
+  it("o céu escuro, a neblina de outra cor, perto ou longe demais, o chão pequeno ou de costas, a câmera perto ou baixa e o sol baixo ou apagado, a conferência avisa", () => {
+    expect(failing(variant("palco", ['cena.background = new THREE.Color("#9fd8ff");', 'cena.background = new THREE.Color("#1b2a4a");']))).toEqual([
+      "O céu é azul-claro (o fundo é #1b2a4a, escuro demais para um dia de sol)",
+      "A neblina tem a cor do céu e apaga a borda do chão (a neblina é #9fd8ff, e o céu é #1b2a4a)",
+    ]);
+    expect(failing(variant("palco", ['new THREE.Fog("#9fd8ff", 50, 150)', 'new THREE.Fog("#ffffff", 50, 150)']))).toEqual(["A neblina tem a cor do céu e apaga a borda do chão (a neblina é #ffffff, e o céu é #9fd8ff)"]);
+    expect(failing(variant("palco", ['new THREE.Fog("#9fd8ff", 50, 150)', 'new THREE.Fog("#9fd8ff", 10, 150)']))).toEqual(["A neblina tem a cor do céu e apaga a borda do chão (a neblina já cobre 16% do meio do parque)"]);
+    expect(failing(variant("palco", ['new THREE.Fog("#9fd8ff", 50, 150)', 'new THREE.Fog("#9fd8ff", 50, 400)']))).toEqual([
+      "A neblina tem a cor do céu e apaga a borda do chão (a neblina cobre só 55% da borda do chão: ela aparece contra o céu)",
+    ]);
+    expect(failing(variant("palco", ["new THREE.PlaneGeometry(400, 400)", "new THREE.PlaneGeometry(100, 100)"]))).toEqual([
+      "O chão é uma placa de grama grande e deitada (o chão tem 100 de lado: a borda dele aparece perto do trilho)",
+    ]);
+    expect(failing(variant("palco", ["chao.rotation.x = -Math.PI / 2;", "chao.rotation.x = Math.PI / 2;"]))).toEqual([
+      "O chão é uma placa de grama grande e deitada (o chão está virado para baixo: de cima, a câmera vê o verso, que não é desenhado)",
+    ]);
+    expect(failing(variant("palco", ["camera.position.set(34, 18, 26);", "camera.position.set(14, 8, 10);"]))).toEqual([
+      "A câmera vê o parque do alto, de um canto (a câmera está a 17,66 do meio do parque: perto demais para ver o trilho inteiro)",
+    ]);
+    expect(failing(variant("palco", ["camera.position.set(34, 18, 26);", "camera.position.set(40, 5, 30);"]))).toEqual([
+      "A câmera vê o parque do alto, de um canto (a câmera está na altura 5,00: baixa demais para ver o trilho de cima)",
+    ]);
+    expect(failing(variant("palco", ["sol.position.set(15, 30, 20);", "sol.position.set(30, 8, 20);"]))).toEqual([
+      "O parque tem a luz do céu e um sol alto (o sol está 13° acima do horizonte: baixo demais para um dia de sol)",
+    ]);
+    expect(failing(variant("palco", ['new THREE.DirectionalLight("#fff2d6", 2.2)', 'new THREE.DirectionalLight("#fff2d6", 0)']))).toEqual([
+      "O parque tem a luz do céu e um sol alto (o sol está apagado: a intensidade dele é 0)",
+    ]);
+    // a sugestão do chão de areia: o mesmo parque
+    expect(failing(variant("palco", ['color: "#7cbf5a"', 'color: "#e0c98f"']))).toEqual([]);
+  });
+
+  it("um ponto rente ao chão e uma geometria por bolinha, a conferência avisa; o morro mais alto ou mais longe ainda vale", () => {
+    expect(failing(variant("pontos", ["new THREE.Vector3(3, 1.5, -14.5)", "new THREE.Vector3(3, 0.5, -14.5)"]))).toEqual([
+      "Os pontos ficam acima do chão, a mais de 1 dele (o ponto (3,00; 0,50; −14,50) fica a menos de 1 do chão: não sobra lugar para o carrinho)",
+    ]);
+    expect(failing(variant("pontos", ["new THREE.Mesh(geometriaMarca, materialMarca)", "new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 8), materialMarca)"]))).toEqual([
+      "As bolinhas dividem uma geometria (13 geometrias diferentes: uma por volta do laço)",
+    ]);
+    expect(failing(variant("pontos", ["new THREE.Vector3(8.5, 12, -5)", "new THREE.Vector3(8.5, 16, -5)"]))).toEqual([]);
+    expect(failing(variant("pontos", ["new THREE.Vector3(-9, 6, 3)", "new THREE.Vector3(-15, 6, 3)"]))).toEqual([]);
+  });
+
+  it("a curva aberta ou a linha com poucos traços, a conferência avisa; o morro esticado continua suave", () => {
+    expect(failing(variant("curva", ["new THREE.CatmullRomCurve3(pontos, true)", "new THREE.CatmullRomCurve3(pontos, false)"]))).toEqual([
+      "A linha fecha a volta (a linha começa em (8,50; 12,00; −5,00) e termina em (9,00; 7,50; 0,00): falta o true que fecha a curva)",
+    ]);
+    expect(failing(variant("curva", ["curva.getPoints(300)", "curva.getPoints(13)"]))).toEqual(["A linha é suave, sem quinas (a linha faz uma quina de 79° em (−9,50; 2,00; −3,00))"]);
+    expect(failing(variant("curva", ["new THREE.Vector3(-9, 6, 3)", "new THREE.Vector3(-15, 6, 3)"]))).toEqual([]);
+  });
+
+  it("a viga aberta, grossa, com poucos pedaços ou poucos lados, a conferência avisa", () => {
+    expect(failing(variant("viga", ["new THREE.CatmullRomCurve3(pontos, true)", "new THREE.CatmullRomCurve3(pontos)"]))).toEqual([
+      "A viga é um tubo pela curva, e fecha a volta (a curva da viga não fecha: falta o true no fim da CatmullRomCurve3)",
+    ]);
+    expect(failing(variant("viga", ["TubeGeometry(curva, 800, 0.2, 12, true)", "TubeGeometry(curva, 800, 0.2, 12, false)"]))).toEqual([
+      "A viga é um tubo pela curva, e fecha a volta (o tubo da viga não fecha: falta o true no fim da TubeGeometry)",
+    ]);
+    expect(failing(variant("viga", ["TubeGeometry(curva, 800, 0.2, 12, true)", "TubeGeometry(curva, 800, 1, 12, true)"]))).toEqual([
+      "O tubo é fino: o raio fica entre 0,1 e 0,4 (o raio é 1,00: grosso demais para a viga de uma montanha-russa)",
+    ]);
+    expect(failing(variant("viga", ["TubeGeometry(curva, 800, 0.2, 12, true)", "TubeGeometry(curva, 40, 0.2, 12, true)"]))).toEqual([
+      "O tubo é liso, sem quinas nem faces planas (com 40 pedaços para 97 de trilho, cada um tem 2,43: as curvas ficam com quinas)",
+    ]);
+    expect(failing(variant("viga", ["TubeGeometry(curva, 800, 0.2, 12, true)", "TubeGeometry(curva, 800, 0.2, 3, true)"]))).toEqual([
+      "O tubo é liso, sem quinas nem faces planas (com 3 lados, a viga fica com faces planas)",
+    ]);
+  });
+
+  it("os trilhos sem o normalize, longe da viga ou abertos, a conferência avisa; o produto na outra ordem só troca os lados", () => {
+    expect(failing(variant("trilhos", [".normalize().multiplyScalar(0.55)", ".multiplyScalar(0.55)"]))).toEqual([
+      "Há um trilho de cada lado da viga, a uns 0,55 dela (em (8,20; 10,97; −6,56), o trilho direito passa a 0,36 da viga)",
+    ]);
+    expect(failing(variant("trilhos", ["multiplyScalar(0.55)", "multiplyScalar(1.5)"]))).toEqual([
+      "Há um trilho de cada lado da viga, a uns 0,55 dela (em (8,50; 12,00; −5,00), o trilho esquerdo passa a 1,50 da viga, longe demais)",
+    ]);
+    expect(failing(variant("trilhos", ["new THREE.CatmullRomCurve3(esquerda, true)", "new THREE.CatmullRomCurve3(esquerda)"]))).toEqual([
+      "Os trilhos são tubos fechados, mais finos que a viga (a curva do trilho esquerdo não fecha: falta o true no fim da CatmullRomCurve3)",
+    ]);
+    expect(failing(variant("trilhos", ["crossVectors(frente, cima)", "crossVectors(cima, frente)"]))).toEqual([]);
+  });
+
+  it("os dormentes espaçados ou sem o lookAt, a conferência avisa", () => {
+    expect(failing(variant("dormentes", ["i < 160", "i < 40"], ["i / 160", "i / 40"]))).toEqual(["Há dormentes pelo caminho todo, a menos de 1 um do outro (há 40 dormentes: poucos para 97 de trilho)"]);
+    expect(failing(variant("dormentes", ["  dormente.lookAt(ponto.clone().add(curva.getTangentAt(u)));\n", ""]))).toEqual([
+      "Cada dormente fica na viga, atravessado no trilho (o dormente em (8,39; 11,83; −5,57) fica 29° fora da direção do caminho: ele não atravessa o trilho)",
+    ]);
+  });
+
+  it("sem o translate, os pilares afundam no chão; com o dobro de pilares, vale", () => {
+    expect(failing(variant("pilares", ["geometriaPilar.translate(0, 0.5, 0);", ""]))).toEqual(["Cada pilar vai do chão até a viga (um pilar começa em y = −6,00, dentro do chão)"]);
+    expect(failing(variant("pilares", ["i < 30", "i < 60"], ["i / 30", "i / 60"]))).toEqual([]);
+  });
+
+  it("sem castShadow, a caixa pequena, rasa ou enorme e o mapa com poucos pixels, a conferência avisa", () => {
+    expect(failing(variant("sombras", ["viga.castShadow = true;\n", ""], ["  pilar.castShadow = true;\n", ""]))).toEqual([
+      "A viga, os trilhos, os dormentes e os pilares fazem sombra (a viga e os pilares não fazem sombra)",
+    ]);
+    const box = (n) => [-1, 1, 1, -1].map((sign, k) => [`sol.shadow.camera.${["left", "right", "top", "bottom"][k]} = ${sign * 18};`, `sol.shadow.camera.${["left", "right", "top", "bottom"][k]} = ${sign * n};`]);
+    expect(failing(variant("sombras", ...box(5)))).toEqual(["A caixa da sombra cobre a montanha-russa inteira (a caixa, de −5,0 a 5,0, deixa de fora 99% do trilho)"]);
+    expect(failing(variant("sombras", ["sol.shadow.camera.far = 60;", "sol.shadow.camera.far = 30;"]))).toEqual([
+      "A caixa da sombra cobre a montanha-russa inteira (o fundo da caixa fica a 30 do sol, e a sombra do trilho cai no chão a até 52)",
+    ]);
+    expect(failing(variant("sombras", ["sol.shadow.mapSize.set(2048, 2048);", "sol.shadow.mapSize.set(256, 256);"]))).toEqual([
+      "Os pixels do mapa de sombra são pequenos para a sombra fina dos trilhos (com 256 × 256 numa caixa de 36 por 36, cada pixel do mapa cobre 0,14: a sombra dos trilhos, que têm 0,14 de largura, vira um borrão)",
+    ]);
+    expect(failing(variant("sombras", ...box(50)))).toEqual([
+      "Os pixels do mapa de sombra são pequenos para a sombra fina dos trilhos (com 2048 × 2048 numa caixa de 100 por 100, cada pixel do mapa cobre 0,05: a sombra dos trilhos, que têm 0,14 de largura, vira um borrão)",
+    ]);
+    expect(failing(variant("sombras", ["sol.shadow.mapSize.set(2048, 2048);", "sol.shadow.mapSize.set(1024, 1024);"]))).toEqual([]);
+  });
+
+  it("o passeio espera a animação rodar: parada, ela pede o ▶; nos primeiros segundos, mede antes de dizer", () => {
+    const step = stepOf("passeio");
+    const marks = (facts) => grade(step, facts).results.map((r) => [r.ok, r.seen]);
+    // parada desde o começo, o carrinho ainda está onde nasceu, na origem
+    expect(marks(factsOf(step.code))).toEqual(Array(4).fill([null, "a animação está parada: aperte ▶ na barra de cima para o carrinho andar"]));
+    expect(marks(factsOf(step.code, { seconds: 1 }))).toEqual([
+      [true, null],
+      [true, null],
+      [true, null],
+      [null, "medindo a velocidade"],
+    ]);
+    expect(grade(step, factsOf(step.code, { seconds: 1 })).ok).toBe(false);
+  });
+
+  it("o carrinho com getPoint, sem o translate ou parado, a conferência avisa; mais rápido, vale", () => {
+    expect(failing(variant("passeio", inAnimar("getPoint")))).toEqual([
+      "O carrinho aponta para a frente, ao longo da curva (o carrinho fica 35° fora da direção da curva)",
+      "O carrinho anda sempre na mesma velocidade (a velocidade vai de 4,9 a 11,0 por segundo)",
+    ]);
+    expect(failing(variant("passeio", ["geometriaCarrinho.translate(0, 0.55, 0);\n", ""]))).toEqual([
+      "O carrinho fica em cima da viga, com a base na curva (o fundo do carrinho fica 0,35 abaixo da origem dele: o carrinho atravessa a viga)",
+    ]);
+    expect(failing(variant("passeio", ["const velocidade = 8;", "const velocidade = 0;"]))).toEqual([
+      "O carrinho anda pela curva (o carrinho não sai do lugar)",
+      "O carrinho anda sempre na mesma velocidade (o carrinho não sai do lugar)",
+    ]);
+    expect(failing(variant("passeio", ["const velocidade = 8;", "const velocidade = 30;"]))).toEqual([]);
+  });
+
+  it("a velocidade sem a altura ou sem a energia, ou zero no topo, a conferência avisa; na Lua, vale", () => {
+    expect(failing(variant("gravidade", ["(topo - ponto.y)", "(topo - 5)"]))).toEqual([
+      "O carrinho ganha velocidade na descida e perde na subida (a velocidade não muda com a altura: fica em 11,9 por segundo)",
+    ]);
+    expect(failing(variant("gravidade", inAnimar("getPoint")))).toEqual([
+      "O carrinho ganha velocidade na descida e perde na subida (a velocidade muda, mas não acompanha a altura: ela não vem da conta da energia)",
+    ]);
+    expect(failing(variant("gravidade", ["const velocidadeNoTopo = 2;", "const velocidadeNoTopo = 0;"]))).toEqual([
+      "O carrinho anda pela curva (o carrinho não sai do lugar)",
+      "O carrinho ganha velocidade na descida e perde na subida (o carrinho não sai do lugar)",
+      "O carrinho dá a volta inteira, sem parar no alto (o carrinho não sai do lugar)",
+    ]);
+    expect(failing(variant("gravidade", ["const gravidade = 9.8;", "const gravidade = 1.6;"]))).toEqual([]);
+  });
+
+  it("com quadros de tempos diferentes, como num computador lento, a conta da energia ainda vale, e a velocidade fixa ainda não", () => {
+    const step = stepOf("gravidade");
+    // um quadro de 0,1 s a cada cinco: o carrinho anda o delta de um quadro, e o rastro mede no seguinte
+    const slow = { seconds: MOTION_SECONDS, frames: [0.1, 1 / 30, 1 / 30, 1 / 30, 1 / 30] };
+    expect(failing(grade(step, factsOf(step.code, slow)))).toEqual([]);
+    const fixed = failing(grade(step, factsOf(step.code.replace("(topo - ponto.y)", "(topo - 5)"), slow)));
+    expect(fixed).toHaveLength(1);
+    expect(fixed[0]).toMatch(/^O carrinho ganha velocidade na descida e perde na subida \(a velocidade não muda com a altura: fica (em|entre) 1\d,\d/);
+  });
+
+  it("a câmera fora do carrinho, de costas, atrás, do lado, dentro dele ou alta demais, a conferência avisa; com outro campo de visão, vale", () => {
+    expect(failing(variant("camera", ["carrinho.add(camera);\n", ""]))).toEqual(["A câmera vai no carrinho, como filha dele (a câmera não está no carrinho: falta carrinho.add(camera))"]);
+    expect(failing(variant("camera", ["camera.rotation.y = Math.PI;", "camera.rotation.y = 0;"]))).toEqual(["A câmera olha para a frente do carrinho (a câmera olha para trás: falta a meia-volta em y)"]);
+    const at = (position) => failing(variant("camera", ["camera.position.set(0, 1.2, 0.3);", `camera.position.set(${position});`]));
+    expect(at("0, 2.2, -4")).toEqual(["A câmera fica em cima do carrinho, onde iria a cabeça (a câmera fica 4,00 atrás do meio do carrinho, fora dele)"]);
+    expect(at("0.8, 1.2, 0.3")).toEqual(["A câmera fica em cima do carrinho, onde iria a cabeça (a câmera fica 0,80 para o lado do meio do carrinho, fora dele)"]);
+    expect(at("0, 0.5, 0.3")).toEqual([
+      "A câmera fica em cima do carrinho, onde iria a cabeça (a câmera está 0,50 acima da origem do carrinho, e a tampa dele, a 0,90: ela fica dentro da caixa)",
+    ]);
+    expect(at("0, 4, 0.3")).toEqual(["A câmera fica em cima do carrinho, onde iria a cabeça (a câmera está 4,00 acima do carrinho: alto demais para quem vai sentado nele)"]);
+    expect(failing(variant("camera", ["new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 300)", "new THREE.PerspectiveCamera(90, 16 / 9, 0.1, 300)"]))).toEqual([]);
+  });
+
+  it("os andaimes saem no passo 4, e a câmera do alto, no 11", () => {
+    expect(stepOf("curva").code).toContain("const linha = new THREE.Line(");
+    expect(stepOf("viga").code).not.toMatch(/marca|linha/);
+    expect(stepOf("gravidade").code).toContain("camera.position.set(34, 18, 26);");
+    expect(stepOf("camera").code).not.toContain("camera.position.set(34, 18, 26);");
+    expect(stepOf("camera").code).not.toContain("camera.lookAt");
+  });
+
+  it("o projeto baixado anda no carrinho: sem os controles do mouse", () => {
+    const main = fileOf(stepOf("computador").files, "src/main.js").code;
+    expect(main).not.toContain("OrbitControls");
+    expect(main).toContain("// O código move a câmera: sem controles do mouse, que a tirariam do lugar a cada quadro");
+    expect(main).toContain("  animar(tempo, delta);\n  renderizador.render(cena, camera);");
   });
 });
 

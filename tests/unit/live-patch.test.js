@@ -71,6 +71,13 @@ const l = new THREE.PointLight(\`#fff\`);`;
     const code = HEAD + "const g = new THREE.SphereGeometry(1, 32, 16);";
     expect(edit(code, "g", "widthSegments", 12.7)).toContain("new THREE.SphereGeometry(1, 13, 16)");
   });
+
+  it("o tubo em volta de uma curva: o raio e os segmentos viram controles, a curva não", () => {
+    const code = HEAD + "const curva = new THREE.CatmullRomCurve3([new THREE.Vector3(), new THREE.Vector3(1, 0, 0), new THREE.Vector3(1, 1, 0)]);\nconst g = new THREE.TubeGeometry(curva, 800, 0.2, 12, true);";
+    expect(edit(code, "g", "radius", 1)).toContain("new THREE.TubeGeometry(curva, 800, 1, 12, true)");
+    expect(edit(code, "g", "tubularSegments", 40)).toContain("new THREE.TubeGeometry(curva, 40, 0.2, 12, true)");
+    expect(edit(code, "g", "closed", false)).toContain("new THREE.TubeGeometry(curva, 800, 0.2, 12, false)");
+  });
 });
 
 describe("ângulos", () => {

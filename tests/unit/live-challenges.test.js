@@ -5,13 +5,14 @@ import { sceneFacts } from "../../src/live/runtime/facts.js";
 import { analyze, hasBlockingError } from "../../src/live/engine/analyze.js";
 
 // Roda o código com o Three.js de verdade e monta os fatos como o visor monta: cada variável
-// do código é um objeto, e o pai de um objeto é dito pelo nome dela.
-function factsOf(code) {
+// do código é um objeto, e o pai de um objeto é dito pelo nome dela. `trails`, pelo nome, são os
+// rastros que o visor anotou enquanto a animação rodava.
+function factsOf(code, trails = null) {
   const names = [...code.matchAll(/^(?:const|let|var)\s+(\w+)\s*=/gm)].map((m) => m[1]);
   const scope = new Function("THREE", `${code}\nreturn { ${names.join(", ")} };`)(THREE);
   const idOf = (obj) => names.find((n) => scope[n] === obj);
   const entries = names.map((n) => [n, scope[n]]);
-  return { ...sceneFacts({ scene: scope.cena, camera: scope.camera, entries, idOf }), nameOf: (id) => id };
+  return { ...sceneFacts({ scene: scope.cena, camera: scope.camera, entries, idOf, trails }), nameOf: (id) => id };
 }
 
 const run = (id, extra = "") => grade(challengeById(id), factsOf(challengeById(id).starter + extra));
@@ -293,5 +294,30 @@ cena.add(lampada);`);
     expect(facts.fog).toEqual({ type: "Fog", color: "#f6a26b", near: 25, far: 70, density: null });
     expect(factsOf('const cena = new THREE.Scene();\ncena.fog = new THREE.FogExp2("#ffffff", 0.02);').fog).toEqual({ type: "FogExp2", color: "#ffffff", near: null, far: null, density: 0.02 });
     expect(factsOf("const cena = new THREE.Scene();").fog).toBeNull();
+  });
+
+  it("dizem os parâmetros da geometria, a curva de um tubo e o rastro do que andou", () => {
+    const code = `const cena = new THREE.Scene();
+const curva = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(4, 0, 0), new THREE.Vector3(4, 0, 4)], true);
+const tubo = new THREE.Mesh(new THREE.TubeGeometry(curva, 64, 0.2, 8, true), new THREE.MeshStandardMaterial());
+tubo.position.y = 1;
+cena.add(tubo);
+const caixa = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 3), new THREE.MeshStandardMaterial());
+cena.add(caixa);`;
+    const still = [[0, 0, 0, 0], [0.5, 0, 0, 0]];
+    const moving = [[0, 0, 1, 0], [0.5, 1, 1, 0]];
+    const { objects } = factsOf(code, new Map([["tubo", moving], ["caixa", still]]));
+    expect(objects.tubo.geometry.parameters).toEqual({ tubularSegments: 64, radius: 0.2, radialSegments: 8, closed: true });
+    expect(objects.caixa.geometry.parameters).toEqual({ width: 1, height: 2, depth: 3, widthSegments: 1, heightSegments: 1, depthSegments: 1 });
+    // a curva vai no espaço do objeto, igualmente espaçada, de ponta a ponta: fechada, termina onde começou
+    const { curve } = objects.tubo.geometry;
+    expect(curve).toHaveLength(401);
+    expect(curve[0]).toEqual([0, 0, 0]);
+    expect(curve.at(-1).map((c) => Math.round(c * 1e6) / 1e6 + 0)).toEqual([0, 0, 0]);
+    expect(objects.caixa.geometry.curve).toBeUndefined();
+    // o rastro vai só para o que saiu do lugar, numa cópia
+    expect(objects.tubo.trail).toEqual(moving);
+    expect(objects.tubo.trail).not.toBe(moving);
+    expect(objects.caixa.trail).toBeUndefined();
   });
 });

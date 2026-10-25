@@ -5,6 +5,7 @@ import { test, expect } from "./fixtures.js";
 import { code, pasteCode, status } from "./live.js";
 import { CIDADE } from "../../src/live/projects/cidade.js";
 import { GALAXIA } from "../../src/live/projects/galaxia.js";
+import { MONTANHA_RUSSA } from "../../src/live/projects/montanhaRussa.js";
 import { SISTEMA_SOLAR } from "../../src/live/projects/sistemaSolar.js";
 import { VITRINE } from "../../src/live/projects/vitrine.js";
 import { unzip } from "../../src/lib/zip.js";
@@ -97,10 +98,11 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
   await page.click("#lv-tab-project");
   await expect(panel(page).locator(".lv-pj-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
-  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(5);
+  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(4);
   await expect(panel(page).locator('.lv-pj-card[data-project="sistema-solar"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="vitrine"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="cidade"] .lv-pj-card__progress')).toHaveText("9 passos");
+  await expect(panel(page).locator('.lv-pj-card[data-project="montanha-russa"] .lv-pj-card__progress')).toHaveText("12 passos");
   const card = panel(page).locator('.lv-pj-card[data-project="galaxia"]');
   await expect(card.locator(".lv-pj-card__progress")).toHaveText("12 passos");
 
@@ -277,6 +279,58 @@ test("projetos: na Cidade ao entardecer, a conferência vê as sombras dos préd
   const files = await zipFiles(download);
   for (const file of CIDADE.steps[8].files) expect(files[file.path], file.path).toBe(file.code);
   expect(JSON.parse(files["package.json"]).name).toBe("cidade");
+});
+
+test("projetos: na Montanha-russa, a conferência segue o carrinho andando, e o projeto sai para o computador sem os controles do mouse", async ({ page }) => {
+  test.slow(); // o carrinho anda alguns segundos de verdade até a conferência medir a velocidade
+  await page.goto("index-3d.html?projeto=montanha-russa&passo=9");
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(panel(page).locator(".lv-ch__kicker")).toHaveText("Intermediário · Montanha-russa");
+  await expect(title(page)).toHaveText("9. O passeio");
+  await expect(page.locator("#lv-codebar")).toContainText("Montanha-russa · passo 9 de 12");
+  await expect(result(page)).toContainText("(não achei carrinho na cena)", { timeout: 30_000 });
+
+  // a conferência segue o rastro do carrinho andando e mede a velocidade
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(codeState(page)).toHaveText("O editor já tem o código deste passo.");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+
+  // rodando de novo com a animação parada, ela espera o carrinho andar, e volta a valer quando ele anda
+  await page.click("#lv-play");
+  await expect(page.locator("#lv-play")).toHaveAttribute("aria-pressed", "false");
+  await page.click("#lv-restart");
+  await expect(result(page)).toContainText("(a animação está parada: aperte ▶ na barra de cima para o carrinho andar)", { timeout: 30_000 });
+  await expect(result(page)).toHaveAttribute("data-ok", "pending");
+  await expect(done(page)).toBeHidden();
+  await page.click("#lv-play");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+
+  // com getPoint, o carrinho acelera e freia conforme os pontos do traçado
+  const getPoint = MONTANHA_RUSSA.steps[8].code.replace("% 1;\n  const ponto = curva.getPointAt(u);", "% 1;\n  const ponto = curva.getPoint(u);");
+  expect(getPoint).not.toBe(MONTANHA_RUSSA.steps[8].code);
+  await pasteCode(page, getPoint);
+  await expect(result(page, 3)).toContainText(/\(a velocidade vai de \d+,\d a \d+,\d por segundo\)/, { timeout: 60_000 });
+  await expect(result(page, 3)).toHaveAttribute("data-ok", "false");
+
+  // o passo 10 começa com a velocidade fixa do 9, que não muda com a altura, e a conta da energia passa
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+  await done(page).locator('[data-action="next"]').click();
+  await expect(title(page)).toHaveText("10. A gravidade");
+  await expect(result(page, 1)).toContainText("(a velocidade não muda com a altura: fica em 8,0 por segundo)", { timeout: 60_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(codeState(page)).toHaveText("O editor já tem o código deste passo.");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 90_000 });
+
+  // o passo no computador começa do fim do passo 11, com a câmera no carrinho, e o main.js não leva os OrbitControls
+  await stepButton(page, 12).click();
+  await expect(title(page)).toHaveText("12. No seu computador");
+  const [download] = await Promise.all([page.waitForEvent("download"), panel(page).locator('[data-download="montanha-russa.zip"]').click()]);
+  expect(download.suggestedFilename()).toBe("montanha-russa.zip");
+  const files = await zipFiles(download);
+  for (const file of MONTANHA_RUSSA.steps[11].files) expect(files[file.path], file.path).toBe(file.code);
+  expect(JSON.parse(files["package.json"]).name).toBe("montanha-russa");
+  expect(files["src/main.js"]).not.toContain("OrbitControls");
 });
 
 test("projetos: o modo de estudo não tem a aba Projetos", async ({ page }) => {

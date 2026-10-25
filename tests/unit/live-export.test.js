@@ -76,6 +76,38 @@ describe("exportar a cena", () => {
     expect(alone).toContain("controles.target.set(0, 0.5, 0);");
   });
 
+  it("sem os controles do mouse quando o código move a câmera: presa a outro objeto ou mudada em animar()", () => {
+    const base = [
+      "const cena = new THREE.Scene();",
+      "const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);",
+      "camera.position.set(0, 2, 5);",
+      "camera.lookAt(0, 1, 0);",
+      "const carrinho = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());",
+      "cena.add(carrinho);",
+      "",
+    ].join("\n");
+    const main = (extra) => fileOf(exportProject(analyze(base + extra)).files, "src/main.js");
+    const riding = main("carrinho.add(camera);\nfunction animar(tempo) {\n  carrinho.position.x = Math.sin(tempo);\n}\n");
+    expect(riding).not.toContain("OrbitControls");
+    expect(riding).not.toMatch(/controles\.|const controles/);
+    expect(riding).toContain("redimensionar();\n\n// O código move a câmera: sem controles do mouse, que a tirariam do lugar a cada quadro\n\n");
+    expect(riding).toContain("  animar(tempo, delta);\n  renderizador.render(cena, camera);\n});");
+    expect(main("function animar(tempo) {\n  camera.position.x = Math.sin(tempo);\n}\n")).not.toContain("OrbitControls");
+    // na cena, a câmera fica parada: os controles continuam
+    const still = main("cena.add(camera);\n");
+    expect(still).toContain('import { OrbitControls } from "three/addons/controls/OrbitControls.js";');
+    expect(still).toContain("controles.target.set(0, 1, 0);");
+  });
+
+  it("o relógio lê a hora do navegador a cada quadro, e o primeiro delta não sai negativo", () => {
+    // o instante que o setAnimationLoop passa é o do começo do quadro: no primeiro, ele pode ser de
+    // antes de o relógio existir, e um delta negativo poria o carrinho da montanha-russa antes do
+    // começo da curva, onde getPointAt não tem ponto
+    const main = fileOf(exportProject(analyze(STARTER_CODE)).files, "src/main.js");
+    expect(main).toContain("renderizador.setAnimationLoop(() => {\n  relogio.update();\n  const delta = Math.min(relogio.getDelta(), 0.1);");
+    expect(exportHtml(analyze(STARTER_CODE)).html).toContain("renderer.setAnimationLoop(() => {\n  timer.update();\n");
+  });
+
   it("o centro dos controles é o último lookAt da câmera, só com números", () => {
     const main = (lookAt) => fileOf(exportProject(analyze(`const cena = new THREE.Scene();\nconst camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);\n${lookAt}\n`)).files, "src/main.js");
     expect(main("camera.lookAt(1, 2, 3);\ncamera.lookAt(0, -1.5, 2);")).toContain("controles.target.set(0, -1.5, 2);");

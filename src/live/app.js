@@ -607,6 +607,12 @@ setInterval(() => {
   if (state.playing && state.hasAnimar && selectedId() != null && document.visibilityState === "visible") requestInspect();
 }, 300);
 
+// Um passo que mede o movimento (`motion`, como a velocidade do carrinho da montanha-russa)
+// confere de novo a cada segundo enquanto a animação roda: o rastro do que anda cresce a cada quadro.
+setInterval(() => {
+  if (projectStep()?.motion && state.playing && state.hasAnimar && !state.liveApplied && document.visibilityState === "visible") requestFacts();
+}, 1000);
+
 // ---------------------------------------------------------------------------
 // Edições vindas da cena e do painel
 
@@ -835,7 +841,8 @@ function requestFacts() {
 
 /**
  * Corrige o desafio ou o passo aberto com os fatos da cena, pelos nomes das variáveis do código
- * que rodou. Os passos de projeto também olham o fundo da cena e o que animar() muda.
+ * que rodou. Os passos de projeto também olham o fundo da cena, o que animar() muda e se a
+ * animação está andando (o rastro de quem anda só cresce com ela).
  */
 function onFacts(msg) {
   const analysis = state.runs.get(msg.runId)?.analysis;
@@ -848,7 +855,18 @@ function onFacts(msg) {
     const name = nameOf(id);
     if (name && !objects[name]) objects[name] = facts;
   }
-  const facts = { objects, camera: msg.camera, lights: msg.lights, nameOf, background: msg.background, fog: msg.fog, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar };
+  const facts = {
+    objects,
+    camera: msg.camera,
+    lights: msg.lights,
+    nameOf,
+    background: msg.background,
+    fog: msg.fog,
+    animated: animatedKeys(analysis),
+    hasAnimar: !!analysis.animar,
+    playing: !!msg.playing,
+    recorded: msg.recorded ?? 0,
+  };
   const result = grade(target, facts);
   const passed = result.results.filter((r) => r.ok).length;
   updateCodebar({ passed, total: result.results.length, ok: result.ok });

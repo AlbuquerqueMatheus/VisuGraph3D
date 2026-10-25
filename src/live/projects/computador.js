@@ -196,16 +196,22 @@ function mainLines({ stretched, jump, animarStep }) {
       text: "O centro em volta do qual os controles giram a câmera: o ponto do seu `camera.lookAt`. Sem isso, eles girariam em volta da origem, e a câmera viraria para ela logo no primeiro quadro.",
     },
     {
+      code: "// O código move a câmera: sem controles do mouse, que a tirariam do lugar a cada quadro",
+      text: "Nos projetos com a câmera parada, aqui entram os OrbitControls, que giram a câmera com o mouse. Eles põem a câmera no lugar deles a cada quadro, e a sua câmera anda com o código: com eles, ela sairia do passeio. Por isso este `main.js` não os importa.",
+    },
+    {
       code: "const relogio = new THREE.Timer();",
       text: "Mede o tempo que passa entre um quadro e o seguinte.",
     },
     {
-      code: "renderizador.setAnimationLoop((agora) => {",
-      text: "Chama a função a cada quadro da tela, em geral 60 vezes por segundo, e para enquanto a aba está escondida. `agora` é o instante do quadro, em milissegundos.",
+      code: "renderizador.setAnimationLoop(() => {",
+      text: animarStep
+        ? "Chama a função a cada quadro da tela, em geral 60 vezes por segundo, e para enquanto a aba está escondida."
+        : "Chama a função a cada quadro da tela, em geral 60 vezes por segundo, e para enquanto a aba está escondida. Sem `animar`, a cena fica parada, mas os controles mexem na câmera, e cada quadro desenha a cena de novo, vista do lugar novo.",
     },
     {
-      code: "renderizador.setAnimationLoop(() => {",
-      text: "Chama a função a cada quadro da tela, em geral 60 vezes por segundo, e para enquanto a aba está escondida. Sem `animar`, a cena fica parada, mas os controles mexem na câmera, e cada quadro desenha a cena de novo, vista do lugar novo.",
+      code: "relogio.update();",
+      text: "Marca o instante deste quadro, e o relógio calcula quanto tempo passou desde o anterior. Sem argumento, ele lê a hora do navegador naquele momento. O `setAnimationLoop` também passa à função um instante, o do começo do quadro, mas o do primeiro quadro pode ser de antes de o relógio existir, e o primeiro `delta` sairia negativo.",
     },
     {
       code: "const delta = Math.min(relogio.getDelta(), 0.1);",

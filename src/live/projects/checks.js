@@ -6,10 +6,31 @@
 // rotação e a escala dele), com a cor de cada vértice da amostra no espaço linear do Three.js; a
 // matriz de mundo (`world`, por linhas) leva a amostra para o lugar dela na cena.
 
+import { check } from "../challenges.js";
+
 export { check, fmt } from "../challenges.js";
+
+/** Resultado de uma conferência que ainda espera a cena (a animação andar mais): nem ✓ nem ✗. */
+export const wait = (seen) => ({ ok: null, seen });
 
 /** Número inteiro com ponto de milhar, como nos textos: 50.000. */
 export const int = (n) => Math.round(n).toLocaleString("pt-BR");
+
+/** Uma fração (0 a 1) em porcentagem: "35%". */
+export const pct = (f) => `${Math.round(f * 100)}%`;
+
+/** O objeto e os outros que a mesma linha do código criou, num laço. */
+export const all = (obj) => [obj, ...(obj.copies ?? [])];
+
+/** Materiais que calculam a luz que chega a cada ponto. */
+const LIT = ["MeshStandardMaterial", "MeshPhysicalMaterial", "MeshLambertMaterial", "MeshPhongMaterial", "MeshToonMaterial"];
+
+/** Confere que a malha é de um material que reage à luz. */
+export function lit(name, obj) {
+  const type = obj.material?.type ?? null;
+  if (LIT.includes(type)) return check(true);
+  return check(false, type === "MeshBasicMaterial" ? `${name} é MeshBasicMaterial, que ignora a luz` : `${name} é ${type ?? "outro material"}`);
+}
 
 /** Distância de um ponto ao eixo y: o raio, visto de cima. */
 export const radius = ([x, , z]) => Math.hypot(x, z);
@@ -33,6 +54,18 @@ export const deg = (rad) => (rad * 180) / Math.PI;
 
 /** Distância entre dois pontos [x, y, z]. */
 export const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+export const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+/** Direção, com comprimento 1, do ponto a para o ponto b. */
+export function toward(a, b) {
+  const v = [0, 1, 2].map((i) => b[i] - a[i]);
+  const n = Math.hypot(...v) || 1;
+  return v.map((c) => c / n);
+}
+
+/** Um ponto [x, y, z] levado por uma matriz 4 × 4, escrita por linhas. */
+export const apply = (m, [x, y, z]) => [0, 1, 2].map((i) => m[i][0] * x + m[i][1] * y + m[i][2] * z + m[i][3]);
 
 /** Um ponto do espaço do objeto levado ao mundo pela matriz de mundo dele. */
 export function toWorld(obj, [x, y, z]) {
@@ -74,6 +107,42 @@ export function isRound(obj) {
   if (!d || d.max <= 0 || (d.max - d.min) / d.max >= 0.02) return false;
   const places = new Set(obj.geometry.sample.map((p) => p.map((c) => Math.round(c * 1e4)).join()));
   return places.size >= 20;
+}
+
+/**
+ * As bordas da caixa da câmera da sombra como a projeção as usa: com zoom, a caixa encolhe em
+ * volta do meio dela.
+ */
+function shadowBox({ left, right, top, bottom, near, far, zoom = 1 }) {
+  const cx = (left + right) / 2;
+  const cy = (top + bottom) / 2;
+  const dx = (right - left) / (2 * zoom);
+  const dy = (top - bottom) / (2 * zoom);
+  return { left: cx - dx, right: cx + dx, bottom: cy - dy, top: cy + dy, near, far };
+}
+
+/**
+ * A câmera da sombra de uma luz direcional: a caixa (`box`), a matriz que leva um ponto da cena
+ * para o espaço dela (`view`) e o tamanho do mapa; null se a luz não tem essa câmera.
+ */
+export function shadowOf(light) {
+  const shadow = light.shadow;
+  if (!shadow?.view || shadow.camera.left == null) return null;
+  return { box: shadowBox(shadow.camera), view: shadow.view, mapSize: shadow.mapSize };
+}
+
+/** Profundidade de um ponto: o quanto ele fica à frente da câmera, na direção em que ela olha. */
+export const depthOf = (camera, p) => dot(camera.direction, [0, 1, 2].map((i) => p[i] - camera.worldPosition[i]));
+
+/**
+ * Quanto de neblina (0 a 1) cobre um ponto à profundidade `depth`, como o shader do Three.js
+ * calcula: na Fog, uma curva suave (smoothstep) de near a far; na FogExp2, 1 − e^−(densidade × d)².
+ */
+export function fogAt(fog, depth) {
+  if (fog.type === "FogExp2") return 1 - Math.exp(-((fog.density * depth) ** 2));
+  if (fog.far <= fog.near) return depth >= fog.far ? 1 : 0;
+  const t = Math.min(1, Math.max(0, (depth - fog.near) / (fog.far - fog.near)));
+  return t * t * (3 - 2 * t);
 }
 
 /** Brilho (0 a 1) de uma cor "#rrggbb", pela luminância de Rec. 709 sobre os canais sRGB. */
@@ -153,4 +222,90 @@ export function animatedKeys(analysis) {
     for (const [key, prop] of Object.entries(obj.props)) if (prop.reason === "animated") keys.add(`${obj.name}.${key}`);
   }
   return keys;
+}
+
+// ---------------------------------------------------------------------------
+// Curvas e rastros: a curva que um tubo segue (`geometry.curve`, nos fatos) e o caminho que um
+// objeto fez enquanto a animação rodava (`trail`: [[tempo, x, y, z], …])
+
+/** Os pontos da curva de um tubo (TubeGeometry), levados ao mundo; [] se não é um tubo. */
+export const curveOf = (obj) => (obj?.geometry?.curve ?? []).map((p) => toWorld(obj, p));
+
+/** O comprimento de uma linha de pontos ligados em sequência. */
+export function lengthOf(points) {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) total += dist(points[i - 1], points[i]);
+  return total;
+}
+
+/**
+ * O ponto da linha (pontos ligados em sequência) mais perto de p: a distância, o trecho (de
+ * points[index] a points[index + 1]), quanto do trecho até o ponto (t, de 0 a 1), o ponto e a
+ * direção do trecho, com comprimento 1.
+ */
+export function nearest(points, p) {
+  let best = { distance: Infinity, index: -1, t: 0, point: null, direction: null };
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i];
+    const ab = [0, 1, 2].map((k) => points[i + 1][k] - a[k]);
+    const len2 = dot(ab, ab);
+    if (len2 === 0) continue;
+    const t = Math.max(0, Math.min(1, dot([0, 1, 2].map((k) => p[k] - a[k]), ab) / len2));
+    const q = [0, 1, 2].map((k) => a[k] + ab[k] * t);
+    const d = dist(p, q);
+    if (d < best.distance) {
+      const len = Math.sqrt(len2);
+      best = { distance: d, index: i, t, point: q, direction: ab.map((c) => c / len) };
+    }
+  }
+  return best;
+}
+
+/** As posições [x, y, z] de um rastro. */
+export const placesOf = (trail) => trail.map(([, x, y, z]) => [x, y, z]);
+
+/**
+ * A velocidade ao longo de um rastro: [{ y, v }], o caminho andado em cada janela de pelo menos
+ * `window` segundos (de cada ponto ao seguinte, sem janela) dividido pelo tempo, com a altura média.
+ * Com `lag`, o tempo da janela começa e termina um ponto antes: é a conta certa para um código que
+ * anda depois de pôr o objeto no lugar (`distancia += velocidade * delta` no fim de animar), em
+ * que o pedaço entre dois pontos do rastro foi andado com o delta do quadro anterior.
+ */
+export function speedsOf(trail, { window = 0, lag = false } = {}) {
+  const out = [];
+  for (let i = lag ? 1 : 0; i + 1 < trail.length; i++) {
+    let length = 0;
+    let j = i;
+    do {
+      length += dist(trail[j].slice(1), trail[j + 1].slice(1));
+      j++;
+    } while (j + 1 < trail.length && trail[j][0] - trail[i][0] < window);
+    if (trail[j][0] - trail[i][0] < window) break;
+    const time = lag ? trail[j - 1][0] - trail[i - 1][0] : trail[j][0] - trail[i][0];
+    if (time <= 0) continue;
+    let y = 0;
+    for (let k = i; k <= j; k++) y += trail[k][2];
+    out.push({ y: y / (j - i + 1), v: length / time });
+  }
+  return out;
+}
+
+/**
+ * A reta y = a + b·x que passa mais perto dos pontos (pelos mínimos quadrados), com o r² (de 0 a
+ * 1): quanto da variação de y a reta explica.
+ */
+export function fitLine(xs, ys) {
+  const n = xs.length;
+  const mx = xs.reduce((s, x) => s + x, 0) / n;
+  const my = ys.reduce((s, y) => s + y, 0) / n;
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (let i = 0; i < n; i++) {
+    sxy += (xs[i] - mx) * (ys[i] - my);
+    sxx += (xs[i] - mx) ** 2;
+    syy += (ys[i] - my) ** 2;
+  }
+  const b = sxx ? sxy / sxx : 0;
+  return { a: my - b * mx, b, r2: sxx && syy ? (sxy * sxy) / (sxx * syy) : 0 };
 }

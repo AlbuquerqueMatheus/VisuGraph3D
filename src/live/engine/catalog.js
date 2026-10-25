@@ -150,6 +150,18 @@ export const CLASSES = {
     ["radialSegments", int("segmentos do tubo", 8, { min: 3, max: 64 })],
     ["p", int("voltas (p)", 2, { max: 20 })], ["q", int("voltas (q)", 3, { max: 20 })],
   ]),
+  // um tubo em volta de uma curva: o primeiro argumento é a curva (uma CatmullRomCurve3, por
+  // exemplo), que não vira controle
+  TubeGeometry: {
+    kind: "geometry",
+    args: [null, "tubularSegments", "radius", "radialSegments", "closed"],
+    props: {
+      tubularSegments: int("segmentos ao longo", 64, { min: 2, max: 4000 }),
+      radius: size("raio"),
+      radialSegments: int("segmentos em volta", 8, { min: 3, max: 64 }),
+      closed: bool("fechado"),
+    },
+  },
   CapsuleGeometry: geometry([
     ["radius", size("raio")], ["height", size("altura")],
     ["capSegments", int("segmentos da tampa", 4, { max: 32 })],

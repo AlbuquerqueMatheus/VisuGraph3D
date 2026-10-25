@@ -7,7 +7,7 @@
 // prédios saem de dois laços: a conferência mede todos eles pelas cópias (`copies`) dos fatos, e a
 // sombra pela câmera da sombra do sol (`shadow`), vista dele.
 
-import { axisOf, check, deg, dist, extent, fmt, int, luminance, toWorld } from "./checks.js";
+import { all, apply, axisOf, check, deg, depthOf, dist, dot, extent, fmt, fogAt, int, lit, luminance, pct, shadowOf, toWorld, toward } from "./checks.js";
 import { computerStep } from "./computador.js";
 import { by, codeAt as sourceAt, from } from "./source.js";
 
@@ -89,12 +89,6 @@ const codeAt = (n) => sourceAt(SOURCE, n);
 /** O centro da cidade, para onde a câmera olha. */
 const CENTER = [0, 1, 0];
 
-/** Materiais que calculam a luz que chega a cada ponto. */
-const LIT = ["MeshStandardMaterial", "MeshPhysicalMaterial", "MeshLambertMaterial", "MeshPhongMaterial", "MeshToonMaterial"];
-
-/** O objeto e os outros que a mesma linha do código criou, num laço. */
-const all = (obj) => [obj, ...(obj.copies ?? [])];
-
 /** Os prédios com geometria (os que têm caixa). */
 const buildings = (objects) => all(objects.predio).filter((p) => p.box);
 
@@ -103,18 +97,6 @@ const centerOf = (box) => [0, 1, 2].map((i) => (box.min[i] + box.max[i]) / 2);
 
 /** Os 8 cantos de uma caixa { min, max }. */
 const cornersOf = ({ min, max }) => Array.from({ length: 8 }, (_, i) => [i & 1 ? max[0] : min[0], i & 2 ? max[1] : min[1], i & 4 ? max[2] : min[2]]);
-
-/** Direção, com comprimento 1, do ponto a para o ponto b. */
-function toward(a, b) {
-  const v = [0, 1, 2].map((i) => b[i] - a[i]);
-  const n = Math.hypot(...v) || 1;
-  return v.map((c) => c / n);
-}
-
-const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-
-/** Um ponto [x, y, z] levado por uma matriz 4 × 4, escrita por linhas. */
-const apply = (m, [x, y, z]) => [0, 1, 2].map((i) => m[i][0] * x + m[i][1] * y + m[i][2] * z + m[i][3]);
 
 /** Brilho (0 a 1) de uma cor [r, g, b] em sRGB, como a luminance() de "#rrggbb". */
 const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -125,54 +107,11 @@ const hexOf = (rgb) => "#" + rgb.map((c) => Math.round(c * 255).toString(16).pad
 /** Uma cor "#rrggbb" em [r, g, b], de 0 a 1. */
 const rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
 
-/** Uma fração (0 a 1) em porcentagem: "35%". */
-const pct = (f) => `${Math.round(f * 100)}%`;
-
 /** Altura de um prédio, pela caixa. */
 const heightOf = (b) => b.box.max[1] - b.box.min[1];
 
 /** A distância do prédio ao eixo do centro da cidade, vista de cima. */
 const fromCenter = (b) => Math.hypot(...[0, 2].map((i) => centerOf(b.box)[i]));
-
-/**
- * As bordas da caixa da câmera da sombra como a projeção as usa: com zoom, a caixa encolhe em
- * volta do meio dela.
- */
-function shadowBox({ left, right, top, bottom, near, far, zoom = 1 }) {
-  const cx = (left + right) / 2;
-  const cy = (top + bottom) / 2;
-  const dx = (right - left) / (2 * zoom);
-  const dy = (top - bottom) / (2 * zoom);
-  return { left: cx - dx, right: cx + dx, bottom: cy - dy, top: cy + dy, near, far };
-}
-
-/** A câmera da sombra do sol, se ele é uma luz direcional: { box, view }. */
-function shadowOf(sol) {
-  const shadow = sol.shadow;
-  if (!shadow?.view || shadow.camera.left == null) return null;
-  return { box: shadowBox(shadow.camera), view: shadow.view, mapSize: shadow.mapSize };
-}
-
-/** Profundidade de um ponto: o quanto ele fica à frente da câmera, na direção em que ela olha. */
-const depthOf = (camera, p) => dot(camera.direction, [0, 1, 2].map((i) => p[i] - camera.worldPosition[i]));
-
-/**
- * Quanto de neblina (0 a 1) cobre um ponto à profundidade `depth`, como o shader do Three.js
- * calcula: na Fog, uma curva suave (smoothstep) de near a far; na FogExp2, 1 − e^−(densidade × d)².
- */
-function fogAt(fog, depth) {
-  if (fog.type === "FogExp2") return 1 - Math.exp(-((fog.density * depth) ** 2));
-  if (fog.far <= fog.near) return depth >= fog.far ? 1 : 0;
-  const t = Math.min(1, Math.max(0, (depth - fog.near) / (fog.far - fog.near)));
-  return t * t * (3 - 2 * t);
-}
-
-/** Confere que a malha é de um material que reage à luz. */
-function lit(name, obj) {
-  const type = obj.material?.type ?? null;
-  if (LIT.includes(type)) return check(true);
-  return check(false, type === "MeshBasicMaterial" ? `${name} é MeshBasicMaterial, que ignora a luz` : `${name} é ${type ?? "outro material"}`);
-}
 
 // ---------------------------------------------------------------------------
 // No seu computador: o projeto Vite com o código do fim do passo 8 em src/cena.js

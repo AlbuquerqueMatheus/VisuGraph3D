@@ -77,8 +77,8 @@ resize();
 
 const timer = new THREE.Timer();
 let tempo = 0;
-renderer.setAnimationLoop((t) => {
-  timer.update(t);
+renderer.setAnimationLoop(() => {
+  timer.update();
   const delta = Math.min(timer.getDelta(), 0.1);
   tempo += delta;
   if (visugraph.animar) visugraph.animar(tempo, delta);
@@ -97,8 +97,9 @@ renderer.setAnimationLoop((t) => {
 
 /**
  * O que o main.js de um projeto precisa saber do código: os nomes da cena e da câmera, se há
- * animar(), se a câmera tem perspectiva, se a cena tem fundo e sombras, e o ponto para onde a
- * câmera olha (null se é a origem, o centro dos controles do mouse). { error } sem cena com nome.
+ * animar(), se a câmera tem perspectiva, se a cena tem fundo e sombras, o ponto para onde a
+ * câmera olha (null se é a origem, o centro dos controles do mouse) e se os controles do mouse
+ * entram (não com uma câmera que o código move). { error } sem cena com nome.
  */
 export function sceneOptions(analysis) {
   if (!analysis.ok) return { error: "Corrija o erro no código antes de exportar." };
@@ -113,7 +114,23 @@ export function sceneOptions(analysis) {
     background: /\.background\s*=/.test(code),
     shadows: /\bcastShadow\b/.test(code),
     target: camera ? lookAtOf(code, camera) : ["0", "0.5", "0"],
+    controls: !camera || !cameraMoves(analysis, camera),
   };
+}
+
+/**
+ * Se o código move a câmera: presa a outro objeto (`carrinho.add(camera)`), ela anda com ele, e
+ * animar() pode mudar a posição ou a rotação dela. Os OrbitControls a levariam de volta para o
+ * lugar deles a cada quadro.
+ */
+function cameraMoves(analysis, camera) {
+  const props = analysis.objects[analysis.camera.id]?.props ?? {};
+  if (Object.entries(props).some(([key, prop]) => /^(position|rotation)\./.test(key) && prop.reason === "animated")) return true;
+  const scene = analysis.scene.name;
+  for (const [, owner, args] of analysis.code.matchAll(/(?<![\w$.])([\w$]+)\.add\(([^()]*)\)/g)) {
+    if (owner !== scene && args.split(",").some((arg) => arg.trim() === camera)) return true;
+  }
+  return false;
 }
 
 /** Os números do último camera.lookAt(x, y, z) do código, como estão escritos; null se não há, ou se é a origem. */
@@ -136,13 +153,13 @@ export function cenaJs(code, { scene, camera, animar }) {
 }
 
 /** src/main.js: liga a cena à página, como o visor do VisuGraph faz. */
-export function mainJs({ camera, perspective, animar, background, shadows, target }) {
+export function mainJs({ camera, perspective, animar, background, shadows, target, controls = true }) {
   const lines = [
     'import * as THREE from "three";',
-    'import { OrbitControls } from "three/addons/controls/OrbitControls.js";',
+    controls && 'import { OrbitControls } from "three/addons/controls/OrbitControls.js";',
     `import { ${["cena", camera && "camera", animar && "animar"].filter(Boolean).join(", ")} } from "./cena.js";`,
     "",
-  ];
+  ].filter((line) => line !== false);
   if (!camera) {
     lines.push(
       "// O código não cria uma câmera: esta é a do exemplo do VisuGraph",
@@ -169,16 +186,17 @@ export function mainJs({ camera, perspective, animar, background, shadows, targe
     "  renderizador.setSize(largura, altura, false);",
   );
   if (perspective) lines.push("  camera.aspect = largura / altura;", "  camera.updateProjectionMatrix();");
-  lines.push(
-    "}",
-    'window.addEventListener("resize", redimensionar);',
-    "redimensionar();",
-    "",
-    "// Arrastar gira a câmera em volta do centro, a roda aproxima e o botão direito arrasta a vista",
-    "const controles = new OrbitControls(camera, canvas);",
-    "controles.enableDamping = true;",
-  );
-  if (target) lines.push(`controles.target.set(${target.join(", ")}); // o centro: o ponto para onde a câmera olha`);
+  lines.push("}", 'window.addEventListener("resize", redimensionar);', "redimensionar();", "");
+  if (controls) {
+    lines.push(
+      "// Arrastar gira a câmera em volta do centro, a roda aproxima e o botão direito arrasta a vista",
+      "const controles = new OrbitControls(camera, canvas);",
+      "controles.enableDamping = true;",
+    );
+    if (target) lines.push(`controles.target.set(${target.join(", ")}); // o centro: o ponto para onde a câmera olha`);
+  } else {
+    lines.push("// O código move a câmera: sem controles do mouse, que a tirariam do lugar a cada quadro");
+  }
   lines.push("");
   if (animar) {
     lines.push(
@@ -186,8 +204,8 @@ export function mainJs({ camera, perspective, animar, background, shadows, targe
       "const relogio = new THREE.Timer();",
       "let tempo = 0;",
       "",
-      "renderizador.setAnimationLoop((agora) => {",
-      "  relogio.update(agora);",
+      "renderizador.setAnimationLoop(() => {",
+      "  relogio.update();",
       "  const delta = Math.min(relogio.getDelta(), 0.1);",
       "  tempo += delta;",
       "  animar(tempo, delta);",
@@ -195,7 +213,8 @@ export function mainJs({ camera, perspective, animar, background, shadows, targe
   } else {
     lines.push("// A cada quadro, a cena é desenhada de novo", "renderizador.setAnimationLoop(() => {");
   }
-  lines.push("  controles.update();", "  renderizador.render(cena, camera);", "});");
+  if (controls) lines.push("  controles.update();");
+  lines.push("  renderizador.render(cena, camera);", "});");
   return lines.join("\n") + "\n";
 }
 

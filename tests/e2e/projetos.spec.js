@@ -2,11 +2,12 @@
 // outro e o progresso fica. Os passos no computador baixam o projeto e ficam feitos pela pessoa.
 import { readFile } from "node:fs/promises";
 import { test, expect } from "./fixtures.js";
-import { code, pasteCode, status } from "./live.js";
+import { code, pasteCode, status, viewport } from "./live.js";
 import { CIDADE } from "../../src/live/projects/cidade.js";
 import { FLORESTA } from "../../src/live/projects/floresta.js";
 import { GALAXIA } from "../../src/live/projects/galaxia.js";
 import { MONTANHA_RUSSA } from "../../src/live/projects/montanhaRussa.js";
+import { PHONG } from "../../src/live/projects/phong.js";
 import { SISTEMA_SOLAR } from "../../src/live/projects/sistemaSolar.js";
 import { VITRINE } from "../../src/live/projects/vitrine.js";
 import { unzip } from "../../src/lib/zip.js";
@@ -23,6 +24,24 @@ async function zipFiles(download) {
   const files = unzip(new Uint8Array(await readFile(await download.path())));
   return Object.fromEntries(files.map((f) => [f.path, new TextDecoder().decode(f.content)]));
 }
+
+/** Quantos pixels do visor são magenta chapado, a cor de um shader que não compila. */
+const magentaPixels = (page) =>
+  viewport(page).evaluate(
+    () =>
+      new Promise((resolve) => {
+        // o quadro do visor já está na fila deste quadro, então é desenhado antes desta leitura
+        requestAnimationFrame(() => {
+          const canvas = document.getElementById("vg-canvas");
+          const gl = canvas.getContext("webgl2");
+          const data = new Uint8Array(canvas.width * canvas.height * 4);
+          gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, data);
+          let count = 0;
+          for (let i = 0; i < data.length; i += 4) if (data[i] === 255 && data[i + 1] === 0 && data[i + 2] === 255) count++;
+          resolve(count);
+        });
+      }),
+  );
 
 test("projetos: o endereço abre o passo, o código pronto passa na conferência e o próximo passo parte dele", async ({ page }) => {
   await page.goto("index-3d.html?projeto=galaxia&passo=2");
@@ -99,12 +118,13 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
   await page.click("#lv-tab-project");
   await expect(panel(page).locator(".lv-pj-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
-  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(3);
+  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(2);
   await expect(panel(page).locator('.lv-pj-card[data-project="sistema-solar"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="vitrine"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="cidade"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="montanha-russa"] .lv-pj-card__progress')).toHaveText("12 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="floresta"] .lv-pj-card__progress')).toHaveText("12 passos");
+  await expect(panel(page).locator('.lv-pj-card[data-project="phong"] .lv-pj-card__progress')).toHaveText("13 passos");
   const card = panel(page).locator('.lv-pj-card[data-project="galaxia"]');
   await expect(card.locator(".lv-pj-card__progress")).toHaveText("12 passos");
 
@@ -377,6 +397,77 @@ test("projetos: na Floresta, a conferência espera o vento soprar e avisa do nee
   for (const file of FLORESTA.steps[11].files) expect(files[file.path], file.path).toBe(file.code);
   expect(JSON.parse(files["package.json"]).name).toBe("floresta");
   expect(files["src/main.js"]).toContain("controles.target.set(0, 0, 20);");
+});
+
+test("projetos: no Phong escrito à mão, o erro do shader aparece na linha dele, a conferência refaz a conta da luz nos pixels, e o projeto sai para o computador", async ({ page }) => {
+  test.slow(); // a conferência desenha a cena para medir os pixels, e a lâmpada anda alguns segundos de verdade
+  await page.goto("index-3d.html?projeto=phong&passo=2");
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(panel(page).locator(".lv-ch__kicker")).toHaveText("Avançado · Phong escrito à mão");
+  await expect(title(page)).toHaveText("2. O primeiro shader");
+  await expect(page.locator("#lv-codebar")).toContainText("Phong escrito à mão · passo 2 de 13");
+  await expect(result(page)).toContainText("(a esfera é MeshPhongMaterial, e não um ShaderMaterial)", { timeout: 30_000 });
+
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect.poll(() => code(page)).toContain("gl_FragColor = vec4(1.0, 0.5, 0.2, 1.0);");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+  expect(await magentaPixels(page), "os dois shaders compilam").toBe(0);
+
+  // sem o ; no fim do gl_FragColor, o shader não compila: o erro vai para a linha dele no editor, e a esfera fica magenta
+  const broken = PHONG.steps[1].code.replace("vec4(1.0, 0.5, 0.2, 1.0);", "vec4(1.0, 0.5, 0.2, 1.0)");
+  expect(broken).not.toBe(PHONG.steps[1].code);
+  const line = broken.split("\n").findIndex((l) => l.includes("gl_FragColor")) + 1;
+  await pasteCode(page, broken);
+  await expect(status(page)).toContainText(`Linha ${line}: No shader de fragmentos: Falta um ; no fim desta linha`, { timeout: 30_000 });
+  await expect(page.locator(".cm-lint-marker-error")).toHaveCount(1);
+  await expect(result(page, 1)).toContainText("(o shader de fragmentos não compila: a barra embaixo do código diz o erro e a linha)", { timeout: 30_000 });
+  await expect.poll(() => magentaPixels(page), "a esfera do shader quebrado fica magenta").toBeGreaterThan(500);
+
+  // com o ; de volta, a esfera volta a ser desenhada pelo shader
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+  await expect(page.locator(".cm-lint-marker-error")).toHaveCount(0);
+  await expect.poll(() => magentaPixels(page)).toBe(0);
+
+  // no último passo no VisuGraph, a conferência refaz a conta do sol e da lâmpada em cada pixel da esfera
+  await stepButton(page, 12).click();
+  await expect(title(page)).toHaveText("12. A lâmpada dá a volta");
+  await expect(codeState(page), "o passo 12 começa do fim do passo 11, com a lâmpada parada").toHaveText(/^Escreva no editor/);
+  await expect(result(page)).toContainText("(não achei a função animar(tempo))", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(codeState(page)).toHaveText("O editor já tem o código deste passo.");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+
+  // rodando de novo com a animação parada, ela espera a lâmpada andar
+  await page.click("#lv-play");
+  await expect(page.locator("#lv-play")).toHaveAttribute("aria-pressed", "false");
+  await page.click("#lv-restart");
+  await expect(result(page)).toContainText("(a animação está parada: aperte ▶ na barra de cima para a lâmpada andar)", { timeout: 30_000 });
+  await expect(result(page)).toHaveAttribute("data-ok", "pending");
+  await expect(done(page)).toBeHidden();
+  await page.click("#lv-play");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+
+  // sem o copy, a lâmpada anda, e a luz dela fica no shader onde ela começou
+  const stale = PHONG.steps[11].code.replace("  material.uniforms.uPosicaoDaLampada.value.copy(lampada.position);\n", "");
+  expect(stale).not.toBe(PHONG.steps[11].code);
+  await pasteCode(page, stale);
+  await expect(result(page, 1)).toContainText(/e a luz no shader ficou em \(0,00; 0,60; 3,00\): falta copiar a posição dela para material\.uniforms\.uPosicaoDaLampada\.value no animar/, { timeout: 60_000 });
+  await expect(result(page, 1)).toHaveAttribute("data-ok", "false");
+
+  // o passo no computador começa do fim do passo 12, com os dois shaders no cena.js e os controles do mouse no main.js
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(codeState(page)).toHaveText("O editor já tem o código deste passo.");
+  await stepButton(page, 13).click();
+  await expect(title(page)).toHaveText("13. No seu computador");
+  const [download] = await Promise.all([page.waitForEvent("download"), panel(page).locator('[data-download="phong.zip"]').click()]);
+  expect(download.suggestedFilename()).toBe("phong.zip");
+  const files = await zipFiles(download);
+  for (const file of PHONG.steps[12].files) expect(files[file.path], file.path).toBe(file.code);
+  expect(JSON.parse(files["package.json"]).name).toBe("phong");
+  expect(files["src/cena.js"]).toContain("const fragmentShader = /* glsl */ `");
+  expect(files["src/main.js"]).toContain("new OrbitControls(");
+  expect(files["src/main.js"], "os controles giram em volta do meio, onde a câmera olha").not.toContain("controles.target.set");
 });
 
 test("projetos: o modo de estudo não tem a aba Projetos", async ({ page }) => {

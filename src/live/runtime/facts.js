@@ -3,7 +3,8 @@
 // Os fatos são números da cena como ela está, não do texto do código: posições de mundo,
 // matrizes, caixas, materiais, geometrias (quantos vértices, quais atributos e os parâmetros),
 // as cópias de uma InstancedMesh, luzes e sombras, a câmera e a neblina, e o rastro de quem a
-// animação moveu. As cores vão como estão no código (sRGB).
+// animação moveu. As cores vão como estão no código (sRGB), menos as dos uniforms de um
+// ShaderMaterial, que vão como o shader as recebe (no espaço linear).
 
 import * as THREE from "three";
 import { fromColumnMajor } from "../../lib/transform3d.js";
@@ -133,6 +134,26 @@ function instancedFacts(obj) {
 }
 
 /**
+ * Os uniforms de um ShaderMaterial, como o shader os recebe: { nome: { type, value } }, com `type`
+ * "number", "boolean", "vector" (Vector2, Vector3 ou Vector4, como lista), "color" (no espaço linear,
+ * como chega ao shader, e não como está no código), "matrix" (por linhas) ou "other" (uma textura,
+ * por exemplo, sem o valor).
+ */
+function uniformsOf(uniforms) {
+  const out = {};
+  for (const [name, uniform] of Object.entries(uniforms ?? {})) {
+    const v = uniform?.value;
+    if (typeof v === "number" || typeof v === "boolean") out[name] = { type: typeof v, value: v };
+    else if (v?.isColor) out[name] = { type: "color", value: [v.r, v.g, v.b] };
+    else if (v?.isVector2 || v?.isVector3 || v?.isVector4) out[name] = { type: "vector", value: v.toArray() };
+    else if (v?.isMatrix4) out[name] = { type: "matrix", value: fromColumnMajor(v.elements) };
+    else if (v?.isMatrix3) out[name] = { type: "matrix", value: [0, 1, 2].map((i) => [0, 1, 2].map((j) => v.elements[j * 3 + i])) };
+    else out[name] = { type: "other", value: null };
+  }
+  return out;
+}
+
+/**
  * A sombra de uma luz: o tamanho do mapa, os desvios e a câmera da sombra, com a matriz que leva
  * um ponto do mundo para o espaço dela (`view`, por linhas). A matriz sai como o desenho a monta,
  * com a câmera na luz olhando para o alvo; a luz pontual olha para os seis lados, sem uma só.
@@ -205,6 +226,7 @@ function objectFacts(obj, idOf, cache) {
       side: SIDE_NAMES[material.side] ?? null,
       flatShading: !!material.flatShading,
     };
+    if (material.isShaderMaterial) facts.material.uniforms = uniformsOf(material.uniforms);
   }
   const geometry = drawn && obj.geometry?.isBufferGeometry ? obj.geometry : null;
   if (geometry) {

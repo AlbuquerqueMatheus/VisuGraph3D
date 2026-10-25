@@ -9,7 +9,7 @@ import { analyze, hasBlockingError } from "./engine/analyze.js";
 import { instrument } from "./engine/instrument.js";
 import { editableAxes, planEdit, planTransform } from "./engine/patch.js";
 import { ADD_ITEMS, STARTER_CODE, planAddObject } from "./engine/snippets.js";
-import { translateError } from "./engine/errors.js";
+import { shaderError, translateError, translateShaderError } from "./engine/errors.js";
 import { degToRad } from "./engine/format.js";
 import { createEditor, resetDoc, revealPosition, sceneEdit, showAnalysis, showHighlight, showMathLinks } from "./editor/editor.js";
 import { isDrawableKind, isObject3DKind } from "./engine/catalog.js";
@@ -511,6 +511,10 @@ function onRuntimeError(msg) {
   if (!run) return;
   run.failed = true;
   study.log("erro", { origem: "execucao", fase: msg.phase, tipo: msg.name, laco: !!msg.loop });
+  if (msg.phase === "shader") {
+    showShaderError(run, msg);
+    return;
+  }
   let pos = msg.line != null ? run.toOriginal(msg.line, msg.column ?? 0) : null;
   const where = { animar: "Em animar() (a animação parou): ", timer: "Num temporizador: ", evento: "Num evento: ", async: "Numa função async: " };
   const text = (where[msg.phase] || "") + translateError(msg.name, msg.message);
@@ -527,6 +531,34 @@ function onRuntimeError(msg) {
     refreshEditor();
   }
   setStatus("error", pos ? `Linha ${pos.line}: ${text}` : text, pos ? pos.offset : null);
+}
+
+const SHADER_STAGES = { vertex: "No shader de vértices", fragment: "No shader de fragmentos", link: "Ao ligar os dois shaders" };
+
+/**
+ * Um shader que não compilou. O visor manda a linha do erro dentro do texto do shader e o próprio
+ * texto, que aparece igual no código (entre as crases): o erro vai para a linha dele no editor.
+ */
+function showShaderError(run, msg) {
+  const where = SHADER_STAGES[msg.stage] ?? "No shader";
+  const code = run.analysis.code;
+  const at = msg.glsl ? code.indexOf(msg.glsl.source) : -1;
+  if (at < 0) {
+    setStatus("error", `${where}: ${translateShaderError(msg.message)}`);
+    return;
+  }
+  const { line, text } = shaderError(msg.message, msg.glsl.source, msg.glsl.line);
+  const lines = msg.glsl.source.split("\n");
+  let from = at;
+  for (let i = 0; i < line - 1; i++) from += lines[i].length + 1;
+  from += lines[line - 1].length - lines[line - 1].trimStart().length; // sem o recuo
+  const message = `${where}: ${text}`;
+  if (code === state.analysis.code) {
+    const end = view.state.doc.lineAt(Math.min(from, view.state.doc.length)).to;
+    state.runtimeDiagnostics = [{ from, to: Math.max(end, from + 1), severity: "error", message, source: "shader" }];
+    refreshEditor();
+  }
+  setStatus("error", `Linha ${code.slice(0, from).split("\n").length}: ${message}`, from);
 }
 
 function showBlockingError() {

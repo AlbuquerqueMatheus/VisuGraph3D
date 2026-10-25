@@ -848,7 +848,7 @@ function onFacts(msg) {
     const name = nameOf(id);
     if (name && !objects[name]) objects[name] = facts;
   }
-  const facts = { objects, camera: msg.camera, lights: msg.lights, nameOf, background: msg.background, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar };
+  const facts = { objects, camera: msg.camera, lights: msg.lights, nameOf, background: msg.background, fog: msg.fog, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar };
   const result = grade(target, facts);
   const passed = result.results.filter((r) => r.ok).length;
   updateCodebar({ passed, total: result.results.length, ok: result.ok });

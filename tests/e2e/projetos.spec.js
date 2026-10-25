@@ -3,6 +3,7 @@
 import { readFile } from "node:fs/promises";
 import { test, expect } from "./fixtures.js";
 import { code, pasteCode, status } from "./live.js";
+import { CIDADE } from "../../src/live/projects/cidade.js";
 import { GALAXIA } from "../../src/live/projects/galaxia.js";
 import { SISTEMA_SOLAR } from "../../src/live/projects/sistemaSolar.js";
 import { VITRINE } from "../../src/live/projects/vitrine.js";
@@ -96,9 +97,10 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
   await page.click("#lv-tab-project");
   await expect(panel(page).locator(".lv-pj-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
-  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(6);
+  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(5);
   await expect(panel(page).locator('.lv-pj-card[data-project="sistema-solar"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="vitrine"] .lv-pj-card__progress')).toHaveText("9 passos");
+  await expect(panel(page).locator('.lv-pj-card[data-project="cidade"] .lv-pj-card__progress')).toHaveText("9 passos");
   const card = panel(page).locator('.lv-pj-card[data-project="galaxia"]');
   await expect(card.locator(".lv-pj-card__progress")).toHaveText("12 passos");
 
@@ -235,6 +237,46 @@ test("projetos: na Vitrine de materiais, a conferência conta as amostras que o 
   const files = await zipFiles(download);
   for (const file of VITRINE.steps[8].files) expect(files[file.path], file.path).toBe(file.code);
   expect(JSON.parse(files["package.json"]).name).toBe("vitrine");
+});
+
+test("projetos: na Cidade ao entardecer, a conferência vê as sombras dos prédios do laço e a neblina, e o projeto sai para o computador", async ({ page }) => {
+  await page.goto("index-3d.html?projeto=cidade&passo=6");
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(panel(page).locator(".lv-ch__kicker")).toHaveText("Fácil · Cidade ao entardecer");
+  await expect(title(page)).toHaveText("6. As sombras");
+  await expect(page.locator("#lv-codebar")).toContainText("Cidade ao entardecer · passo 6 de 9");
+  await expect(result(page)).toContainText("(o sol não faz sombra: falta sol.castShadow = true)", { timeout: 30_000 });
+
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect.poll(() => code(page)).toContain("predio.castShadow = true;");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // sem receiveShadow no laço, a conferência conta os 81 prédios que não recebem sombra
+  await pasteCode(page, CIDADE.steps[5].code.replace("predio.receiveShadow = true;", "predio.receiveShadow = false;"));
+  await expect(result(page, 2)).toContainText("(81 prédios não recebem sombra: a sombra de um não aparece no outro)", { timeout: 30_000 });
+  await page.click("#lv-tab-props");
+  await expect(page.locator("#lv-objects .lv-object", { hasText: "predio" }), "o objeto do laço aparece pela variável dele").toContainText("laço");
+
+  // de volta ao código do passo, o passo 8 começa do fim do 7, sem neblina
+  await page.click("#lv-tab-project");
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+  await stepButton(page, 8).click();
+  await expect(title(page)).toHaveText("8. A neblina");
+  await expect.poll(() => code(page)).toContain("sol.shadow.mapSize.set(2048, 2048);");
+  await expect(result(page)).toContainText("(a cena não tem neblina: falta cena.fog)", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // o passo no computador começa do fim do passo 8 e baixa o projeto com ele
+  await stepButton(page, 9).click();
+  await expect(title(page)).toHaveText("9. No seu computador");
+  await expect.poll(() => code(page)).toContain('cena.fog = new THREE.Fog("#f6a26b", 25, 70);');
+  const [download] = await Promise.all([page.waitForEvent("download"), panel(page).locator('[data-download="cidade.zip"]').click()]);
+  expect(download.suggestedFilename()).toBe("cidade.zip");
+  const files = await zipFiles(download);
+  for (const file of CIDADE.steps[8].files) expect(files[file.path], file.path).toBe(file.code);
+  expect(JSON.parse(files["package.json"]).name).toBe("cidade");
 });
 
 test("projetos: o modo de estudo não tem a aba Projetos", async ({ page }) => {

@@ -236,19 +236,62 @@ cena.add(plastico);`);
     expect(facts.objects.metal.material).toMatchObject({ roughness: 0.2, metalness: 1 });
     expect(facts.objects.plastico.material).toMatchObject({ roughness: null, metalness: null });
     expect([facts.objects.fosca, facts.objects.metal, facts.objects.plastico].map((o) => o.geometry.id)).toEqual(["forma", "forma", null]);
+    expect(facts.objects.metal.geometry.uuid).toBe(facts.objects.fosca.geometry.uuid);
+    expect(facts.objects.plastico.geometry.uuid).not.toBe(facts.objects.fosca.geometry.uuid);
   });
 
-  it("os objetos que uma linha criou num laço vão como cópias do primeiro, até 31", () => {
+  it("os objetos que uma linha criou num laço vão como cópias do primeiro, até os 200 que o visor guarda", () => {
     const cena = new THREE.Scene();
-    const bolas = Array.from({ length: 40 }, (_, i) => {
-      const bola = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial());
+    const forma = new THREE.SphereGeometry(0.5);
+    const bolas = Array.from({ length: 250 }, (_, i) => {
+      const bola = new THREE.Mesh(i < 240 ? forma : new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial());
       bola.position.x = i * 2;
       cena.add(bola);
       return bola;
     });
-    const { objects } = sceneFacts({ scene: cena, camera: null, entries: [[7, bolas]], idOf: () => undefined });
+    const { objects } = sceneFacts({ scene: cena, camera: null, entries: [[7, bolas.slice(0, 200)], [8, bolas.slice(240)]], idOf: () => undefined });
     expect(objects[7].worldPosition).toEqual([0, 0, 0]);
-    expect(objects[7].copies).toHaveLength(31);
+    expect(objects[7].copies).toHaveLength(199);
     expect(objects[7].copies.slice(0, 3).map((c) => c.worldPosition[0])).toEqual([2, 4, 6]);
+    // a amostra de uma geometria vai uma vez só: as malhas que dividem a geometria levam a mesma lista
+    expect(objects[7].copies[198].geometry.sample).toBe(objects[7].geometry.sample);
+    expect(objects[8].geometry.sample).not.toBe(objects[7].geometry.sample);
+    expect(objects[8].geometry.sample).toEqual(objects[7].geometry.sample);
+  });
+
+  it("dizem quem faz e quem recebe sombra, a câmera da sombra do sol, vista dele, e a neblina", () => {
+    const facts = factsOf(`const cena = new THREE.Scene();
+cena.fog = new THREE.Fog("#f6a26b", 25, 70);
+const chao = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshStandardMaterial());
+chao.receiveShadow = true;
+cena.add(chao);
+const caixa = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+caixa.castShadow = true;
+cena.add(caixa);
+const sol = new THREE.DirectionalLight("#ffffff", 3);
+sol.position.set(0, 10, 10);
+sol.castShadow = true;
+sol.shadow.camera.left = -22;
+sol.shadow.camera.far = 80;
+sol.shadow.mapSize.set(2048, 1024);
+cena.add(sol);
+const lampada = new THREE.PointLight("#ffffff", 10);
+cena.add(lampada);`);
+    expect(facts.objects.chao).toMatchObject({ castShadow: false, receiveShadow: true });
+    expect(facts.objects.caixa).toMatchObject({ castShadow: true, receiveShadow: false });
+    expect(facts.objects.sol.castShadow).toBe(true);
+    expect(facts.objects.sol.shadow).toMatchObject({
+      mapSize: [2048, 1024],
+      bias: 0,
+      normalBias: 0,
+      camera: { type: "OrthographicCamera", left: -22, right: 5, top: 5, bottom: -5, near: 0.5, far: 80, zoom: 1 },
+    });
+    // a câmera da sombra fica no sol e olha para o alvo: a origem, a 10·√2 dele, fica no eixo dela
+    const [x, y, z] = [0, 1, 2].map((i) => facts.objects.sol.shadow.view[i][3]);
+    expect([x, y, z + 10 * Math.SQRT2].map((c) => Math.round(c * 1e6) / 1e6 + 0)).toEqual([0, 0, 0]);
+    expect(facts.objects.lampada.shadow).toMatchObject({ camera: { type: "PerspectiveCamera", left: null }, view: null });
+    expect(facts.fog).toEqual({ type: "Fog", color: "#f6a26b", near: 25, far: 70, density: null });
+    expect(factsOf('const cena = new THREE.Scene();\ncena.fog = new THREE.FogExp2("#ffffff", 0.02);').fog).toEqual({ type: "FogExp2", color: "#ffffff", near: null, far: null, density: 0.02 });
+    expect(factsOf("const cena = new THREE.Scene();").fog).toBeNull();
   });
 });

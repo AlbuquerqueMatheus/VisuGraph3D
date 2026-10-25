@@ -11,6 +11,7 @@
 // comandos (`setup`), os arquivos do projeto explicados (`files`) e o que conferir lá
 // (`confirm`), e a pessoa diz que funcionou. O código deles é o do último passo no VisuGraph.
 
+import { CIDADE } from "./cidade.js";
 import { GALAXIA } from "./galaxia.js";
 import { SISTEMA_SOLAR } from "./sistemaSolar.js";
 import { VITRINE } from "./vitrine.js";
@@ -20,9 +21,7 @@ export const LEVELS = [
     id: "facil",
     title: "Fácil",
     about: "Cena, malhas, materiais e luz.",
-    soon: [
-      { title: "Cidade ao entardecer", about: "Luz direcional, sombras e neblina." },
-    ],
+    soon: [],
   },
   {
     id: "intermediario",
@@ -45,7 +44,7 @@ export const LEVELS = [
   },
 ];
 
-export const PROJECTS = [SISTEMA_SOLAR, VITRINE, GALAXIA];
+export const PROJECTS = [SISTEMA_SOLAR, VITRINE, CIDADE, GALAXIA];
 
 export const projectById = (id) => PROJECTS.find((p) => p.id === id) ?? null;
 export const levelOf = (project) => LEVELS.find((l) => l.id === project.level);

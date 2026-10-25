@@ -5,7 +5,7 @@
 // código do aluno um `window` e um `document` próprios; não é uma barreira de segurança.
 //
 // Editor → visor: run, apply, select, highlight, inspect, mode, view, play, math, marker, glass, probe
-// Visor → editor: ready, ran, error, pick, hover, transform, inspect, mode, math, probe
+// Visor → editor: ready, ran, error, pick, hover, transform, inspect, mode, math, probe, facts
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -17,6 +17,7 @@ import { shadePoint } from "../../lib/phong3d.js";
 import { localMatrix, objectMath, projectionMatrix, viewOf, worldMatrix } from "../mathModel.js";
 import { collectLights, createGlassMaterial, glassTerms, setLightUniforms, syncGlass } from "./glass.js";
 import { sceneFacts, trailPoint } from "./facts.js";
+import { belongsTo, failureInfo, samplePixels } from "./shaders.js";
 
 const LOOP_LIMIT_MS = { run: 2000, frame: 1000 };
 // O navegador aceita uns 16 contextos WebGL por página e derruba o mais antigo (o do visor)
@@ -160,6 +161,8 @@ class Run {
     this.halted = false; // um laço infinito num temporizador ou evento: o resto deles para
     this.loopError = null; // laço interrompido cujo erro o código do aluno pode ter engolido
     this.glass = new Map(); // malha → materiais da caixa de vidro (um por material dela)
+    this.shaders = false; // a cena tem ShaderMaterial: o visor confere se os shaders compilam
+    this.shaderErrors = new Set(); // shaders cujo erro esta execução já relatou (keyOf)
     // id → [[tempo, x, y, z], …] dos que já saíram do lugar, e id → [tempo, x, y, z] dos parados (recordTrail)
     this.trail = { first: null, last: -Infinity, points: new Map(), still: new Map() };
   }
@@ -496,6 +499,7 @@ function activate(run) {
   const old = state.current;
   run.scene = findScene(run);
   run.camera = run.first(run.cameraId)?.isCamera ? run.first(run.cameraId) : null;
+  run.shaders = [...run.registry.values()].some((list) => list.some((obj) => obj?.isShaderMaterial));
   state.current = run;
   if (!run.scene) {
     reportError(run, new Error("Nenhuma cena foi criada: comece com const cena = new THREE.Scene();"), "run");
@@ -657,6 +661,104 @@ function reportError(run, err, phase) {
     column: pos ? pos.column : null,
     loop: error instanceof LoopLimitError,
   });
+}
+
+// Shaders que não compilam. O three.js só confere um programa no primeiro desenho dele, e guarda o
+// programa para os materiais seguintes com os mesmos textos: a execução seguinte, com o mesmo erro,
+// ganharia o programa quebrado em silêncio. Por isso o erro fica guardado pelos textos dos dois
+// shaders, e cada execução o relata de novo (src/live/runtime/shaders.js diz a linha).
+const MAX_SHADER_FAILURES = 64;
+const shaderFailures = new Map(); // textos dos dois shaders → failureInfo
+const newShaderFailures = []; // o que o WebGL disse dos programas que falharam desde o último desenho
+renderer.debug.onShaderError = (gl, program, vertex, fragment) => {
+  const stage = (name, shader) => ({ stage: name, log: gl.getShaderInfoLog(shader) || "", source: gl.getShaderSource(shader) || "" });
+  newShaderFailures.push({ stages: [stage("vertex", vertex), stage("fragment", fragment)], programLog: gl.getProgramInfoLog(program) || "" });
+};
+
+const shaderKeys = new WeakMap(); // material → { vertex, fragment, key }
+
+/** A chave de um ShaderMaterial: os textos dos dois shaders. */
+function keyOf(material) {
+  let k = shaderKeys.get(material);
+  if (!k || k.vertex !== material.vertexShader || k.fragment !== material.fragmentShader) {
+    k = { vertex: material.vertexShader, fragment: material.fragmentShader, key: `${material.vertexShader}\u0000${material.fragmentShader}` };
+    shaderKeys.set(material, k);
+  }
+  return k.key;
+}
+
+const shaderFailureOf = (material) => (material?.isShaderMaterial ? shaderFailures.get(keyOf(material)) ?? null : null);
+
+function reportShader(run, info, key = null) {
+  if (key != null) {
+    if (run.shaderErrors.has(key)) return;
+    run.shaderErrors.add(key);
+  }
+  post({
+    type: "error",
+    runId: run.id,
+    phase: "shader",
+    name: "ShaderError",
+    stage: info.stage,
+    message: info.message,
+    glsl: info.source != null ? { line: info.line, source: info.source } : null,
+    line: null,
+    column: null,
+    loop: false,
+  });
+}
+
+// No lugar de um shader que não compila, um magenta chapado: o sinal de "shader quebrado" dos
+// editores de jogos. Sem ele, a malha sumiria e o WebGL reclamaria a cada quadro.
+const BROKEN_SHADER = {
+  mesh: new THREE.MeshBasicMaterial({ color: 0xff00ff }),
+  points: new THREE.PointsMaterial({ color: 0xff00ff, size: 3, sizeAttenuation: false }),
+  line: new THREE.LineBasicMaterial({ color: 0xff00ff }),
+};
+
+/**
+ * Antes de desenhar: troca cada material cujo shader não compila pelo magenta (e relata o erro, uma
+ * vez por execução). Devolve como desfazer a troca, ou null se não trocou nada.
+ */
+function coverBrokenShaders(run) {
+  const swapped = [];
+  run.scene.traverse((obj) => {
+    if (!obj.material) return;
+    let changed = false;
+    const replaced = [].concat(obj.material).map((material) => {
+      const info = shaderFailureOf(material);
+      if (!info) return material;
+      reportShader(run, info, keyOf(material));
+      changed = true;
+      return obj.isPoints ? BROKEN_SHADER.points : obj.isLine ? BROKEN_SHADER.line : BROKEN_SHADER.mesh;
+    });
+    if (!changed) return;
+    swapped.push([obj, obj.material]);
+    obj.material = Array.isArray(obj.material) ? replaced : replaced[0];
+  });
+  return swapped.length ? () => swapped.forEach(([obj, material]) => (obj.material = material)) : null;
+}
+
+/** Depois de desenhar: cada programa que acabou de falhar vira o erro dos materiais dele. */
+function resolveShaderFailures(run) {
+  for (const failure of newShaderFailures.splice(0)) {
+    let found = false;
+    run.scene.traverse((obj) => {
+      for (const material of [].concat(obj.material ?? [])) {
+        if (!material?.isShaderMaterial || !belongsTo(failure, material)) continue;
+        found = true;
+        run.shaders = true;
+        const key = keyOf(material);
+        if (!shaderFailures.has(key)) {
+          shaderFailures.set(key, failureInfo(failure, material));
+          if (shaderFailures.size > MAX_SHADER_FAILURES) shaderFailures.delete(shaderFailures.keys().next().value);
+        }
+        reportShader(run, shaderFailures.get(key), key);
+      }
+    });
+    // um programa que não é de um material da cena (montado com #include, por exemplo): sem a linha
+    if (!found) reportShader(run, failureInfo(failure, {}));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1255,9 +1357,86 @@ function factsInfo(msg) {
   const entries = [...run.registry];
   const { trail } = run;
   const facts = sceneFacts({ scene: run.scene, camera: run.camera, entries, idOf: (obj) => run.idOf.get(obj), trails: trail.points });
+  if (run.shaders) shaderFacts(run, entries, facts.objects);
   // `recorded`: quantos segundos de animação o rastro já cobre (quem não saiu do lugar nesse tempo, não anda)
   const recorded = trail.first == null ? 0 : trail.last - trail.first;
   return { type: "facts", seq: msg.seq, runId: run.id, ...facts, playing: state.playing && !!run.animar && !run.animError, recorded };
+}
+
+// Os pixels de um shader: a cena desenhada pela câmera do código numa imagem de 256 de largura, na
+// proporção da câmera, sem antisserrilhado (cada pixel é a conta do shader no centro dele).
+// O fundo da imagem fica de uma cor que nenhum shader dos projetos pinta (nem o magenta de um
+// shader quebrado): os pixels dessa cor são os que nenhum objeto cobriu.
+const SAMPLE_WIDTH = 256;
+const SAMPLE_BACKGROUND = new THREE.Color().setRGB(1, 0, 0.4, THREE.LinearSRGBColorSpace);
+let sampleTarget = null;
+let sampleBuffer = null;
+const sampleBackdrop = new THREE.Scene();
+sampleBackdrop.background = SAMPLE_BACKGROUND;
+let sampleBackground = null; // { key, pixel }: o fundo como sai na imagem, para cada jeito de tratar as cores
+
+/**
+ * Os fatos de cada malha desenhada por um ShaderMaterial (`shader`): o erro de compilação, se
+ * houve, a posição da câmera (o cameraPosition do shader), o tamanho da imagem, a cor do fundo nela
+ * (SAMPLE_BACKGROUND, como saiu) e os pixels que o shader pintou, com o ponto da superfície e a
+ * normal que cada um mostra (samplePixels, em src/live/runtime/shaders.js). A conferência dos
+ * projetos de shader refaz a conta e compara. Os objetos do three.js saem no espaço linear nesta
+ * imagem (o three.js só converte para sRGB na tela); o shader do aluno sai como ele escreve.
+ */
+function shaderFacts(run, entries, objects) {
+  const meshes = [];
+  for (const [id, list] of entries) {
+    const obj = list[0];
+    const material = obj?.isMesh && !obj.isInstancedMesh ? [].concat(obj.material)[0] : null;
+    if (material?.isShaderMaterial && objects[id]) meshes.push([id, obj, material]);
+  }
+  if (!meshes.length) return;
+  const camera = run.camera ?? editorCamera;
+  const aspect = camera.isPerspectiveCamera ? camera.aspect : canvas.clientWidth / Math.max(1, canvas.clientHeight);
+  const width = SAMPLE_WIDTH;
+  const height = Math.min(512, Math.max(32, Math.round(width / (aspect || 1))));
+  if (!sampleTarget) sampleTarget = new THREE.WebGLRenderTarget(width, height);
+  else if (sampleTarget.width !== width || sampleTarget.height !== height) sampleTarget.setSize(width, height);
+  if (sampleBuffer?.length !== width * height * 4) sampleBuffer = new Uint8Array(width * height * 4);
+  const read = (x, y) => {
+    const i = (y * width + x) * 4;
+    return [sampleBuffer[i], sampleBuffer[i + 1], sampleBuffer[i + 2]];
+  };
+  const autoClear = renderer.autoClear;
+  renderer.autoClear = true;
+  renderer.setRenderTarget(sampleTarget);
+  // o fundo como ele sai nesta imagem, medido numa cena vazia (cada leitura espera a placa de vídeo terminar)
+  const colors = `${THREE.ColorManagement.enabled}|${THREE.ColorManagement.workingColorSpace}|${renderer.outputColorSpace}|${renderer.toneMapping}`;
+  if (sampleBackground?.key !== colors) {
+    renderer.render(sampleBackdrop, camera);
+    renderer.readRenderTargetPixels(sampleTarget, 0, 0, 1, 1, sampleBuffer);
+    sampleBackground = { key: colors, pixel: read(0, 0) };
+  }
+  const backgroundPixel = sampleBackground.pixel;
+  const background = run.scene.background;
+  run.scene.background = SAMPLE_BACKGROUND;
+  const uncover = coverBrokenShaders(run);
+  try {
+    renderer.render(run.scene, camera);
+  } finally {
+    uncover?.();
+    run.scene.background = background;
+    renderer.setRenderTarget(null);
+    renderer.autoClear = autoClear;
+  }
+  if (newShaderFailures.length) resolveShaderFailures(run);
+  renderer.readRenderTargetPixels(sampleTarget, 0, 0, width, height, sampleBuffer);
+  const eye = camera.getWorldPosition(new THREE.Vector3()).toArray();
+  for (const [id, mesh, material] of meshes) {
+    const failure = shaderFailureOf(material);
+    objects[id].shader = {
+      error: failure && { stage: failure.stage, message: failure.message, line: failure.line },
+      eye,
+      size: [width, height],
+      background: backgroundPixel,
+      ...samplePixels({ scene: run.scene, camera, mesh, width, height, read }),
+    };
+  }
 }
 
 /**
@@ -1390,7 +1569,10 @@ function frame(time) {
   renderer.autoClear = true;
   if (run) {
     const glass = state.glass ? applyGlass(run, camera) : null;
+    const uncover = run.shaders ? coverBrokenShaders(run) : null;
     renderer.render(run.scene, camera);
+    uncover?.();
+    if (newShaderFailures.length) resolveShaderFailures(run);
     if (glass) {
       glass.restore();
       if (state.probe) measureProbe(run, camera, glass);

@@ -15,6 +15,7 @@ import { CIDADE } from "./cidade.js";
 import { FLORESTA } from "./floresta.js";
 import { GALAXIA } from "./galaxia.js";
 import { MONTANHA_RUSSA } from "./montanhaRussa.js";
+import { PHONG } from "./phong.js";
 import { SISTEMA_SOLAR } from "./sistemaSolar.js";
 import { VITRINE } from "./vitrine.js";
 
@@ -36,14 +37,13 @@ export const LEVELS = [
     title: "Avançado",
     about: "Shaders: o código que roda na placa de vídeo.",
     soon: [
-      { title: "Phong escrito à mão", about: "A iluminação de Phong num ShaderMaterial, em GLSL." },
       { title: "Mar com ondas na GPU", about: "Um shader de vértices que move a superfície a cada quadro." },
       { title: "Galáxia viva", about: "A galáxia num shader: cada estrela gira na sua própria velocidade." },
     ],
   },
 ];
 
-export const PROJECTS = [SISTEMA_SOLAR, VITRINE, CIDADE, GALAXIA, MONTANHA_RUSSA, FLORESTA];
+export const PROJECTS = [SISTEMA_SOLAR, VITRINE, CIDADE, GALAXIA, MONTANHA_RUSSA, FLORESTA, PHONG];
 
 export const projectById = (id) => PROJECTS.find((p) => p.id === id) ?? null;
 export const levelOf = (project) => LEVELS.find((l) => l.id === project.level);

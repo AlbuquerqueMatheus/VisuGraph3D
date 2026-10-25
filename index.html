@@ -302,6 +302,37 @@
             </p>
           </div>
         </article>
+        <article class="project" data-project="phong">
+          <img
+            class="project__shot"
+            src="./src/img/projeto-phong.webp"
+            width="960"
+            height="600"
+            loading="lazy"
+            alt="O Phong pronto: duas esferas azuis iguais sobre um fundo escuro, a da esquerda pintada pelo shader escrito à mão e a da direita pelo MeshPhongMaterial do three.js, cada uma com o brilho branco do sol no alto, à direita, e o brilho alaranjado da lâmpada, a bolinha laranja à esquerda."
+          />
+          <div class="project__text">
+            <p class="project__level">Avançado</p>
+            <h3>Phong escrito à mão</h3>
+            <p>A luz de Phong num shader escrito à mão, em GLSL, pixel a pixel, ao lado do MeshPhongMaterial do three.js: a cor, a luz difusa, o brilho e uma lâmpada que dá a volta, até as duas esferas ficarem iguais.</p>
+            <ul class="project__concepts" aria-label="O que o projeto ensina">
+              <li>ShaderMaterial</li>
+              <li>Shader de vértices e de fragmentos</li>
+              <li>GLSL</li>
+              <li>Uniforms e varyings</li>
+              <li>Linear e sRGB</li>
+              <li>Difusa de Lambert</li>
+              <li>Brilho de Phong e Blinn–Phong</li>
+              <li>Conservação de energia</li>
+              <li>Luz pontual e atenuação</li>
+              <li>Node.js e Vite</li>
+            </ul>
+            <p class="project__go">
+              <a class="home-btn home-btn--primary" href="./index-3d.html?projeto=phong">Começar o projeto</a>
+              <span class="project__progress"></span>
+            </p>
+          </div>
+        </article>
 
         <div class="project-levels">
           <section class="project-level" aria-labelledby="level-facil">
@@ -326,7 +357,7 @@
             <h3 id="level-avancado">Avançado</h3>
             <p>Shaders: o código que roda na placa de vídeo.</p>
             <ul>
-              <li><span>Phong escrito à mão</span> <span class="project-level__soon">em breve</span></li>
+              <li><a href="./index-3d.html?projeto=phong">Phong escrito à mão</a></li>
               <li><span>Mar com ondas na GPU</span> <span class="project-level__soon">em breve</span></li>
               <li><span>Galáxia viva</span> <span class="project-level__soon">em breve</span></li>
             </ul>

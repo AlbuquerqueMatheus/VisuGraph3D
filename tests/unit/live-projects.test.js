@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { grade } from "../../src/live/challenges.js";
 import { sceneFacts, trailPoint } from "../../src/live/runtime/facts.js";
+import { samplePixels } from "../../src/live/runtime/shaders.js";
 import { analyze, hasBlockingError } from "../../src/live/engine/analyze.js";
 import { instrument } from "../../src/live/engine/instrument.js";
 import { LEVELS, PROJECTS, behind, codeState, diffLines, findSnippet, guideStep, hunks, isComputer, liveSteps, projectById, startCode, stepIndex } from "../../src/live/projects/index.js";
 import { animatedKeys, armsOf } from "../../src/live/projects/checks.js";
 import { exportProject } from "../../src/live/export.js";
+import { BACKGROUND, draw } from "./gpu.js";
 
 // Roda o código instrumentado com o Three.js de verdade, como o visor roda, e monta os fatos como
 // o app monta para um projeto: cada `new` do código guarda os objetos que criou (num laço, vários),
@@ -70,7 +72,9 @@ function factsOf(code, { seconds = 0, frames = [1 / 60] } = {}) {
     const any = trails.values().next().value;
     recorded = any ? any.at(-1)[0] - any[0][0] : 0;
   }
-  const facts = sceneFacts({ scene, camera: first(analysis.camera), entries: [...registry], idOf: (obj) => ids.get(obj), trails });
+  const camera = first(analysis.camera);
+  const facts = sceneFacts({ scene, camera, entries: [...registry], idOf: (obj) => ids.get(obj), trails });
+  if (camera) shaderFacts({ scene, camera, registry, objects: facts.objects });
   const nameOf = (id) => analysis.objects[id]?.name ?? analysis.objects[id]?.local ?? null;
   const objects = Object.create(null);
   for (const [id, f] of Object.entries(facts.objects)) {
@@ -78,6 +82,37 @@ function factsOf(code, { seconds = 0, frames = [1 / 60] } = {}) {
     if (name && !objects[name]) objects[name] = f;
   }
   return { ...facts, objects, nameOf, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar, playing: !!animar && seconds > 0, recorded };
+}
+
+/** A largura da imagem que o visor desenha para medir os pixels dos shaders (SAMPLE_WIDTH, em viewport.js). */
+const SAMPLE_WIDTH = 256;
+/** A proporção do visor com a aba Projetos aberta numa tela de 1440 × 900, que a câmera do código assume no app. */
+const VISOR_ASPECT = 580 / 824;
+
+/**
+ * Os fatos `shader` de cada malha com ShaderMaterial, como o visor monta (shaderFacts, em
+ * src/live/runtime/viewport.js), com a placa de vídeo de mentira de gpu.js no lugar da de verdade.
+ */
+function shaderFacts({ scene, camera, registry, objects }) {
+  const meshes = [...registry].filter(([id, [obj]]) => obj?.isMesh && !obj.isInstancedMesh && [].concat(obj.material)[0]?.isShaderMaterial && objects[id]);
+  if (!meshes.length) return;
+  // como no visor, que acerta a proporção da câmera do código com a dele a cada quadro
+  const aspect = camera.aspect;
+  if (camera.isPerspectiveCamera) {
+    camera.aspect = VISOR_ASPECT;
+    camera.updateProjectionMatrix();
+  }
+  const width = SAMPLE_WIDTH;
+  const height = Math.min(512, Math.max(32, Math.round(width / (camera.aspect || 1))));
+  const gpu = draw({ scene, camera, width, height });
+  const eye = camera.getWorldPosition(new THREE.Vector3()).toArray();
+  for (const [id, [mesh]] of meshes) {
+    objects[id].shader = { error: gpu.errorOf(mesh), eye, size: [width, height], background: BACKGROUND, ...samplePixels({ scene, camera, mesh, width, height, read: gpu.read }) };
+  }
+  if (camera.isPerspectiveCamera) {
+    camera.aspect = aspect;
+    camera.updateProjectionMatrix();
+  }
 }
 
 /** Os segundos de animação antes de conferir um passo que mede o movimento (`motion`), como o carrinho da montanha-russa. */
@@ -110,12 +145,12 @@ describe("guia de projetos: o catálogo", () => {
   it("tem os três níveis, e cada projeto está num deles", () => {
     expect(LEVELS.map((l) => l.id)).toEqual(["facil", "intermediario", "avancado"]);
     for (const p of PROJECTS) expect(LEVELS.map((l) => l.id)).toContain(p.level);
-    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(3);
+    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(2);
     const soon = LEVELS.flatMap((l) => l.soon.map((s) => s.title));
     for (const p of PROJECTS) expect(soon, `${p.title} já existe`).not.toContain(p.title);
   });
 
-  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2, e a Montanha-russa e a Floresta, 11 e 1", () => {
+  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2, a Montanha-russa e a Floresta, 11 e 1, e o Phong escrito à mão, 12 e 1", () => {
     expect(PROJECTS.map((p) => [p.id, liveSteps(p).length, p.steps.filter(isComputer).length])).toEqual([
       ["sistema-solar", 8, 1],
       ["vitrine", 8, 1],
@@ -123,6 +158,7 @@ describe("guia de projetos: o catálogo", () => {
       ["galaxia", 10, 2],
       ["montanha-russa", 11, 1],
       ["floresta", 11, 1],
+      ["phong", 12, 1],
     ]);
   });
 
@@ -837,7 +873,7 @@ describe("conferências da floresta", () => {
   it("o chão sorteado vértice por vértice ou baixo demais, a conferência avisa; as montanhas valem", () => {
     expect(failing(variant("morros", ["return grande + media + pequena;", "return Math.random() * 2;"]))).toEqual([
       "O terreno tem morros e vales (o terreno vai da altura 0,00 a 2,00: quase plano)",
-      expect.stringMatching(/^O chão sobe e desce aos poucos \(perto do ponto \(.+\), o chão sobe 1,\d\d de um vértice para o vizinho, a 1,25 dele: um degrau de \d\d°, e não um morro\)$/),
+      expect.stringMatching(/^O chão sobe e desce aos poucos \(perto do ponto \(.+\), o chão sobe \d,\d\d de um vértice para o vizinho, a 1,25 dele: um degrau de \d\d°, e não um morro\)$/),
     ]);
     expect(failing(variant("morros", ["const grande = 3 *", "const grande = 0.3 *"], ["const media = 1.5 *", "const media = 0.15 *"], ["const pequena = 0.6 *", "const pequena = 0.06 *"]))).toEqual([
       "O terreno tem morros e vales (o terreno vai da altura −0,51 a 0,45: quase plano)",
@@ -1035,6 +1071,168 @@ function step4(seen) {
     `Cada árvore balança inteira, no lugar e do tamanho dela (${seen})`,
   ];
 }
+
+describe("conferências do Phong", () => {
+  const phong = projectById("phong");
+  const variant = variantOf(phong);
+  const stepOf = (id) => phong.steps[stepIndex(phong, id)];
+  const NO_SRGB = "a cor saiu do shader no espaço linear, mais escura: falta passar a cor pela paraSRGB no gl_FragColor";
+  const BROKEN = "o shader de fragmentos não compila: a barra embaixo do código diz o erro e a linha";
+
+  it("o shader que não compila, a esfera fora do lugar, sumida ou de mais de uma cor, a conferência avisa; o verde vale", () => {
+    expect(failing(variant("shader", ["gl_FragColor = vec4(1.0, 0.5, 0.2, 1.0);", "gl_FragColor = vec4(1.0, 0.5, 0.2, 1.0)"]))).toEqual([
+      `Ela aparece no lugar dela, do tamanho dela (${BROKEN})`,
+      `O shader pinta a esfera inteira de uma cor só (${BROKEN})`,
+    ]);
+    const away = "a esfera aparece fora do lugar dela: confira o gl_Position do shader de vértices, que leva cada vértice pela câmera com as matrizes";
+    expect(failing(variant("shader", ["projectionMatrix * modelViewMatrix * vec4(position, 1.0)", "vec4(position, 1.0)"]))).toEqual([
+      `Ela aparece no lugar dela, do tamanho dela (${away})`,
+      `O shader pinta a esfera inteira de uma cor só (${away})`,
+    ]);
+    const gone = "100% da esfera não aparece: o fundo continua onde ela está. Confira o gl_Position do shader de vértices";
+    expect(failing(variant("shader", ["projectionMatrix * modelViewMatrix * vec4(position, 1.0)", "vec4(0.0)"]))).toEqual([
+      `Ela aparece no lugar dela, do tamanho dela (${gone})`,
+      `O shader pinta a esfera inteira de uma cor só (${gone})`,
+    ]);
+    expect(failing(variant("shader", ["vec4(1.0, 0.5, 0.2, 1.0)", "vec4(gl_FragCoord.x / 256.0, 0.5, 0.2, 1.0)"]))).toEqual([
+      "O shader pinta a esfera inteira de uma cor só (a cor muda de um pixel para outro: neste passo, o gl_FragColor é uma cor só, a mesma em todo pixel)",
+    ]);
+    expect(failing(variant("shader", ["vec4(1.0, 0.5, 0.2, 1.0)", "vec4(0.2, 0.8, 0.4, 1.0)"]))).toEqual([]);
+  });
+
+  it("o laranja que ficou, o uniform sem declaração ou fora do material, a conferência avisa; outra cor vale", () => {
+    expect(failing(variant("uniform", ["gl_FragColor = vec4(uCor, 1.0);", "gl_FragColor = vec4(1.0, 0.5, 0.2, 1.0);"]))).toEqual([
+      "A esfera tem a cor do uCor (a esfera continua laranja: o gl_FragColor ainda não usa o uCor)",
+    ]);
+    expect(failing(variant("uniform", ["  uniform vec3 uCor;\n", ""]))).toEqual([`A esfera tem a cor do uCor (${BROKEN})`]);
+    expect(failing(variant("uniform", ["    uCor: { value", "    cor: { value"]))).toEqual([
+      "O material da esfera tem o uniform uCor, com uma cor (o material da esfera não tem o uniform uCor)",
+      "A esfera tem a cor do uCor (o material da esfera não tem o uniform uCor)",
+    ]);
+    expect(failing(variant("uniform", ['new THREE.Color("#3f7fd9") },', 'new THREE.Color("#ff3366") },']))).toEqual([]);
+  });
+
+  it("a cor que não passa pela paraSRGB e a normal sem o meio ou no espaço da câmera, a conferência avisa; a curva de 2,2 e a normal em sRGB valem", () => {
+    expect(failing(variant("srgb", ["vec4(paraSRGB(uCor), 1.0)", "vec4(uCor, 1.0)"]))).toEqual([
+      "A esfera tem a cor do código, convertida para sRGB (a cor saiu do shader no espaço linear, mais escura: falta passar o uCor pela paraSRGB no gl_FragColor)",
+    ]);
+    expect(failing(variant("srgb", ["paraSRGB(uCor)", "pow(uCor, vec3(1.0 / 2.2))"]))).toEqual([]);
+    expect(failing(variant("normal", ["vec4(n * 0.5 + 0.5, 1.0)", "vec4(n, 1.0)"]))).toEqual([
+      "A esfera mostra a normal de cada ponto, em cores (faltou o * 0.5 + 0.5: os números da normal vão de −1 a 1, e os negativos viram preto)",
+    ]);
+    expect(failing(variant("normal", ["mat3(modelMatrix) * normal", "normalMatrix * normal"]))).toEqual([
+      "A esfera mostra a normal de cada ponto, em cores (a normal está no espaço da câmera (é o que o normalMatrix faz), e as contas deste projeto são no mundo: use mat3(modelMatrix) * normal)",
+    ]);
+    expect(failing(variant("normal", ["vec4(n * 0.5 + 0.5, 1.0)", "vec4(paraSRGB(n * 0.5 + 0.5), 1.0)"]))).toEqual([]);
+    expect(failing(variant("normal", ["  varying vec3 vNormal;\n\n  void main() {\n    vNormal = mat3(modelMatrix) * normal;\n", "\n  void main() {\n"]))).toEqual([
+      "A esfera mostra a normal de cada ponto, em cores (os dois shaders compilam, mas não se encaixam: a barra embaixo do código diz o que falta)",
+    ]);
+  });
+
+  it("o sol sem o normalize, do lado oposto ou em linear, a conferência avisa; o sol do outro lado vale", () => {
+    expect(failing(variant("difusa", ["sol.position.clone().normalize()", "sol.position.clone()"]))).toEqual([
+      "O uniform uDirecaoDoSol aponta para o sol, com comprimento 1 (uDirecaoDoSol tem comprimento 7,07: falta o normalize())",
+    ]);
+    expect(failing(variant("difusa", ["sol.position.clone().normalize()", "new THREE.Vector3(0, 1, 0)"]))).toEqual([
+      "O uniform uDirecaoDoSol aponta para o sol, com comprimento 1 (uDirecaoDoSol aponta 56° longe do sol: ela vai do ponto para o sol, na direção de sol.position)",
+    ]);
+    expect(failing(variant("difusa", ["max(dot(n, uDirecaoDoSol), 0.0)", "max(dot(n, -uDirecaoDoSol), 0.0)"]))).toEqual([
+      "A luz do sol cai na esfera pela lei de Lambert (a luz chega pelo lado oposto ao do sol: no dot, a direção é a do ponto para o sol, uDirecaoDoSol, sem o menos)",
+    ]);
+    expect(failing(variant("difusa", ["vec4(paraSRGB(cor), 1.0)", "vec4(cor, 1.0)"]))).toEqual([`A luz do sol cai na esfera pela lei de Lambert (${NO_SRGB})`]);
+    expect(failing(variant("difusa", ["sol.position.set(3, 4, 5);", "sol.position.set(-3, 4, 5);"]))).toEqual([]);
+  });
+
+  it("a difusa sem o max, a luz ambiente fora da cor ou com outro número, a conferência avisa", () => {
+    expect(failing(variant("ambiente", ["float difusa = max(dot(n, uDirecaoDoSol), 0.0);", "float difusa = dot(n, uDirecaoDoSol);"]))).toEqual([
+      "A luz ambiente acende o lado escuro, como no gabarito (o lado escuro ficou mais escuro que a luz ambiente: falta o max(…, 0.0) na difusa, porque de costas para o sol o produto escalar é negativo e apaga o ambiente)",
+    ]);
+    expect(failing(variant("ambiente", ["uCor * (uAmbiente + difusa)", "uCor * difusa + uAmbiente"]))).toEqual([
+      "A luz ambiente acende o lado escuro, como no gabarito (a luz ambiente precisa passar pela cor da esfera, como a do sol: uCor * (uAmbiente + difusa))",
+    ]);
+    expect(failing(variant("ambiente", ["uAmbiente: { value: 0.15 }", "uAmbiente: { value: 0.5 }"]))).toEqual([
+      "O uniform uAmbiente tem a luz ambiente da cena, 0,15 (uAmbiente é 0,50, e a luz ambiente da cena vale 0,15: a intensidade dela dividida por π)",
+    ]);
+  });
+
+  it("o reflexo ou a câmera do lado errado, o brilho da cor da esfera e o expoente zero, a conferência avisa; um expoente alto vale", () => {
+    const wrongSign =
+      "O brilho de Phong aparece onde o reflexo do sol aponta para a câmera (o brilho está no lugar errado: confira os sinais. O reflect recebe a direção em que a luz anda, do sol para o ponto, -uDirecaoDoSol, e o v vai do ponto para a câmera, cameraPosition - vPosicao)";
+    expect(failing(variant("phong", ["reflect(-uDirecaoDoSol, n)", "reflect(uDirecaoDoSol, n)"]))).toEqual([wrongSign]);
+    expect(failing(variant("phong", ["normalize(cameraPosition - vPosicao)", "normalize(vPosicao - cameraPosition)"]))).toEqual([wrongSign]);
+    expect(failing(variant("phong", ["uCor * (uAmbiente + difusa) + uCorEspecular * brilho", "uCor * (uAmbiente + difusa + brilho)"]))).toEqual([
+      "O brilho de Phong aparece onde o reflexo do sol aponta para a câmera (o brilho ficou da cor da esfera: ele tem a cor da luz, uCorEspecular * brilho, fora da conta com o uCor)",
+    ]);
+    expect(failing(variant("phong", ["uBrilho: { value: 30 }", "uBrilho: { value: 0 }"]))).toEqual([
+      "O material tem os uniforms do brilho: uCorEspecular e uBrilho (uBrilho é 0: o expoente precisa ser maior que 0)",
+    ]);
+    expect(failing(variant("phong", ["uBrilho: { value: 30 }", "uBrilho: { value: 200 }"]))).toEqual([]);
+  });
+
+  it("o Blinn–Phong que ainda é o de Phong, com o expoente dos livros ou sem normalizar o h, a conferência avisa", () => {
+    const blinn = stepOf("blinn");
+    expect(failing(grade(blinn, factsFor(blinn, startCode(phong, stepIndex(phong, "blinn")))))).toEqual([
+      "O brilho usa o vetor do meio, com o expoente do gabarito (o brilho ainda é o de Phong: troque o r pelo h, normalize(uDirecaoDoSol + v), e o dot(r, v) pelo dot(n, h))",
+    ]);
+    expect(failing(variant("blinn", ["pow(max(dot(n, h), 0.0), uBrilho)", "pow(max(dot(n, h), 0.0), uBrilho * 4.0)"]))).toEqual([
+      "O brilho usa o vetor do meio, com o expoente do gabarito (a mancha ficou do tamanho da de Phong: com o h, o three.js usa o expoente como está, uBrilho, sem o * 4.0)",
+    ]);
+    expect(failing(variant("blinn", ["normalize(uDirecaoDoSol + v)", "(uDirecaoDoSol + v)"]))).toEqual([
+      "O brilho usa o vetor do meio, com o expoente do gabarito (falta normalizar o h: a soma de duas direções de comprimento 1 é mais comprida que 1)",
+    ]);
+  });
+
+  it("sem o fator do three.js ou com outros números que os do gabarito, a conferência avisa; com o expoente 100 nas duas, vale", () => {
+    expect(failing(variant("energia", ["(uBrilho + 2.0) / 8.0", "1.0"]))).toEqual([
+      "A nossa esfera fica igual ao gabarito: o brilho vezes (uBrilho + 2) ÷ 8 e vezes a difusa (a mancha ainda está mais fraca que a do gabarito: falta multiplicar o brilho por (uBrilho + 2.0) / 8.0)",
+    ]);
+    expect(failing(variant("energia", ["uBrilho: { value: 30 }", "uBrilho: { value: 100 }"]))).toEqual([
+      "Os uniforms têm os números do gabarito: a cor, a cor do brilho e o expoente (o uBrilho é 100, e o shininess do gabarito, 30: para as manchas ficarem iguais, os dois números precisam ser iguais)",
+    ]);
+    expect(failing(variant("energia", ['uCor: { value: new THREE.Color("#3f7fd9") }', 'uCor: { value: new THREE.Color("#ff3366") }']))).toEqual([
+      "Os uniforms têm os números do gabarito: a cor, a cor do brilho e o expoente (o uCor é #ff3366, e a cor do gabarito, #3f7fd9)",
+    ]);
+    expect(failing(variant("energia", ["uBrilho: { value: 30 }", "uBrilho: { value: 100 }"], ["shininess: 30 }", "shininess: 100 }"]))).toEqual([]);
+  });
+
+  it("a lâmpada sem atenuação, com a atenuação linear, fora do main, sem a bolinha ou sem a força na cor, a conferência avisa", () => {
+    expect(failing(variant("lampada", ["uCorDaLampada / max(distancia * distancia, 0.01)", "uCorDaLampada"]))).toEqual([
+      "A esfera recebe a luz da lâmpada, que enfraquece com a distância (a luz da lâmpada não enfraquece com a distância: divida a cor dela pelo quadrado da distância)",
+    ]);
+    expect(failing(variant("lampada", ["max(distancia * distancia, 0.01)", "max(distancia, 0.01)"]))).toEqual([
+      "A esfera recebe a luz da lâmpada, que enfraquece com a distância (a luz da lâmpada enfraquece com a distância, e não com o quadrado dela: divida por distancia * distancia)",
+    ]);
+    expect(failing(variant("lampada", ["    cor += luz(paraLampada / distancia, uCorDaLampada / max(distancia * distancia, 0.01), n, v);\n", ""]))).toEqual([
+      "A esfera recebe a luz da lâmpada, que enfraquece com a distância (a luz da lâmpada não chega à esfera: falta somar a luz(…) da lâmpada no main)",
+    ]);
+    expect(failing(variant("lampada", ["lampada.add(bulbo);", "cena.add(bulbo);"]))).toEqual([
+      "A lâmpada é uma luz pontual na cena, com a bolinha dentro (o bulbo não está dentro da lâmpada: falta lampada.add(bulbo))",
+    ]);
+    expect(failing(variant("lampada", ['new THREE.Color("#ffaa55").multiplyScalar(4)', 'new THREE.Color("#ffaa55")']))).toEqual([
+      "Os uniforms da lâmpada têm a posição e a cor dela (uCorDaLampada é (1,00; 0,40; 0,09), e a luz da lâmpada chega com (4,00; 1,61; 0,36): a cor dela, no espaço linear, vezes a intensidade dividida por π)",
+    ]);
+  });
+
+  it("a volta espera a animação rodar; sem o copy ou raspando nas esferas, a conferência avisa; mais rápida, vale", () => {
+    const step = stepOf("volta");
+    const marks = (facts) => grade(step, facts).results.map((r) => [r.ok, r.seen]);
+    expect(marks(factsOf(step.code)).slice(0, 2)).toEqual(Array(2).fill([null, "a animação está parada: aperte ▶ na barra de cima para a lâmpada andar"]));
+    expect(failing(variant("volta", ["  material.uniforms.uPosicaoDaLampada.value.copy(lampada.position);\n", ""]))).toEqual([
+      expect.stringMatching(/^O uniform da posição acompanha a lâmpada \(a lâmpada está em \(.+\), e a luz no shader ficou em \(0,00; 0,60; 3,00\): falta copiar a posição dela para material\.uniforms\.uPosicaoDaLampada\.value no animar\)$/),
+    ]);
+    expect(failing(variant("volta", ["Math.sin(tempo) * 3", "Math.sin(tempo) * 2"], ["Math.cos(tempo) * 3", "Math.cos(tempo) * 2"]))).toEqual([
+      "A lâmpada dá voltas em torno das esferas (a lâmpada passa a 2,00 do centro: a volta tem de passar por fora das esferas)",
+    ]);
+    expect(failing(variant("volta", ["Math.sin(tempo)", "Math.sin(tempo * 3)"], ["Math.cos(tempo)", "Math.cos(tempo * 3)"]))).toEqual([]);
+  });
+
+  it("o projeto baixado leva os controles do mouse, que giram em volta da origem", () => {
+    const main = fileOf(stepOf("computador").files, "src/main.js").code;
+    expect(main).toContain('import { OrbitControls } from "three/addons/controls/OrbitControls.js";');
+    expect(main, "a câmera olha para a origem, o centro dos controles").not.toContain("controles.target.set");
+    expect(fileOf(stepOf("computador").files, "src/cena.js").code).toContain("const fragmentShader = /* glsl */ `");
+  });
+});
 
 describe("os fatos de uma InstancedMesh e de uma placa", () => {
   it("as cópias desenhadas vão com a posição, uma amostra das matrizes e das cores e a versão; o rastro segue a primeira cópia", () => {

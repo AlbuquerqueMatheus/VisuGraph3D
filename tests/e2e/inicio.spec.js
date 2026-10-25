@@ -42,9 +42,9 @@ test("o progresso guardado nos desafios aparece em cada tema", async ({ page }) 
 
 test("a tela inicial mostra os projetos prontos e as trilhas de projetos, e o botão retoma o passo em que a pessoa parou", async ({ page }) => {
   await page.goto("index.html");
-  await expect(page.locator(".project h3")).toHaveText(["Sistema solar", "Vitrine de materiais", "Cidade ao entardecer", "Gerador de galáxias", "Montanha-russa"]);
+  await expect(page.locator(".project h3")).toHaveText(["Sistema solar", "Vitrine de materiais", "Cidade ao entardecer", "Gerador de galáxias", "Montanha-russa", "Floresta de 10 mil árvores"]);
   await expect(page.locator(".project-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
-  await expect(page.locator(".project__progress")).toHaveText(["9 passos", "9 passos", "9 passos", "12 passos", "12 passos"]);
+  await expect(page.locator(".project__progress")).toHaveText(["9 passos", "9 passos", "9 passos", "12 passos", "12 passos", "12 passos"]);
   for (const shot of await page.locator(".project__shot").all()) {
     await shot.scrollIntoViewIfNeeded();
     await expect.poll(() => shot.evaluate((img) => img.naturalWidth), "a foto do projeto carrega").toBe(960);
@@ -54,7 +54,7 @@ test("a tela inicial mostra os projetos prontos e as trilhas de projetos, e o bo
     localStorage.setItem("visugraph.projetos.v1", JSON.stringify({ feitos: { galaxia: ["palco", "pontos", "brilho"] }, atual: { projeto: "galaxia", passo: "disco" } }))
   );
   await page.reload();
-  await expect(page.locator(".project__progress")).toHaveText(["9 passos", "9 passos", "9 passos", "3 de 12 passos", "12 passos"]);
+  await expect(page.locator(".project__progress")).toHaveText(["9 passos", "9 passos", "9 passos", "3 de 12 passos", "12 passos", "12 passos"]);
   await page.getByRole("link", { name: "Continuar o projeto" }).click();
   await expect(page.locator("#lv-project .lv-pj-title")).toHaveText("4. Um disco", { timeout: 30_000 });
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });

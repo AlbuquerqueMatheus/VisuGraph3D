@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { grade } from "../../src/live/challenges.js";
-import { sceneFacts } from "../../src/live/runtime/facts.js";
+import { sceneFacts, trailPoint } from "../../src/live/runtime/facts.js";
 import { analyze, hasBlockingError } from "../../src/live/engine/analyze.js";
 import { instrument } from "../../src/live/engine/instrument.js";
 import { LEVELS, PROJECTS, behind, codeState, diffLines, findSnippet, guideStep, hunks, isComputer, liveSteps, projectById, startCode, stepIndex } from "../../src/live/projects/index.js";
@@ -61,10 +61,9 @@ function factsOf(code, { seconds = 0, frames = [1 / 60] } = {}) {
       for (const [id, [obj]] of registry) {
         if (!obj?.isObject3D || obj.isScene) continue;
         obj.updateWorldMatrix(true, false);
-        const e = obj.matrixWorld.elements;
         if (!trails.has(id)) trails.set(id, []);
         const trail = trails.get(id);
-        trail.push([tempo, e[12], e[13], e[14]]);
+        trail.push([tempo, ...trailPoint(obj)]);
         if (trail.length > 600) trail.shift();
       }
     }
@@ -111,18 +110,19 @@ describe("guia de projetos: o catálogo", () => {
   it("tem os três níveis, e cada projeto está num deles", () => {
     expect(LEVELS.map((l) => l.id)).toEqual(["facil", "intermediario", "avancado"]);
     for (const p of PROJECTS) expect(LEVELS.map((l) => l.id)).toContain(p.level);
-    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(4);
+    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(3);
     const soon = LEVELS.flatMap((l) => l.soon.map((s) => s.title));
     for (const p of PROJECTS) expect(soon, `${p.title} já existe`).not.toContain(p.title);
   });
 
-  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2, e a Montanha-russa, 11 e 1", () => {
+  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2, e a Montanha-russa e a Floresta, 11 e 1", () => {
     expect(PROJECTS.map((p) => [p.id, liveSteps(p).length, p.steps.filter(isComputer).length])).toEqual([
       ["sistema-solar", 8, 1],
       ["vitrine", 8, 1],
       ["cidade", 8, 1],
       ["galaxia", 10, 2],
       ["montanha-russa", 11, 1],
+      ["floresta", 11, 1],
     ]);
   });
 
@@ -769,6 +769,317 @@ describe("conferências da montanha-russa", () => {
     expect(main).not.toContain("OrbitControls");
     expect(main).toContain("// O código move a câmera: sem controles do mouse, que a tirariam do lugar a cada quadro");
     expect(main).toContain("  animar(tempo, delta);\n  renderizador.render(cena, camera);");
+  });
+});
+
+describe("conferências da floresta", () => {
+  const floresta = projectById("floresta");
+  const variant = variantOf(floresta);
+  const stepOf = (id) => floresta.steps[stepIndex(floresta, id)];
+  /** O passo do vento com trocas, conferido depois de 4 s de animação (o bastante para medir, e mais rápido que os 20 s). */
+  const wind = (...swaps) => {
+    let code = stepOf("vento").code;
+    for (const [from, to] of swaps) {
+      expect(code, from).toContain(from);
+      code = code.replace(from, to);
+    }
+    return grade(stepOf("vento"), factsOf(code, { seconds: 4 }));
+  };
+
+  it("o céu escuro, a neblina longe ou perto demais, o terreno de costas, em pé, deitado pela malha, com poucos pedaços ou pequeno, a câmera baixa, olhando para o céu ou para fora e o sol baixo, a conferência avisa; o wireframe vale", () => {
+    expect(failing(variant("palco", ['cena.background = new THREE.Color("#a9cfe8");', 'cena.background = new THREE.Color("#1b2a4a");']))).toEqual([
+      "O céu é azul-claro (o fundo é #1b2a4a, escuro demais para um dia de sol)",
+      "A neblina tem a cor do céu e apaga o fundo do terreno (a neblina é #a9cfe8, e o céu é #1b2a4a)",
+    ]);
+    expect(failing(variant("palco", ['new THREE.Fog("#a9cfe8", 60, 190)', 'new THREE.Fog("#a9cfe8", 60, 400)']))).toEqual([
+      "A neblina tem a cor do céu e apaga o fundo do terreno (a neblina cobre só 36% da borda do fundo do terreno: ela aparece contra o céu)",
+    ]);
+    expect(failing(variant("palco", ['new THREE.Fog("#a9cfe8", 60, 190)', 'new THREE.Fog("#a9cfe8", 20, 190)']))).toEqual([
+      "A neblina tem a cor do céu e apaga o fundo do terreno (a neblina já cobre 32% do meio da floresta)",
+    ]);
+    expect(failing(variant("palco", ["geometriaTerreno.rotateX(-Math.PI / 2);", "geometriaTerreno.rotateX(Math.PI / 2);"]))).toEqual([
+      "O terreno é uma placa deitada, grande e com muitos pedaços (o terreno está de costas: de cima, a câmera vê o verso, que não é desenhado. O giro do rotateX é −Math.PI / 2)",
+    ]);
+    const standing = "o terreno está em pé: falta deitar a placa, com geometriaTerreno.rotateX(-Math.PI / 2)";
+    expect(failing(variant("palco", ["geometriaTerreno.rotateX(-Math.PI / 2);\n", ""]))).toEqual([
+      `A neblina tem a cor do céu e apaga o fundo do terreno (${standing})`,
+      `O terreno é uma placa deitada, grande e com muitos pedaços (${standing})`,
+      `A câmera vê o terreno do alto, da beira (${standing})`,
+    ]);
+    // a montanha-russa deitou o chão pela malha: aqui, o y dos vértices tem de ser a altura
+    expect(failing(variant("palco", ["geometriaTerreno.rotateX(-Math.PI / 2);\n", ""], ["cena.add(terreno);", "terreno.rotation.x = -Math.PI / 2;\ncena.add(terreno);"]))).toEqual([
+      "O terreno é uma placa deitada, grande e com muitos pedaços (a placa foi deitada com terreno.rotation, que gira a malha: gire a geometria, com geometriaTerreno.rotateX, para o y dos vértices ser a altura deles no próximo passo)",
+    ]);
+    expect(failing(variant("palco", ["PlaneGeometry(200, 200, 160, 160)", "PlaneGeometry(200, 200, 10, 10)"]))).toEqual([
+      "O terreno é uma placa deitada, grande e com muitos pedaços (a placa tem 10 × 10 pedaços: poucos vértices para os morros do próximo passo)",
+    ]);
+    expect(failing(variant("palco", ["PlaneGeometry(200, 200, 160, 160)", "PlaneGeometry(100, 100, 160, 160)"]))).toEqual([
+      "A neblina tem a cor do céu e apaga o fundo do terreno (a neblina cobre só 78% da borda do fundo do terreno: ela aparece contra o céu)",
+      "O terreno é uma placa deitada, grande e com muitos pedaços (o terreno tem 100 de lado: pequeno para dez mil árvores)",
+    ]);
+    expect(failing(variant("palco", ["PlaneGeometry(200, 200, 160, 160)", "PlaneGeometry(200, 200, 300, 300)"]))[1]).toBe(
+      "O terreno é uma placa deitada, grande e com muitos pedaços (o terreno tem 90.601 vértices, e a conferência mede até 70 mil, uns 260 × 260 pedaços)",
+    );
+    expect(failing(variant("palco", ["camera.position.set(0, 28, 100);", "camera.position.set(0, 5, 100);"]))).toEqual([
+      "A câmera vê o terreno do alto, da beira (a câmera está na altura 5,00: baixa demais para ver a floresta por cima das árvores)",
+    ]);
+    expect(failing(variant("palco", ["camera.lookAt(0, 0, 20);", "camera.lookAt(0, 30, 20);"]))).toEqual(["A câmera vê o terreno do alto, da beira (a câmera olha para o céu: o terreno fica fora da vista)"]);
+    expect(failing(variant("palco", ["camera.lookAt(0, 0, 20);", "camera.lookAt(200, 0, 20);"]))).toEqual([
+      "A neblina tem a cor do céu e apaga o fundo do terreno (a neblina já cobre 100% do meio da floresta)",
+      "A câmera vê o terreno do alto, da beira (a câmera olha para o ponto (200,0; 20,0), fora do terreno)",
+    ]);
+    expect(failing(variant("palco", ["sol.position.set(-40, 50, 30);", "sol.position.set(-40, 10, 30);"]))).toEqual([
+      "Há a luz do céu e um sol alto (o sol está 11° acima do horizonte: baixo demais para um dia de sol)",
+    ]);
+    expect(failing(variant("palco", ['color: "#7a9a50" }', 'color: "#7a9a50", wireframe: true }']))).toEqual([]);
+  });
+
+  it("o chão sorteado vértice por vértice ou baixo demais, a conferência avisa; as montanhas valem", () => {
+    expect(failing(variant("morros", ["return grande + media + pequena;", "return Math.random() * 2;"]))).toEqual([
+      "O terreno tem morros e vales (o terreno vai da altura 0,00 a 2,00: quase plano)",
+      expect.stringMatching(/^O chão sobe e desce aos poucos \(perto do ponto \(.+\), o chão sobe 1,\d\d de um vértice para o vizinho, a 1,25 dele: um degrau de \d\d°, e não um morro\)$/),
+    ]);
+    expect(failing(variant("morros", ["const grande = 3 *", "const grande = 0.3 *"], ["const media = 1.5 *", "const media = 0.15 *"], ["const pequena = 0.6 *", "const pequena = 0.06 *"]))).toEqual([
+      "O terreno tem morros e vales (o terreno vai da altura −0,51 a 0,45: quase plano)",
+    ]);
+    expect(failing(variant("morros", ["const grande = 3 *", "const grande = 8 *"]))).toEqual([]);
+  });
+
+  it("as normais calculadas antes do laço ou o material sem luz, a conferência avisa; o flatShading e o sol do outro lado valem", () => {
+    const normals = "geometriaTerreno.computeVertexNormals(); // as normais seguem os morros, para a luz\n";
+    expect(failing(variant("normais", [normals, ""], ["const posicoes", "geometriaTerreno.computeVertexNormals();\nconst posicoes"]))).toEqual([
+      "As normais seguem a inclinação dos morros (as normais apontam todas para cima, como na placa plana: a luz não vê os morros. Falta geometriaTerreno.computeVertexNormals(), depois do laço das alturas)",
+    ]);
+    expect(failing(variant("normais", ['new THREE.MeshStandardMaterial({ color: "#7a9a50" })', 'new THREE.MeshBasicMaterial({ color: "#7a9a50" })']))).toEqual([
+      "As normais seguem a inclinação dos morros (o terreno é MeshBasicMaterial, que ignora a luz)",
+    ]);
+    expect(failing(variant("normais", [normals, ""], ['color: "#7a9a50" }', 'color: "#7a9a50", flatShading: true }']))).toEqual([]);
+    expect(failing(variant("normais", ["sol.position.set(-40, 50, 30);", "sol.position.set(40, 50, 30);"]))).toEqual([]);
+  });
+
+  it("sem os translates, a árvore afunda; fora do chão, de lado, longe ou fora da vista, a conferência avisa; a câmera de perto vale", () => {
+    expect(failing(variant("arvore", ["geometriaTronco.translate(0, 0.5, 0);\n", ""]))).toEqual([
+      "O tronco é um cilindro em pé, com a base no chão (metade do tronco está enterrada: o cilindro tem o centro na origem, e falta o translate da geometriaTronco)",
+      "A copa é um cone, em cima do tronco (há uma fresta de 0,30 entre o alto do tronco e a copa)",
+    ]);
+    expect(failing(variant("arvore", ["geometriaCopa.translate(0, 2, 0);\n", ""]))).toEqual([
+      "A copa é um cone, em cima do tronco (a copa começa 1,20 abaixo do pé do tronco, dentro do chão: falta o translate da geometriaCopa, que a sobe)",
+    ]);
+    expect(failing(variant("arvore", ["tronco.position.set(0, altura(0, 60), 60);", "tronco.position.set(0, 0, 60);"]))).toEqual([
+      "O tronco é um cilindro em pé, com a base no chão (o tronco está 1,68 acima do chão: o y dele tem de ser a altura do chão ali, altura(x, z))",
+    ]);
+    expect(failing(variant("arvore", ["copa.position.copy(tronco.position);", "copa.position.set(0, altura(0, 60), 61);"]))).toEqual([
+      "A copa é um cone, em cima do tronco (a copa está 1,00 para o lado do tronco: as duas peças têm de ficar no mesmo lugar)",
+    ]);
+    expect(failing(variant("arvore", ["tronco.position.set(0, altura(0, 60), 60);", "tronco.position.set(0, altura(0, -80), -80);"]))).toEqual([
+      "A árvore aparece na câmera (a neblina cobre 98% da árvore: ela está longe demais)",
+    ]);
+    expect(failing(variant("arvore", ["tronco.position.set(0, altura(0, 60), 60);", "tronco.position.set(80, altura(80, 60), 60);"]))).toEqual(["A árvore aparece na câmera (a árvore fica fora da vista da câmera)"]);
+    // a sugestão de ver a árvore de perto
+    expect(failing(variant("arvore", ["camera.position.set(0, 28, 100);", "camera.position.set(3, 1, 66);"], ["camera.lookAt(0, 0, 20);", "camera.lookAt(0, 0, 60);"]))).toEqual([]);
+  });
+
+  it("o sorteio parado, num canto ou fora do chão, e uma geometria por árvore, a conferência avisa; outra semente e mil árvores valem", () => {
+    expect(failing(variant("cem", ["  semente = (semente * 16807) % 2147483647;\n", ""]))).toEqual([
+      "As árvores se espalham pelo terreno (100 árvores estão no mesmo ponto, (−100,0; −100,0): cada árvore precisa de um ponto sorteado só dela)",
+    ]);
+    expect(failing(variant("cem", ["const x = (sorteio() - 0.5) * 200;", "const x = sorteio() * 100;"], ["const z = (sorteio() - 0.5) * 200;", "const z = sorteio() * 100;"]))).toEqual([
+      "As árvores se espalham pelo terreno (as árvores ocupam só 50% do terreno em x e 50% em z)",
+    ]);
+    expect(failing(variant("cem", ["tronco.position.set(x, altura(x, z), z);", "tronco.position.set(x, 0, z);"]))).toEqual([
+      "As árvores estão em pé no chão (97 árvores estão fora do chão: a do ponto (37,5; −52,4) fica 4,33 acima dele)",
+    ]);
+    expect(failing(variant("cem", ["copa.position.copy(tronco.position);", "copa.position.set(x, 0, z);"]))).toEqual([
+      "Há pelo menos cem árvores, cada uma com tronco e copa (a copa da árvore 1 está a 1,98 do tronco dela)",
+    ]);
+    expect(failing(variant("cem", ["new THREE.Mesh(geometriaTronco, materialTronco);", "new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1, 6).translate(0, 0.5, 0), materialTronco);"]))).toEqual([
+      "Os troncos dividem uma geometria, e as copas, outra (100 geometrias de tronco diferentes: uma por volta do laço)",
+    ]);
+    expect(failing(variant("cem", ["let semente = 7;", "let semente = 8;"]))).toEqual([]);
+    expect(failing(variant("cem", ["i < 100", "i < 1000"]))).toEqual([]);
+  });
+
+  it("as copas sem setMatrixAt, as matrizes sem updateMatrix, as árvores fora do chão ou poucas cópias, a conferência avisa; com 50 mil, vale", () => {
+    expect(failing(variant("instancias", ["  copas.setMatrixAt(i, molde.matrix);", "  // copas.setMatrixAt(i, molde.matrix);"]))).toEqual([
+      "Cada copa fica em cima do seu tronco (10.000 copas estão na origem, com a matriz de quando a malha foi criada: falta copas.setMatrixAt)",
+    ]);
+    expect(failing(variant("instancias", ["  molde.updateMatrix();\n", ""]))).toEqual([
+      "As árvores se espalham pelo terreno inteiro (10.000 árvores estão no mesmo ponto, (0,0; 0,0), a origem: a matriz de quando a malha foi criada)",
+    ]);
+    expect(failing(variant("instancias", ["molde.position.set(x, altura(x, z), z);", "molde.position.set(x, 0, z);"]))).toEqual([
+      "As árvores estão em pé no chão (9.479 árvores estão fora do chão: a do ponto (39,9; −59,5) fica 5,03 acima dele)",
+    ]);
+    expect(failing(variant("instancias", ["const quantas = 10000;", "const quantas = 1000;"]))).toEqual([
+      "Os troncos e as copas são duas InstancedMesh, com 10 mil cópias cada (os troncos têm 1.000 cópias: poucas para dez mil árvores)",
+    ]);
+    expect(failing(variant("instancias", ["new THREE.InstancedMesh(geometriaTronco,", "new THREE.InstancedMesh(geometriaCopa,"]))).toEqual([
+      "Os troncos e as copas são duas InstancedMesh, com 10 mil cópias cada (a malha dos troncos usa a ConeGeometry, e não a geometria do tronco)",
+    ]);
+    // 50 mil cópias: os fatos mandam 20 mil posições, espalhadas
+    expect(failing(variant("instancias", ["const quantas = 10000;", "const quantas = 50000;"]))).toEqual([]);
+  });
+
+  it("o sorteio solto faz clareiras, e sem o n++ as árvores se empilham; a plantação em fileiras ainda tem uma por quadrado", () => {
+    expect(failing(variant("grade", ["const x = -100 + (coluna + sorteio()) * passo;", "const x = (sorteio() - 0.5) * 200;"], ["const z = -100 + (linha + sorteio()) * passo;", "const z = (sorteio() - 0.5) * 200;"]))).toEqual([
+      "Há uma árvore em cada quadrado de 2 × 2 (36% dos quadrados de 2 × 2 estão vazios, e 26% têm duas árvores ou mais: o sorteio solto faz clareiras e bolos)",
+    ]);
+    expect(failing(variant("grade", ["    n++;\n", ""]))).toEqual([
+      "Há uma árvore em cada quadrado de 2 × 2 (9.999 árvores estão no mesmo ponto, (0,0; 0,0), a origem: a matriz de quando a malha foi criada)",
+    ]);
+    expect(failing(variant("grade", ["const x = -100 + (coluna + sorteio()) * passo;", "const x = -100 + (coluna + 0.5) * passo;"], ["const z = -100 + (linha + sorteio()) * passo;", "const z = -100 + (linha + 0.5) * passo;"]))).toEqual([]);
+    expect(failing(variant("grade", ["const lado = 100;", "const lado = 60;"]))).toEqual([]);
+  });
+
+  it("a proporção fixa, as árvores achatadas ou todas da mesma altura ou largura, a conferência avisa; as mais altas valem", () => {
+    expect(failing(variant("tamanhos", ["molde.scale.set(largura, alto, largura);", "molde.scale.set(largura, largura, largura);"]))).toEqual([
+      "As larguras também mudam, e a proporção muda de uma árvore para outra (a altura cresce junto com a largura: as árvores são cópias ampliadas umas das outras. Sorteie as duas separadas)",
+    ]);
+    expect(failing(variant("tamanhos", ["molde.scale.set(largura, alto, largura);", "molde.scale.set(largura, alto, 1);"]))).toEqual([
+      "Vistas de cima, as árvores continuam redondas (há árvores achatadas: a escala em x e em z tem de ser a mesma, a largura)",
+    ]);
+    expect(failing(variant("tamanhos", ["const alto = 0.7 + sorteio() * 0.8;", "const alto = 1;"]))).toEqual(["As árvores têm alturas diferentes (as árvores têm todas a mesma altura: 3,20)"]);
+    expect(failing(variant("tamanhos", ["const largura = 0.7 + sorteio() * 0.6;", "const largura = 1;"]))).toEqual([
+      "As larguras também mudam, e a proporção muda de uma árvore para outra (as árvores têm quase todas a mesma largura)",
+    ]);
+    expect(failing(variant("tamanhos", ["const alto = 0.7 + sorteio() * 0.8;", "const alto = 0.7 + sorteio() * 2.5;"]))).toEqual([]);
+  });
+
+  it("as copas sem setColorAt, de outono, de uma cor só ou com o material verde, a conferência avisa", () => {
+    expect(failing(variant("cores", ["    copas.setColorAt(n, cor);\n", ""]))).toEqual([
+      "Cada copa tem a sua cor (as copas não têm cor por cópia: falta copas.setColorAt)",
+      "As copas são verdes (as copas não têm cor por cópia: falta copas.setColorAt)",
+    ]);
+    expect(failing(variant("cores", ["cor.setHSL(0.25 + sorteio() * 0.1,", "cor.setHSL(0.03 + sorteio() * 0.1,"]))).toEqual(["As copas são verdes (as copas não são verdes: a maioria é laranja)"]);
+    expect(failing(variant("cores", ["cor.setHSL(0.25 + sorteio() * 0.1, 0.5, 0.22 + sorteio() * 0.15);", "cor.setHSL(0.3, 0.5, 0.3);"]))).toEqual(["Cada copa tem a sua cor (as copas têm todas a mesma cor)"]);
+    expect(failing(variant("cores", ['{ color: "#ffffff" }); // a cor de cada copa vem do setColorAt', '{ color: "#4f7a3a" });']))).toEqual([
+      "O material das copas é branco (o material das copas é #4f7a3a: a cor de cada cópia multiplica a dele, e as copas saem escurecidas)",
+    ]);
+  });
+
+  it("a água alta, abaixo dos vales, opaca, verde, de costas ou pequena, as árvores na água e as cópias que sobram, a conferência avisa", () => {
+    expect(failing(variant("lagos", ["const nivelDaAgua = -2.4;", "const nivelDaAgua = 0;"]))).toEqual(["A água cobre só o fundo dos vales (a água cobre 50% do terreno: um mar, e não lagos)"]);
+    expect(failing(variant("lagos", ["const nivelDaAgua = -2.4;", "const nivelDaAgua = -6;"]))).toEqual([
+      "A água cobre só o fundo dos vales (a água, na altura −6,00, fica abaixo do vale mais fundo, que chega a −5,05: nenhum lago aparece)",
+    ]);
+    expect(failing(variant("lagos", ["transparent: true, opacity: 0.85, ", ""]))).toEqual([
+      "A água é uma placa azul, deitada e um pouco transparente (a água não é transparente: falta transparent: true no material)",
+    ]);
+    expect(failing(variant("lagos", ['color: "#4f8fc0"', 'color: "#3f9f4f"']))).toEqual(["A água é uma placa azul, deitada e um pouco transparente (a água é #3f9f4f, que não é azul)"]);
+    expect(failing(variant("lagos", ["agua.rotation.x = -Math.PI / 2;", "agua.rotation.x = Math.PI / 2;"]))).toEqual([
+      "A água é uma placa azul, deitada e um pouco transparente (a água está de costas: de cima, a câmera vê o verso, que não é desenhado)",
+    ]);
+    expect(failing(variant("lagos", ["new THREE.PlaneGeometry(200, 200),", "new THREE.PlaneGeometry(50, 50),"]))).toEqual([
+      "A água é uma placa azul, deitada e um pouco transparente (a água tem 50 de lado, e o terreno, 200: os vales fora dela ficam secos)",
+    ]);
+    expect(failing(variant("lagos", ["    if (y < nivelDaAgua + 0.3) continue; // na água ou na beira: sem árvore\n", ""]))).toEqual([
+      "Nenhuma árvore fica dentro d'água (758 árvores estão dentro d'água: falta o continue que pula os pontos abaixo do nível da água)",
+    ]);
+    expect(failing(variant("lagos", ["troncos.count = n; // só as árvores plantadas são desenhadas\ncopas.count = n;\n", ""]))).toEqual([
+      "Só as árvores plantadas são desenhadas (1.012 árvores estão todas no mesmo ponto, a origem: são as cópias que o laço pulou, com a matriz de quando a malha foi criada. Faltam troncos.count = n e copas.count = n)",
+    ]);
+    expect(failing(variant("lagos", ["copas.count = n;\n", ""]))).toEqual([
+      "Só as árvores plantadas são desenhadas (a malha dos troncos desenha 8.988 cópias, e a das copas, 10.000: falta copas.count = n)",
+    ]);
+  });
+
+  it("o vento espera a animação rodar: parada, ela pede o ▶; no primeiro segundo, espera as matrizes mudarem", () => {
+    const step = stepOf("vento");
+    const marks = (facts) => grade(step, facts).results.map((r) => [r.ok, r.seen]);
+    expect(marks(factsOf(step.code))).toEqual(Array(4).fill([null, "a animação está parada: aperte ▶ na barra de cima para o vento soprar"]));
+    expect(marks(factsOf(step.code, { seconds: 0.5 }))[0]).toEqual([null, "esperando o vento soprar"]);
+    expect(failing(wind())).toEqual([]);
+  });
+
+  it("sem o needsUpdate, em bloco, forte ou fraco demais, parado no tempo, fora do lugar, sem a escala ou com uma peça parada, a conferência avisa; num computador lento, vale", () => {
+    expect(failing(wind(["  troncos.instanceMatrix.needsUpdate = true;\n  copas.instanceMatrix.needsUpdate = true;\n", ""]))).toEqual([
+      "As árvores balançam com o vento (as matrizes dos troncos mudam, mas a placa de vídeo não fica sabendo: falta troncos.instanceMatrix.needsUpdate = true)",
+    ]);
+    expect(failing(wind(["  copas.instanceMatrix.needsUpdate = true;\n", ""]))).toEqual([
+      "As árvores balançam com o vento (as matrizes das copas mudam, mas a placa de vídeo não fica sabendo: falta copas.instanceMatrix.needsUpdate = true)",
+    ]);
+    expect(failing(wind([" - arvore.x * 0.1", ""]))).toEqual([
+      "O vento passa como uma onda, e não em todas juntas (todas as árvores se inclinam juntas, como um bloco: o ângulo tem de depender também do lugar da árvore)",
+    ]);
+    expect(failing(wind(["* 0.06;", "* 0.3;"]))).toEqual(["As árvores se inclinam pouco, como num vento forte (as árvores se inclinam até 17°: é um vendaval)"]);
+    expect(failing(wind(["Math.sin(tempo * 1.5 - arvore.x * 0.1)", "Math.sin(1.5 - arvore.x * 0.1)"]))).toEqual(
+      step4("as árvores estão inclinadas, mas paradas: a inclinação não muda com o tempo"),
+    );
+    expect(failing(wind(["    molde.position.set(arvore.x, arvore.y, arvore.z);\n", ""]))).toEqual([
+      "Cada árvore balança inteira, no lugar e do tamanho dela (as árvores saíram do lugar: 8.988 estão no mesmo ponto, (98,4; 100,0). Falta pôr o molde no lugar de cada árvore no animar)",
+    ]);
+    expect(failing(wind(["    molde.scale.set(arvore.largura, arvore.alto, arvore.largura);\n", ""]))).toEqual([
+      "Cada árvore balança inteira, no lugar e do tamanho dela (as árvores ficaram todas do mesmo tamanho: falta molde.scale.set no animar)",
+    ]);
+    expect(failing(wind(["    troncos.setMatrixAt(i, molde.matrix);\n", ""]))).toEqual([
+      "Cada árvore balança inteira, no lugar e do tamanho dela (as copas balançam, e os troncos ficam parados: falta troncos.setMatrixAt(i, molde.matrix) no animar)",
+    ]);
+    // um quadro de 0,1 s a cada cinco: as matrizes mudam a cada quadro, e o vento continua valendo
+    const slow = { seconds: 4, frames: [0.1, 1 / 30, 1 / 30, 1 / 30, 1 / 30] };
+    expect(failing(grade(stepOf("vento"), factsOf(stepOf("vento").code, slow)))).toEqual([]);
+  });
+
+  it("o projeto baixado leva os controles do mouse, que giram a câmera em volta do meio da floresta", () => {
+    const main = fileOf(stepOf("computador").files, "src/main.js").code;
+    expect(main).toContain('import { OrbitControls } from "three/addons/controls/OrbitControls.js";');
+    expect(main).toContain("controles.target.set(0, 0, 20);");
+    expect(main, "a floresta não tem sombras").not.toContain("shadowMap");
+  });
+});
+
+/** As quatro conferências do vento, todas com o mesmo resultado. */
+function step4(seen) {
+  return [
+    `As árvores balançam com o vento (${seen})`,
+    `As árvores se inclinam pouco, como num vento forte (${seen})`,
+    `O vento passa como uma onda, e não em todas juntas (${seen})`,
+    `Cada árvore balança inteira, no lugar e do tamanho dela (${seen})`,
+  ];
+}
+
+describe("os fatos de uma InstancedMesh e de uma placa", () => {
+  it("as cópias desenhadas vão com a posição, uma amostra das matrizes e das cores e a versão; o rastro segue a primeira cópia", () => {
+    const geometry = new THREE.BoxGeometry();
+    const copies = new THREE.InstancedMesh(geometry, new THREE.MeshStandardMaterial(), 30);
+    const molde = new THREE.Object3D();
+    for (let i = 0; i < 30; i++) {
+      molde.position.set(i, 0, -i);
+      molde.updateMatrix();
+      copies.setMatrixAt(i, molde.matrix);
+      copies.setColorAt(i, new THREE.Color(i / 30, 0.5, 0));
+    }
+    copies.count = 20;
+    const scene = new THREE.Scene();
+    scene.add(copies);
+    const { objects } = sceneFacts({ scene, camera: null, entries: [[1, [copies]]], idOf: () => undefined });
+    const facts = objects[1];
+    expect(facts.instances).toBe(20);
+    expect([...facts.instanced.positions]).toEqual(Array.from({ length: 20 }, (_, i) => [i, 0, -i]).flat());
+    expect(facts.instanced.sample).toHaveLength(20);
+    expect(facts.instanced.sample[3][0][3]).toBe(3);
+    expect(facts.instanced.colors).toHaveLength(20);
+    expect(facts.instanced.version).toBe(0);
+    copies.instanceMatrix.needsUpdate = true;
+    expect(sceneFacts({ scene, camera: null, entries: [[1, [copies]]], idOf: () => undefined }).objects[1].instanced.version).toBe(1);
+    // o rastro segue o ponto (1, 1, 1) da primeira cópia, e não a malha
+    copies.position.set(0, 5, 0);
+    copies.updateMatrixWorld();
+    expect(trailPoint(copies)).toEqual([1, 6, 1]);
+  });
+
+  it("uma placa (PlaneGeometry) manda a grade de vértices e as normais; sem a grade, não manda", () => {
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(4, 2, 4, 2), new THREE.MeshStandardMaterial({ flatShading: true }));
+    const scene = new THREE.Scene();
+    scene.add(plate);
+    const factsOfPlate = (mesh) => sceneFacts({ scene, camera: null, entries: [[1, [mesh]]], idOf: () => undefined }).objects[1];
+    const { geometry, material } = factsOfPlate(plate);
+    expect(material.flatShading).toBe(true);
+    expect([geometry.grid.cols, geometry.grid.rows]).toEqual([4, 2]);
+    expect(geometry.grid.positions).toHaveLength(15 * 3);
+    expect([...geometry.grid.positions.slice(0, 3)]).toEqual([-2, 1, 0]);
+    expect([...geometry.grid.normals.slice(0, 3)]).toEqual([0, 0, 1]);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+    scene.add(box);
+    expect(factsOfPlate(box).geometry.grid).toBeUndefined();
   });
 });
 

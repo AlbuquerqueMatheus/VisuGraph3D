@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { test, expect } from "./fixtures.js";
 import { code, pasteCode, status } from "./live.js";
 import { CIDADE } from "../../src/live/projects/cidade.js";
+import { FLORESTA } from "../../src/live/projects/floresta.js";
 import { GALAXIA } from "../../src/live/projects/galaxia.js";
 import { MONTANHA_RUSSA } from "../../src/live/projects/montanhaRussa.js";
 import { SISTEMA_SOLAR } from "../../src/live/projects/sistemaSolar.js";
@@ -98,11 +99,12 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
   await page.click("#lv-tab-project");
   await expect(panel(page).locator(".lv-pj-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
-  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(4);
+  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(3);
   await expect(panel(page).locator('.lv-pj-card[data-project="sistema-solar"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="vitrine"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="cidade"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="montanha-russa"] .lv-pj-card__progress')).toHaveText("12 passos");
+  await expect(panel(page).locator('.lv-pj-card[data-project="floresta"] .lv-pj-card__progress')).toHaveText("12 passos");
   const card = panel(page).locator('.lv-pj-card[data-project="galaxia"]');
   await expect(card.locator(".lv-pj-card__progress")).toHaveText("12 passos");
 
@@ -331,6 +333,50 @@ test("projetos: na Montanha-russa, a conferência segue o carrinho andando, e o 
   for (const file of MONTANHA_RUSSA.steps[11].files) expect(files[file.path], file.path).toBe(file.code);
   expect(JSON.parse(files["package.json"]).name).toBe("montanha-russa");
   expect(files["src/main.js"]).not.toContain("OrbitControls");
+});
+
+test("projetos: na Floresta, a conferência espera o vento soprar e avisa do needsUpdate esquecido, e o projeto sai para o computador", async ({ page }) => {
+  test.slow(); // a conferência olha as árvores balançarem alguns segundos de verdade
+  await page.goto("index-3d.html?projeto=floresta&passo=11");
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(panel(page).locator(".lv-ch__kicker")).toHaveText("Intermediário · Floresta de 10 mil árvores");
+  await expect(title(page)).toHaveText("11. O vento");
+  await expect(page.locator("#lv-codebar")).toContainText("Floresta de 10 mil árvores · passo 11 de 12");
+  await expect(result(page)).toContainText("(não achei a função animar(tempo))", { timeout: 30_000 });
+
+  // a conferência olha as dez mil árvores balançarem, pela amostra das matrizes das cópias
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(codeState(page)).toHaveText("O editor já tem o código deste passo.");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+
+  // rodando de novo com a animação parada, ela espera o vento soprar
+  await page.click("#lv-play");
+  await expect(page.locator("#lv-play")).toHaveAttribute("aria-pressed", "false");
+  await page.click("#lv-restart");
+  await expect(result(page)).toContainText("(a animação está parada: aperte ▶ na barra de cima para o vento soprar)", { timeout: 30_000 });
+  await expect(result(page)).toHaveAttribute("data-ok", "pending");
+  await expect(done(page)).toBeHidden();
+  await page.click("#lv-play");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+
+  // sem o needsUpdate, as matrizes mudam na lista do three.js, mas a placa de vídeo não fica sabendo
+  const stale = FLORESTA.steps[10].code.replace("  troncos.instanceMatrix.needsUpdate = true;\n  copas.instanceMatrix.needsUpdate = true;\n", "");
+  expect(stale).not.toBe(FLORESTA.steps[10].code);
+  await pasteCode(page, stale);
+  await expect(result(page)).toContainText("(as matrizes dos troncos mudam, mas a placa de vídeo não fica sabendo: falta troncos.instanceMatrix.needsUpdate = true)", { timeout: 60_000 });
+  await expect(result(page)).toHaveAttribute("data-ok", "false");
+
+  // o passo no computador começa do fim do passo 11, e os controles do mouse giram em volta do meio da floresta
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+  await stepButton(page, 12).click();
+  await expect(title(page)).toHaveText("12. No seu computador");
+  const [download] = await Promise.all([page.waitForEvent("download"), panel(page).locator('[data-download="floresta.zip"]').click()]);
+  expect(download.suggestedFilename()).toBe("floresta.zip");
+  const files = await zipFiles(download);
+  for (const file of FLORESTA.steps[11].files) expect(files[file.path], file.path).toBe(file.code);
+  expect(JSON.parse(files["package.json"]).name).toBe("floresta");
+  expect(files["src/main.js"]).toContain("controles.target.set(0, 0, 20);");
 });
 
 test("projetos: o modo de estudo não tem a aba Projetos", async ({ page }) => {

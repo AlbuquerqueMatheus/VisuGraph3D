@@ -2,8 +2,8 @@
 //
 // Os fatos são números da cena como ela está, não do texto do código: posições de mundo,
 // matrizes, caixas, materiais, geometrias (quantos vértices, quais atributos e os parâmetros),
-// luzes e sombras, a câmera e a neblina, e o rastro de quem a animação moveu. As cores vão como
-// estão no código (sRGB).
+// as cópias de uma InstancedMesh, luzes e sombras, a câmera e a neblina, e o rastro de quem a
+// animação moveu. As cores vão como estão no código (sRGB).
 
 import * as THREE from "three";
 import { fromColumnMajor } from "../../lib/transform3d.js";
@@ -22,12 +22,13 @@ const SAMPLE_SIZE = 1024;
  */
 function sampleOf(attribute) {
   if (!attribute || attribute.itemSize < 3) return null;
-  const count = attribute.count;
-  const n = Math.min(count, SAMPLE_SIZE);
-  return Array.from({ length: n }, (_, j) => {
-    const i = n === count ? j : Math.floor(((j * 0.6180339887498949) % 1) * count);
-    return [attribute.getX(i), attribute.getY(i), attribute.getZ(i)];
-  });
+  return spread(attribute.count, SAMPLE_SIZE).map((i) => [attribute.getX(i), attribute.getY(i), attribute.getZ(i)]);
+}
+
+/** Até `max` índices de 0 a count − 1: todos, ou espalhados pela razão áurea (sampleOf). */
+function spread(count, max) {
+  const n = Math.min(count, max);
+  return Array.from({ length: n }, (_, j) => (n === count ? j : Math.floor(((j * 0.6180339887498949) % 1) * count)));
 }
 
 /** Nome da constante de mistura do material, como no código (THREE.AdditiveBlending → "AdditiveBlending"). */
@@ -40,6 +41,30 @@ const SIDE_NAMES = { [THREE.FrontSide]: "FrontSide", [THREE.BackSide]: "BackSide
 
 /** Quantos pontos da curva de um tubo (TubeGeometry) vão nos fatos, espaçados por igual. */
 const CURVE_POINTS = 400;
+
+/** Até quantos vértices uma placa (PlaneGeometry) manda inteira, para medir um terreno. */
+const GRID_VERTICES = 70000;
+
+/** Os valores x, y, z de um atributo de 3 em 3, numa lista só de números (Float32Array). */
+function copyOf(attribute) {
+  if (!attribute.isInterleavedBufferAttribute && !attribute.normalized) return new Float32Array(attribute.array.subarray(0, attribute.count * 3));
+  return Float32Array.from({ length: attribute.count * 3 }, (_, k) => attribute.getComponent(Math.floor(k / 3), k % 3));
+}
+
+/**
+ * Os vértices de uma placa (PlaneGeometry) na grade dela, com as normais: `cols` × `rows` pedaços,
+ * e o vértice da coluna c e da linha r em (r × (cols + 1) + c) × 3, no espaço do objeto. Num
+ * terreno de morros, é o que a conferência precisa para saber a altura do chão em qualquer ponto,
+ * pelos mesmos triângulos que o desenho usa. null se a placa não tem mais a grade (ou é grande demais).
+ */
+function gridOf(geometry) {
+  const { widthSegments: cols, heightSegments: rows } = geometry.parameters ?? {};
+  const position = geometry.getAttribute("position");
+  if (!position || !Number.isInteger(cols) || !Number.isInteger(rows)) return null;
+  if (position.count !== (cols + 1) * (rows + 1) || position.count > GRID_VERTICES || position.itemSize !== 3) return null;
+  const normal = geometry.getAttribute("normal");
+  return { cols, rows, positions: copyOf(position), normals: normal?.itemSize === 3 && normal.count === position.count ? copyOf(normal) : null };
+}
 
 /**
  * Os parâmetros com que a geometria foi criada que são números ou sim/não (a largura de uma
@@ -68,10 +93,43 @@ function samplesOf(geometry, cache) {
       sample: sampleOf(geometry.getAttribute("position")),
       colors: sampleOf(geometry.getAttribute("color")),
       curve: path instanceof THREE.Curve ? path.getSpacedPoints(CURVE_POINTS).map((p) => p.toArray()) : null,
+      grid: geometry.type === "PlaneGeometry" ? gridOf(geometry) : null,
     };
     cache.set(geometry, samples);
   }
   return samples;
+}
+
+/** Quantas cópias de uma InstancedMesh mandam a posição: todas, numa floresta de 10 mil árvores. */
+const MAX_INSTANCES = 20000;
+
+/**
+ * As cópias que uma InstancedMesh desenha (as `count` primeiras): a posição de cada uma no espaço do
+ * objeto, de 3 em 3 números (até MAX_INSTANCES, espalhadas pela razão áurea se forem mais), a
+ * matriz (por linhas) e a cor de uma amostra de até SAMPLE_SIZE, e a versão das matrizes, que
+ * cresce a cada `instanceMatrix.needsUpdate = true`.
+ */
+function instancedFacts(obj) {
+  const matrix = new THREE.Matrix4();
+  const color = new THREE.Color();
+  const placed = spread(obj.count, MAX_INSTANCES);
+  const positions = new Float32Array(placed.length * 3);
+  placed.forEach((i, k) => {
+    obj.getMatrixAt(i, matrix);
+    positions[k * 3] = matrix.elements[12];
+    positions[k * 3 + 1] = matrix.elements[13];
+    positions[k * 3 + 2] = matrix.elements[14];
+  });
+  const sampled = spread(obj.count, SAMPLE_SIZE);
+  return {
+    positions,
+    sample: sampled.map((i) => {
+      obj.getMatrixAt(i, matrix);
+      return fromColumnMajor(matrix.elements);
+    }),
+    colors: obj.instanceColor ? sampled.map((i) => rgbArray(obj.getColorAt(i, color))) : null,
+    version: obj.instanceMatrix.version,
+  };
 }
 
 /**
@@ -145,12 +203,13 @@ function objectFacts(obj, idOf, cache) {
       depthWrite: material.depthWrite,
       blending: BLENDING_NAMES[material.blending] ?? null,
       side: SIDE_NAMES[material.side] ?? null,
+      flatShading: !!material.flatShading,
     };
   }
   const geometry = drawn && obj.geometry?.isBufferGeometry ? obj.geometry : null;
   if (geometry) {
     // vértices: em THREE.Points, cada vértice é um ponto desenhado; a amostra fica no espaço do objeto
-    const { sample, colors, curve } = samplesOf(geometry, cache);
+    const { sample, colors, curve, grid } = samplesOf(geometry, cache);
     facts.geometry = {
       // o id é o do trecho do código que criou a geometria (num laço, o mesmo para todas as que
       // ele criou), e o uuid é o da própria geometria: malhas que dividem uma têm o mesmo uuid
@@ -164,8 +223,12 @@ function objectFacts(obj, idOf, cache) {
       colors,
     };
     if (curve) facts.geometry.curve = curve;
+    if (grid) facts.geometry.grid = grid;
   }
-  if (obj.isInstancedMesh) facts.instances = obj.count;
+  if (obj.isInstancedMesh) {
+    facts.instances = obj.count;
+    facts.instanced = instancedFacts(obj);
+  }
   if (obj.isLight) {
     // decay e distance: como a luz pontual e o holofote enfraquecem com a distância
     facts.light = { color: rgbArray(obj.color), intensity: obj.intensity, decay: obj.decay ?? null, distance: obj.distance ?? null };
@@ -211,6 +274,22 @@ function fogFacts(fog) {
  */
 const MAX_COPIES = 199;
 
+const trailMatrix = new THREE.Matrix4();
+const trailVector = new THREE.Vector3();
+
+/**
+ * O ponto que o rastro de um objeto acompanha, com as matrizes de mundo em dia: a posição dele no
+ * mundo. Numa InstancedMesh, é o ponto (1, 1, 1) da primeira cópia, que sai do lugar quando ela
+ * anda, gira, cresce ou se inclina: o vento de uma floresta mexe as cópias, e não a malha.
+ */
+export function trailPoint(obj) {
+  if (obj.isInstancedMesh && obj.count > 0) {
+    obj.getMatrixAt(0, trailMatrix);
+    return trailVector.set(1, 1, 1).applyMatrix4(trailMatrix).applyMatrix4(obj.matrixWorld).toArray();
+  }
+  return trailVector.setFromMatrixPosition(obj.matrixWorld).toArray();
+}
+
 /** Se o rastro saiu do lugar: algum ponto a mais de um décimo de milésimo do primeiro. */
 function moved(trail) {
   const [, x, y, z] = trail[0];
@@ -221,8 +300,8 @@ function moved(trail) {
  * Fatos da cena: os objetos do código (`entries`, pares [id, objeto] ou [id, objetos], os que
  * aquela linha criou, na ordem), as luzes acesas, a câmera do código, a cor de fundo e a neblina.
  * Os fatos de um id são os do primeiro objeto, e os dos outros vão em `copies`. `trails` (id →
- * [[tempo, x, y, z], …], os lugares por onde o primeiro objeto passou enquanto a animação rodava)
- * vira o `trail` de quem saiu do lugar.
+ * [[tempo, x, y, z], …], os lugares por onde o primeiro objeto passou enquanto a animação rodava,
+ * pelo trailPoint) vira o `trail` de quem saiu do lugar.
  */
 export function sceneFacts({ scene, camera, entries, idOf, trails = null }) {
   scene.updateMatrixWorld(); // como o desenho faz a cada quadro: alvos de luz na cena inclusive

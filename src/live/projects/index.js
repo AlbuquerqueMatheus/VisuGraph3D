@@ -12,6 +12,7 @@
 // (`confirm`), e a pessoa diz que funcionou. O código deles é o do último passo no VisuGraph.
 
 import { CIDADE } from "./cidade.js";
+import { FLORESTA } from "./floresta.js";
 import { GALAXIA } from "./galaxia.js";
 import { MONTANHA_RUSSA } from "./montanhaRussa.js";
 import { SISTEMA_SOLAR } from "./sistemaSolar.js";
@@ -28,9 +29,7 @@ export const LEVELS = [
     id: "intermediario",
     title: "Intermediário",
     about: "Geometria feita à mão, milhares de objetos, curvas e animação.",
-    soon: [
-      { title: "Floresta de 10 mil árvores", about: "InstancedMesh: milhares de cópias numa só chamada de desenho." },
-    ],
+    soon: [],
   },
   {
     id: "avancado",
@@ -44,7 +43,7 @@ export const LEVELS = [
   },
 ];
 
-export const PROJECTS = [SISTEMA_SOLAR, VITRINE, CIDADE, GALAXIA, MONTANHA_RUSSA];
+export const PROJECTS = [SISTEMA_SOLAR, VITRINE, CIDADE, GALAXIA, MONTANHA_RUSSA, FLORESTA];
 
 export const projectById = (id) => PROJECTS.find((p) => p.id === id) ?? null;
 export const levelOf = (project) => LEVELS.find((l) => l.id === project.level);

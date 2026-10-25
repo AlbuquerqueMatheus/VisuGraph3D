@@ -225,6 +225,45 @@ export function animatedKeys(analysis) {
 }
 
 // ---------------------------------------------------------------------------
+// Cópias de uma InstancedMesh: nos fatos, `instanced` traz a posição de cada cópia (de 3 em 3
+// números, no espaço da malha), a matriz (por linhas) e a cor de uma amostra de até 1.024 cópias e
+// a versão das matrizes, que cresce a cada `instanceMatrix.needsUpdate = true`
+
+/** Uma matriz 4 × 4 vezes outra, as duas escritas por linhas. */
+export const multiply = (a, b) => a.map((row) => [0, 1, 2, 3].map((j) => row[0] * b[0][j] + row[1] * b[1][j] + row[2] * b[2][j] + row[3] * b[3][j]));
+
+/** A coluna k (0 = x, 1 = y, 2 = z) de uma matriz por linhas: para onde vai o eixo k, com o comprimento da escala. */
+export const columnOf = (m, k) => [m[0][k], m[1][k], m[2][k]];
+
+/** As posições, no mundo, das cópias que a InstancedMesh desenha (todas, até 20 mil). */
+export function instancePlaces(obj) {
+  const p = obj?.instanced?.positions ?? [];
+  const out = [];
+  for (let k = 0; k + 2 < p.length; k += 3) out.push(apply(obj.world, [p[k], p[k + 1], p[k + 2]]));
+  return out;
+}
+
+/** As matrizes, no mundo, da amostra de cópias da InstancedMesh: a da malha vezes a de cada cópia. */
+export const instanceMatrices = (obj) => (obj?.instanced?.sample ?? []).map((m) => multiply(obj.world, m));
+
+/** Matiz (0 a 360), saturação e luminosidade (0 a 1) de uma cor [r, g, b], de 0 a 1. */
+export function hslOf([r, g, b]) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l };
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { h: (h * 60 + 360) % 360, s: d / (1 - Math.abs(2 * l - 1)), l };
+}
+
+/** O valor abaixo do qual fica a fração q (de 0 a 1) dos valores: 0,5 é a mediana. */
+export function quantile(values, q) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * sorted.length)))];
+}
+
+// ---------------------------------------------------------------------------
 // Curvas e rastros: a curva que um tubo segue (`geometry.curve`, nos fatos) e o caminho que um
 // objeto fez enquanto a animação rodava (`trail`: [[tempo, x, y, z], …])
 

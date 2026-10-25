@@ -16,7 +16,7 @@ import { normalize, dot } from "../../lib/phong.js";
 import { shadePoint } from "../../lib/phong3d.js";
 import { localMatrix, objectMath, projectionMatrix, viewOf, worldMatrix } from "../mathModel.js";
 import { collectLights, createGlassMaterial, glassTerms, setLightUniforms, syncGlass } from "./glass.js";
-import { sceneFacts } from "./facts.js";
+import { sceneFacts, trailPoint } from "./facts.js";
 
 const LOOP_LIMIT_MS = { run: 2000, frame: 1000 };
 // O navegador aceita uns 16 contextos WebGL por página e derruba o mais antigo (o do visor)
@@ -1263,7 +1263,7 @@ function factsInfo(msg) {
 /**
  * Anota onde está, no mundo, o primeiro objeto de cada trecho do código, no tempo da animação: a
  * correção dos projetos mede por esse rastro se um objeto anda e com que velocidade (o carrinho
- * da montanha-russa). Roda depois do desenho, que deixa as matrizes de mundo em dia, e só nos
+ * da montanha-russa), ou se as cópias de uma InstancedMesh se mexem (o vento da floresta). Roda depois do desenho, que deixa as matrizes de mundo em dia, e só nos
  * quadros em que animar() rodou; cada execução começa um rastro novo. O rastro de um objeto só
  * começa quando ele sai do lugar (a partir da última vez em que foi visto parado): numa cena com
  * centenas de peças paradas, só o que anda ocupa memória.
@@ -1277,8 +1277,7 @@ function recordTrail(run) {
   for (const [id, list] of run.registry) {
     const obj = list[0];
     if (!obj?.isObject3D || obj.isScene) continue;
-    const e = obj.matrixWorld.elements;
-    const [x, y, z] = [e[12], e[13], e[14]];
+    const [x, y, z] = trailPoint(obj);
     let points = trail.points.get(id);
     if (!points) {
       const still = trail.still.get(id);

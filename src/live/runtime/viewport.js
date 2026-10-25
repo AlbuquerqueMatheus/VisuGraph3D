@@ -547,6 +547,7 @@ function buildHelpers(run) {
     else if (obj.isPointLight) helper = new THREE.PointLightHelper(obj, 0.15);
     else if (obj.isHemisphereLight) helper = new THREE.HemisphereLightHelper(obj, 0.3);
     if (helper) addHelper(run, helper, obj);
+    if (obj.isDirectionalLight) addShadowBox(run, obj);
   });
   if (run.camera) {
     // Um CameraHelper da câmera do código iria até o plano distante e cruzaria a cena toda:
@@ -571,6 +572,50 @@ function syncCameraIcon(helper) {
   icon.far = 0.6;
   icon.updateProjectionMatrix();
   icon.updateMatrixWorld();
+}
+
+/** As 12 arestas de uma caixa, pelos números dos cantos (bit 0: x, bit 1: y, bit 2: z). */
+const BOX_EDGES = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+
+/**
+ * A caixa que a câmera da sombra de uma luz direcional enxerga: só o que está dentro dela faz e
+ * recebe sombra. Aparece com a luz selecionada, se ela faz sombra (castShadow), e acompanha a
+ * câmera da sombra, que o desenho põe na luz, olhando para o alvo, a cada quadro.
+ */
+function addShadowBox(run, light) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(BOX_EDGES.length * 6), 3));
+  const material = new THREE.LineBasicMaterial({ color: 0xffc94d, depthTest: false, transparent: true, opacity: 0.85 });
+  const box = new THREE.LineSegments(geometry, material);
+  box.matrixAutoUpdate = false;
+  box.renderOrder = 1;
+  box.userData.target = light;
+  box.userData.shadow = true;
+  box.update = () => syncShadowBox(box);
+  box.dispose = () => {
+    geometry.dispose();
+    material.dispose();
+  };
+  run.helpers.push(box);
+  overlay.add(box);
+}
+
+function syncShadowBox(box) {
+  const camera = box.userData.target.shadow.camera;
+  // as bordas como a câmera ortográfica as usa na projeção, com o zoom
+  const cx = (camera.left + camera.right) / 2;
+  const cy = (camera.top + camera.bottom) / 2;
+  const dx = (camera.right - camera.left) / (2 * camera.zoom);
+  const dy = (camera.top - camera.bottom) / (2 * camera.zoom);
+  const corner = (i) => [i & 1 ? cx + dx : cx - dx, i & 2 ? cy + dy : cy - dy, i & 4 ? -camera.far : -camera.near];
+  const position = box.geometry.attributes.position;
+  BOX_EDGES.forEach(([a, b], k) => {
+    position.setXYZ(2 * k, ...corner(a));
+    position.setXYZ(2 * k + 1, ...corner(b));
+  });
+  position.needsUpdate = true;
+  box.geometry.computeBoundingSphere();
+  box.matrix.copy(camera.matrixWorld);
 }
 
 function addHelper(run, helper, target) {
@@ -1306,8 +1351,11 @@ function frame(time) {
   updateMarker(camera);
 
   if (run) {
+    const selected = state.selected ? targetOf(state.selected.id) : null;
     for (const h of run.helpers) {
-      h.visible = editorView && isShown(h.userData.target);
+      const target = h.userData.target;
+      // a caixa da sombra, só com a luz selecionada e se ela faz sombra
+      h.visible = editorView && isShown(target) && (!h.userData.shadow || (target.castShadow && target === selected));
       if (h.userData.icon) syncCameraIcon(h);
       h.update?.();
     }

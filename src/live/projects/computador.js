@@ -10,8 +10,8 @@ import { VERSIONS, cenaJs, indexHtml, mainJs, packageJson, viteConfig } from "..
  * código do último passo no VisuGraph e `options`, o que o main.js precisa saber dele
  * (sceneOptions, em src/live/export.js). `words`: `yours` (o que o projeto leva, "a sua galáxia"),
  * `browser` (por que o three.js vai para o navegador), `privates` (o que o cena.js não exporta),
- * `stretched` (o que sai deformado sem o aspect), `jump` (o que saltaria sem o teto do delta) e
- * `animarStep` (o passo que escreveu o animar).
+ * `stretched` (o que sai deformado sem o aspect) e, numa cena com animar, `jump` (o que saltaria
+ * sem o teto do delta) e `animarStep` (o passo que escreveu o animar).
  */
 export function computerStep({ id, title, end, options, words, goal, why, try: tries, confirm }) {
   return {
@@ -56,6 +56,11 @@ function setupOf(id, { yours }) {
 
 function filesOf({ id, title, end, options, words }) {
   const main = mainJs(options);
+  const cena = cenaJs(end, options);
+  // a última linha do cena.js: o export do que o main.js usa (sem animar, ele não leva a função)
+  const exports = cena.trimEnd().split("\n").at(-1);
+  const shared = ["a cena", options.camera && "a câmera", options.animar && "a função `animar`"].filter(Boolean);
+  const used = shared.length > 1 ? `${shared.slice(0, -1).join(", ")} e ${shared.at(-1)}` : shared[0];
   return [
     {
       path: "package.json",
@@ -114,15 +119,15 @@ function filesOf({ id, title, end, options, words }) {
       path: "src/cena.js",
       about: "O código do editor, com duas linhas a mais no começo e duas no fim.",
       from: end,
-      code: cenaJs(end, options),
+      code: cena,
       lines: [
         {
           code: 'import * as THREE from "three";',
           text: "No VisuGraph, `THREE` já existia. Aqui, o arquivo importa o three.js com esse nome: `* as THREE` junta tudo o que a biblioteca exporta num objeto só, e o resto do código continua igual.",
         },
         {
-          code: "export { cena, camera, animar };",
-          text: `Deixa o \`main.js\` usar a cena, a câmera e a função \`animar\`. O que um módulo não exporta fica só dele: ${words.privates} continuam visíveis só aqui dentro.`,
+          code: exports,
+          text: `Deixa o \`main.js\` usar ${used}. O que um módulo não exporta fica só dele: ${words.privates} continuam visíveis só aqui dentro.`,
         },
       ],
     },
@@ -197,6 +202,10 @@ function mainLines({ stretched, jump, animarStep }) {
     {
       code: "renderizador.setAnimationLoop((agora) => {",
       text: "Chama a função a cada quadro da tela, em geral 60 vezes por segundo, e para enquanto a aba está escondida. `agora` é o instante do quadro, em milissegundos.",
+    },
+    {
+      code: "renderizador.setAnimationLoop(() => {",
+      text: "Chama a função a cada quadro da tela, em geral 60 vezes por segundo, e para enquanto a aba está escondida. Sem `animar`, a cena fica parada, mas os controles mexem na câmera, e cada quadro desenha a cena de novo, vista do lugar novo.",
     },
     {
       code: "const delta = Math.min(relogio.getDelta(), 0.1);",

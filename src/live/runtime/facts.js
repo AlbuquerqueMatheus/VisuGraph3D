@@ -1,8 +1,8 @@
 // facts.js — o que o visor conta da cena para a correção dos desafios (src/live/challenges.js).
 //
 // Os fatos são números da cena como ela está, não do texto do código: posições de mundo,
-// matrizes, caixas, materiais, geometrias (quantos vértices e quais atributos), luzes e a câmera.
-// As cores vão como estão no código (sRGB).
+// matrizes, caixas, materiais, geometrias (quantos vértices e quais atributos), luzes e sombras,
+// a câmera e a neblina. As cores vão como estão no código (sRGB).
 
 import * as THREE from "three";
 import { fromColumnMajor } from "../../lib/transform3d.js";
@@ -38,10 +38,60 @@ const BLENDING_NAMES = Object.fromEntries(
 const SIDE_NAMES = { [THREE.FrontSide]: "FrontSide", [THREE.BackSide]: "BackSide", [THREE.DoubleSide]: "DoubleSide" };
 
 /**
+ * A amostra das posições e das cores de uma geometria, calculada uma vez só por geometria: as
+ * malhas que dividem uma geometria (os prédios de uma cidade, num laço) levam a mesma lista, e a
+ * mensagem do visor, que guarda as referências repetidas, leva essa lista uma vez só.
+ */
+function samplesOf(geometry, cache) {
+  let samples = cache.get(geometry);
+  if (!samples) {
+    samples = { sample: sampleOf(geometry.getAttribute("position")), colors: sampleOf(geometry.getAttribute("color")) };
+    cache.set(geometry, samples);
+  }
+  return samples;
+}
+
+/**
+ * A sombra de uma luz: o tamanho do mapa, os desvios e a câmera da sombra, com a matriz que leva
+ * um ponto do mundo para o espaço dela (`view`, por linhas). A matriz sai como o desenho a monta,
+ * com a câmera na luz olhando para o alvo; a luz pontual olha para os seis lados, sem uma só.
+ */
+function shadowFacts(light) {
+  const { camera, mapSize } = light.shadow;
+  const facts = {
+    mapSize: [mapSize.x, mapSize.y],
+    bias: light.shadow.bias,
+    normalBias: light.shadow.normalBias,
+    camera: {
+      type: camera.type,
+      // só a câmera ortográfica (a da luz direcional) tem as bordas
+      left: camera.left ?? null,
+      right: camera.right ?? null,
+      top: camera.top ?? null,
+      bottom: camera.bottom ?? null,
+      near: camera.near,
+      far: camera.far,
+      zoom: camera.zoom,
+    },
+    view: null,
+  };
+  if (!light.isPointLight && light.target?.isObject3D) {
+    const eye = new THREE.Camera();
+    eye.up.copy(camera.up);
+    eye.position.setFromMatrixPosition(light.matrixWorld);
+    eye.lookAt(new THREE.Vector3().setFromMatrixPosition(light.target.matrixWorld));
+    eye.updateMatrixWorld();
+    facts.view = fromColumnMajor(eye.matrixWorldInverse.elements);
+  }
+  return facts;
+}
+
+/**
  * Fatos de um objeto. `idOf(obj)` diz quem é o pai no código: o `parent` dos fatos é esse id,
  * null se o objeto está direto na cena (ou fora dela) e -1 se o pai não veio do código.
+ * `cache` guarda as amostras de cada geometria (samplesOf).
  */
-function objectFacts(obj, idOf) {
+function objectFacts(obj, idOf, cache) {
   obj.updateWorldMatrix(true, false);
   const box = new THREE.Box3().setFromObject(obj);
   const facts = {
@@ -50,6 +100,8 @@ function objectFacts(obj, idOf) {
     world: fromColumnMajor(obj.matrixWorld.elements),
     box: box.isEmpty() ? null : { min: box.min.toArray(), max: box.max.toArray() },
     parent: obj.parent && !obj.parent.isScene ? idOf(obj.parent) ?? -1 : null,
+    castShadow: obj.castShadow,
+    receiveShadow: obj.receiveShadow,
   };
   const drawn = obj.isMesh || obj.isPoints || obj.isLine;
   const material = drawn ? [].concat(obj.material)[0] : null;
@@ -75,14 +127,17 @@ function objectFacts(obj, idOf) {
   const geometry = drawn && obj.geometry?.isBufferGeometry ? obj.geometry : null;
   if (geometry) {
     // vértices: em THREE.Points, cada vértice é um ponto desenhado; a amostra fica no espaço do objeto
-    const position = geometry.getAttribute("position");
+    const { sample, colors } = samplesOf(geometry, cache);
     facts.geometry = {
-      id: idOf(geometry) ?? null, // malhas com a mesma geometria têm o mesmo id
+      // o id é o do trecho do código que criou a geometria (num laço, o mesmo para todas as que
+      // ele criou), e o uuid é o da própria geometria: malhas que dividem uma têm o mesmo uuid
+      id: idOf(geometry) ?? null,
+      uuid: geometry.uuid,
       type: geometry.type,
-      vertices: position?.count ?? 0,
+      vertices: geometry.getAttribute("position")?.count ?? 0,
       attributes: Object.keys(geometry.attributes),
-      sample: sampleOf(position),
-      colors: sampleOf(geometry.getAttribute("color")),
+      sample,
+      colors,
     };
   }
   if (obj.isInstancedMesh) facts.instances = obj.count;
@@ -91,6 +146,7 @@ function objectFacts(obj, idOf) {
     facts.light = { color: rgbArray(obj.color), intensity: obj.intensity, decay: obj.decay ?? null, distance: obj.distance ?? null };
     // o alvo só se atualiza se estiver na cena, como no desenho do Three.js
     if (obj.target?.isObject3D) facts.target = worldPositionOf(obj.target);
+    if (obj.shadow) facts.shadow = shadowFacts(obj);
   }
   return facts;
 }
@@ -118,24 +174,34 @@ function cameraFacts(camera) {
   };
 }
 
-/** Quantos objetos a mais de uma mesma linha do código (criados num laço) vão nos fatos, como `copies`. */
-const MAX_COPIES = 31;
+/** Neblina da cena: a linear (Fog), com o começo e o fim, ou a exponencial (FogExp2), com a densidade. */
+function fogFacts(fog) {
+  if (!fog?.color?.isColor) return null;
+  return { type: fog.isFogExp2 ? "FogExp2" : "Fog", color: "#" + fog.color.getHexString(), near: fog.near ?? null, far: fog.far ?? null, density: fog.density ?? null };
+}
+
+/**
+ * Quantos objetos a mais de uma mesma linha do código (criados num laço) vão nos fatos, como
+ * `copies`: com o primeiro, os 200 que o visor guarda de cada linha.
+ */
+const MAX_COPIES = 199;
 
 /**
  * Fatos da cena: os objetos do código (`entries`, pares [id, objeto] ou [id, objetos], os que
- * aquela linha criou, na ordem), as luzes acesas, a câmera do código e a cor de fundo. Os fatos
- * de um id são os do primeiro objeto, e os dos outros vão em `copies`.
+ * aquela linha criou, na ordem), as luzes acesas, a câmera do código, a cor de fundo e a neblina.
+ * Os fatos de um id são os do primeiro objeto, e os dos outros vão em `copies`.
  */
 export function sceneFacts({ scene, camera, entries, idOf }) {
   scene.updateMatrixWorld(); // como o desenho faz a cada quadro: alvos de luz na cena inclusive
   const objects = {};
+  const cache = new Map();
   const object3D = (obj) => obj && obj.isObject3D && !obj.isScene;
   for (const [id, value] of entries) {
     const [first, ...rest] = [].concat(value).filter(object3D);
     if (!first) continue;
-    objects[id] = objectFacts(first, idOf);
-    if (rest.length) objects[id].copies = rest.slice(0, MAX_COPIES).map((obj) => objectFacts(obj, idOf));
+    objects[id] = objectFacts(first, idOf, cache);
+    if (rest.length) objects[id].copies = rest.slice(0, MAX_COPIES).map((obj) => objectFacts(obj, idOf, cache));
   }
   const background = scene.background?.isColor ? "#" + scene.background.getHexString() : null;
-  return { objects, lights: sceneLights(scene), camera: camera ? cameraFacts(camera) : null, background };
+  return { objects, lights: sceneLights(scene), camera: camera ? cameraFacts(camera) : null, background, fog: fogFacts(scene.fog) };
 }

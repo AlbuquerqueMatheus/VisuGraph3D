@@ -75,15 +75,16 @@ describe("guia de projetos: o catálogo", () => {
   it("tem os três níveis, e cada projeto está num deles", () => {
     expect(LEVELS.map((l) => l.id)).toEqual(["facil", "intermediario", "avancado"]);
     for (const p of PROJECTS) expect(LEVELS.map((l) => l.id)).toContain(p.level);
-    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(6);
+    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(5);
     const soon = LEVELS.flatMap((l) => l.soon.map((s) => s.title));
     for (const p of PROJECTS) expect(soon, `${p.title} já existe`).not.toContain(p.title);
   });
 
-  it("os fáceis vêm primeiro: Sistema solar e Vitrine de materiais, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2", () => {
+  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2", () => {
     expect(PROJECTS.map((p) => [p.id, liveSteps(p).length, p.steps.filter(isComputer).length])).toEqual([
       ["sistema-solar", 8, 1],
       ["vitrine", 8, 1],
+      ["cidade", 8, 1],
       ["galaxia", 10, 2],
     ]);
   });
@@ -394,6 +395,141 @@ describe("conferências da vitrine", () => {
     expect(
       failing(variant("lampada", ["  lampada.position.x = Math.cos(tempo) * 4;\n  lampada.position.z = Math.sin(tempo) * 4;", "  lampada.position.set(Math.cos(tempo) * 4, 3.5, Math.sin(tempo) * 4);"])),
     ).toEqual([]);
+  });
+});
+
+describe("conferências da cidade", () => {
+  const variant = variantOf(projectById("cidade"));
+
+  it("o céu escuro ou frio, e a câmera de frente, perto ou olhando para fora, a conferência avisa", () => {
+    expect(failing(variant("palco", ['new THREE.Color("#f6a26b")', 'new THREE.Color("#1b2a4a")']))).toEqual(["O céu é de fim de tarde: uma cor clara e quente (o fundo é #1b2a4a, escuro demais para o fim da tarde)"]);
+    expect(failing(variant("palco", ['new THREE.Color("#f6a26b")', 'new THREE.Color("#a8c8ff")']))).toEqual([
+      "O céu é de fim de tarde: uma cor clara e quente (o fundo é #a8c8ff, uma cor fria: o céu do fim da tarde puxa para o laranja)",
+    ]);
+    expect(failing(variant("palco", ["camera.position.set(22, 19, 33);", "camera.position.set(0, 19, 40);"]))).toEqual([
+      "Ela vê a cidade na diagonal e de cima, de 15° a 45° (a câmera está só 0° fora do eixo z: quase de frente para a grade, ela vê uma face só de cada prédio)",
+    ]);
+    expect(failing(variant("palco", ["camera.position.set(22, 19, 33);", "camera.position.set(10, 9, 15);"]))).toEqual([
+      "A câmera fica do lado de fora da cidade, a uns 30 a 60 do centro (a câmera está a 19,7 do centro: perto demais, no meio dos prédios)",
+    ]);
+    expect(failing(variant("palco", ["camera.position.set(22, 19, 33);", "camera.position.set(22, 6, 33);"]))).toEqual([
+      "Ela vê a cidade na diagonal e de cima, de 15° a 45° (a câmera está só 7° acima do centro: os prédios da frente escondem a cidade)",
+    ]);
+    expect(failing(variant("palco", ["camera.lookAt(0, 1, 0);", "camera.lookAt(10, 1, 0);"]))).toEqual(["Ela olha para o centro da cidade (a câmera olha 13° para fora do centro da cidade)"]);
+  });
+
+  it("o chão de costas ou pequeno e a luz do céu forte ou com as cores trocadas, a conferência avisa", () => {
+    expect(failing(variant("chao", ["chao.rotation.x = -Math.PI / 2;", "chao.rotation.x = Math.PI / 2;"]))).toEqual([
+      "O chão é plano, deitado na altura 0 e virado para cima (o chão está de costas: a câmera, de cima, vê o verso, que não é pintado)",
+    ]);
+    expect(failing(variant("chao", ["new THREE.PlaneGeometry(200, 200)", "new THREE.PlaneGeometry(40, 40)"]))).toEqual([
+      "Ele é grande: vai pelo menos 60 para cada lado do centro (o chão vai só até 20 do centro: a borda dele aparece logo atrás da cidade)",
+    ]);
+    expect(failing(variant("chao", ['new THREE.HemisphereLight("#7f8fff", "#6b4a3a", 1)', 'new THREE.HemisphereLight("#7f8fff", "#6b4a3a", 3)']))).toEqual([
+      "Uma luz do céu (HemisphereLight) clareia a cena, azulada de cima (a intensidade é 3,00: forte demais, o lado da sombra ficaria quase tão claro quanto o do sol)",
+    ]);
+    expect(failing(variant("chao", ['new THREE.HemisphereLight("#7f8fff", "#6b4a3a", 1)', 'new THREE.HemisphereLight("#6b4a3a", "#7f8fff", 1)']))).toEqual([
+      "Uma luz do céu (HemisphereLight) clareia a cena, azulada de cima (o chão (a segunda cor) está mais claro que o céu)",
+    ]);
+    expect(failing(variant("chao", ['new THREE.HemisphereLight("#7f8fff", "#6b4a3a", 1)', 'new THREE.HemisphereLight("#ffd0a0", "#6b4a3a", 1)']))).toEqual([
+      "Uma luz do céu (HemisphereLight) clareia a cena, azulada de cima (a cor de cima é #ffd0a0: a luz do céu, a que vai pintar as sombras, é azulada)",
+    ]);
+    // a sugestão da câmera que desenha só até 60: o chão termina antes, e nada mais muda
+    expect(failing(variant("chao", ["16 / 9, 0.1, 200)", "16 / 9, 0.1, 60)"]))).toEqual([]);
+  });
+
+  it("sem o translate, o prédio afunda; subir o prédio metade da altura não muda a forma, que continua com o centro no meio", () => {
+    expect(failing(variant("predio", ["forma.translate(0, 0.5, 0);\n", ""]))).toEqual([
+      "O prédio fica no centro, de pé no chão (o prédio afunda 3,00 no chão)",
+      "A forma tem a base no chão: começa na altura 0 (a forma vai de −0,50 a 0,50 em y: com o centro no meio, a escala estica o prédio para baixo também)",
+    ]);
+    expect(failing(variant("predio", ["forma.translate(0, 0.5, 0);\n", ""], ["predio.scale.set(2, 6, 2);", "predio.scale.set(2, 6, 2);\npredio.position.y = 3;"]))).toEqual([
+      "A forma tem a base no chão: começa na altura 0 (a forma vai de −0,50 a 0,50 em y: com o centro no meio, a escala estica o prédio para baixo também)",
+    ]);
+    expect(failing(variant("predio", ["predio.scale.set(2, 6, 2);", "predio.scale.set(2, 2, 2);"]))).toEqual(["Ele é um prédio: mais alto que largo (o prédio tem 2,0 de altura e 2,0 de largura: parece mais um bloco)"]);
+    expect(failing(variant("predio", ["new THREE.MeshStandardMaterial({ color: \"#e8dfd2\" })", "new THREE.MeshBasicMaterial({ color: \"#e8dfd2\" })"]))).toEqual([
+      "O concreto reage à luz (o prédio é MeshBasicMaterial, que ignora a luz)",
+    ]);
+  });
+
+  it("outro sorteio ainda é a cidade; sem o centro mais alto, com as quadras grudadas ou com uma forma por prédio, a conferência avisa", () => {
+    expect(failing(variant("cidade", ["Math.sin(i * 17 + j * 31)", "Math.sin(i * 18 + j * 31)"]))).toEqual([]);
+    const flat = failing(variant("cidade", ["(12 - 2 * centro)", "12"]));
+    expect(flat).toHaveLength(1);
+    expect(flat[0]).toMatch(/^Os mais altos ficam perto do centro \(perto do centro, a altura média é \d,\d; mais longe, \d,\d\)$/);
+    expect(failing(variant("cidade", ["predio.position.set((i - 4) * 3.6, 0, (j - 4) * 3.6);", "predio.position.set((i - 4) * 1.8, 0, (j - 4) * 1.8);"]))).toEqual([
+      "Todos ficam de pé no chão, com ruas entre eles (dois prédios se encostam perto de (−7,2; −7,2))",
+    ]);
+    expect(failing(variant("cidade", ["const predio = new THREE.Mesh(forma, concreto);", "const predio = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), concreto);"]))).toEqual([
+      "Todos usam a mesma forma (cada prédio tem uma geometria só dele)",
+    ]);
+    expect(failing(variant("cidade", ["for (let i = 0; i < 9; i++) {", "for (let i = 0; i < 2; i++) {"]))[0]).toBe("A cidade tem pelo menos 25 prédios (há 18 prédios)");
+  });
+
+  it("o sol alto, branco, atrás dos prédios ou fraco, a conferência avisa; com o dobro da posição, a luz é a mesma", () => {
+    expect(failing(variant("sol", ["sol.position.set(-22, 12, 26);", "sol.position.set(-22, 40, 26);"]))).toEqual([
+      "Ele está baixo: de 10° a 30° acima do horizonte (o sol está 50° acima do horizonte: alto demais para o fim da tarde, e as sombras ficariam curtas)",
+    ]);
+    expect(failing(variant("sol", ['new THREE.DirectionalLight("#ffc27a", 3.5)', 'new THREE.DirectionalLight("#ffffff", 3.5)']))).toEqual([
+      "A luz dele é quente, mais vermelha que azul (a cor do sol é #ffffff: no fim da tarde, a luz do sol chega alaranjada)",
+    ]);
+    expect(failing(variant("sol", ["sol.position.set(-22, 12, 26);", "sol.position.set(-22, 12, -26);"]))).toEqual([
+      "Ele ilumina o lado dos prédios que a câmera vê (o sol está atrás dos prédios: a câmera só vê o lado da sombra)",
+    ]);
+    expect(failing(variant("sol", ['new THREE.DirectionalLight("#ffc27a", 3.5)', 'new THREE.DirectionalLight("#ffc27a", 1)']))).toEqual([
+      "Ele é a luz mais forte: intensidade de 2 a 6 (a intensidade é 1,00: fraca demais, a luz do céu ganha dele)",
+    ]);
+    expect(failing(variant("sol", ['new THREE.DirectionalLight("#ffc27a", 3.5)', 'new THREE.PointLight("#ffc27a", 3.5)']))[0]).toBe("O sol é uma luz direcional, na cena (sol é PointLight, não DirectionalLight)");
+    expect(failing(variant("sol", ["sol.position.set(-22, 12, 26);", "sol.position.set(-44, 24, 52);"]))).toEqual([]);
+    // a sugestão do sol do lado da câmera: os prédios ficam chapados, mas a luz ainda vale
+    expect(failing(variant("sol", ["sol.position.set(-22, 12, 26);", "sol.position.set(22, 12, 26);"]))).toEqual([]);
+  });
+
+  it("sem castShadow ou receiveShadow, a conferência diz onde falta", () => {
+    expect(failing(variant("sombras", ["sol.castShadow = true;\n", ""]))).toEqual(["O sol faz sombra (castShadow) (o sol não faz sombra: falta sol.castShadow = true)"]);
+    expect(failing(variant("sombras", ["chao.receiveShadow = true;\n", ""]))).toEqual([
+      "O chão e os prédios recebem sombra (receiveShadow) (o chão não recebe sombra: falta chao.receiveShadow = true)",
+    ]);
+    expect(failing(variant("sombras", ["    predio.castShadow = true;\n", ""]))).toEqual(["Todos os prédios fazem sombra (os prédios não fazem sombra: falta castShadow no laço)"]);
+    expect(failing(variant("sombras", ["predio.receiveShadow = true;", "predio.receiveShadow = false;"]))).toEqual([
+      "O chão e os prédios recebem sombra (receiveShadow) (81 prédios não recebem sombra: a sombra de um não aparece no outro)",
+    ]);
+  });
+
+  it("a caixa pequena, rasa ou com poucos pixels, a conferência avisa; o sol dando voltas continua coberto", () => {
+    const box = (n) => [-1, 1, 1, -1].map((sign, k) => [`sol.shadow.camera.${["left", "right", "top", "bottom"][k]} = ${sign * 22};`, `sol.shadow.camera.${["left", "right", "top", "bottom"][k]} = ${sign * n};`]);
+    expect(failing(variant("camera-sombra", ...box(10)))).toEqual([
+      "A caixa da sombra cobre a cidade inteira, vista do sol (vista do sol, a cidade vai de −21,7 a 21,7 de um lado ao outro, e a caixa, de −10,0 a 10,0)",
+    ]);
+    expect(failing(variant("camera-sombra", ["sol.shadow.mapSize.set(2048, 2048);", "sol.shadow.mapSize.set(256, 256);"]))).toEqual([
+      "A foto da sombra tem detalhe: cada pixel dela cobre no máximo 0,05 (com a caixa de 44 de largura e 256 pixels, cada pixel cobre 0,17: a borda da sombra sai em degraus)",
+    ]);
+    expect(failing(variant("camera-sombra", ["sol.shadow.camera.far = 80;", "sol.shadow.camera.far = 40;"]))).toEqual([
+      "Ela vai da frente da cidade até a ponta da sombra mais comprida (o fundo da caixa (far) está a 40,0 do sol, e a sombra mais comprida termina a 70,3 dele)",
+    ]);
+    expect(failing(variant("camera-sombra", ["sol.shadow.camera.near = 10;", "sol.shadow.camera.near = 20;"]))).toEqual([
+      "Ela vai da frente da cidade até a ponta da sombra mais comprida (a frente da caixa (near) está a 20,0 do sol, e a cidade começa a 15,1 dele: a caixa corta os prédios mais perto do sol)",
+    ]);
+    // o sol da sugestão, que dá voltas: de qualquer lado, na mesma altura e à mesma distância
+    for (const a of [0, 1, 2, 3, 4, 5]) {
+      const [x, z] = [Math.cos(a) * 34, Math.sin(a) * 34].map((c) => c.toFixed(3));
+      expect(failing(variant("camera-sombra", ["sol.position.set(-22, 12, 26);", `sol.position.set(${x}, 12, ${z});`])), `ângulo ${a}`).toEqual([]);
+    }
+  });
+
+  it("a neblina de outra cor, colada na câmera ou longe demais, a conferência avisa; a exponencial da sugestão vale", () => {
+    expect(failing(variant("neblina", ['new THREE.Fog("#f6a26b", 25, 70)', 'new THREE.Fog("#ffffff", 25, 70)']))).toEqual([
+      "A neblina tem a cor do céu (a neblina é #ffffff, e o céu, #f6a26b: o que está longe vira uma mancha de outra cor)",
+    ]);
+    expect(failing(variant("neblina", ['new THREE.Fog("#f6a26b", 25, 70)', 'new THREE.Fog("#f6a26b", 0, 70)']))).toEqual([
+      "A frente da cidade fica nítida, e o fundo quase some (o prédio mais perto já fica 27% coberto pela neblina: ela começa perto demais da câmera)",
+    ]);
+    expect(failing(variant("neblina", ['new THREE.Fog("#f6a26b", 25, 70)', 'new THREE.Fog("#f6a26b", 25, 150)']))).toEqual([
+      "A frente da cidade fica nítida, e o fundo quase some (o prédio mais longe fica só 21% coberto: a neblina quase não aparece)",
+      "A borda do chão some na neblina (a borda do chão fica a 100 da câmera, e só 65% coberta pela neblina)",
+    ]);
+    expect(failing(variant("neblina", ['new THREE.Fog("#f6a26b", 25, 70)', 'new THREE.Fog("#f6a26b", 25, 40)']))).toEqual([]);
+    expect(failing(variant("neblina", ['cena.fog = new THREE.Fog("#f6a26b", 25, 70);', 'cena.fog = new THREE.FogExp2("#f6a26b", 0.02);']))).toEqual([]);
   });
 });
 

@@ -222,4 +222,33 @@ cena.add(ambiente);`);
     expect(facts.objects.lampada.light).toMatchObject({ intensity: 80, distance: 20, decay: 1 });
     expect(facts.objects.ambiente.light).toMatchObject({ intensity: 0.2, distance: null, decay: null });
   });
+
+  it("dizem a aspereza e o metal dos materiais com base física, e qual geometria cada malha usa", () => {
+    const facts = factsOf(`const cena = new THREE.Scene();
+const forma = new THREE.SphereGeometry();
+const fosca = new THREE.Mesh(forma, new THREE.MeshStandardMaterial());
+cena.add(fosca);
+const metal = new THREE.Mesh(forma, new THREE.MeshPhysicalMaterial({ roughness: 0.2, metalness: 1 }));
+cena.add(metal);
+const plastico = new THREE.Mesh(new THREE.SphereGeometry(), new THREE.MeshPhongMaterial());
+cena.add(plastico);`);
+    expect(facts.objects.fosca.material).toMatchObject({ roughness: 1, metalness: 0 });
+    expect(facts.objects.metal.material).toMatchObject({ roughness: 0.2, metalness: 1 });
+    expect(facts.objects.plastico.material).toMatchObject({ roughness: null, metalness: null });
+    expect([facts.objects.fosca, facts.objects.metal, facts.objects.plastico].map((o) => o.geometry.id)).toEqual(["forma", "forma", null]);
+  });
+
+  it("os objetos que uma linha criou num laço vão como cópias do primeiro, até 31", () => {
+    const cena = new THREE.Scene();
+    const bolas = Array.from({ length: 40 }, (_, i) => {
+      const bola = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial());
+      bola.position.x = i * 2;
+      cena.add(bola);
+      return bola;
+    });
+    const { objects } = sceneFacts({ scene: cena, camera: null, entries: [[7, bolas]], idOf: () => undefined });
+    expect(objects[7].worldPosition).toEqual([0, 0, 0]);
+    expect(objects[7].copies).toHaveLength(31);
+    expect(objects[7].copies.slice(0, 3).map((c) => c.worldPosition[0])).toEqual([2, 4, 6]);
+  });
 });

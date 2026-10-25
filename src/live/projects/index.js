@@ -13,6 +13,7 @@
 
 import { GALAXIA } from "./galaxia.js";
 import { SISTEMA_SOLAR } from "./sistemaSolar.js";
+import { VITRINE } from "./vitrine.js";
 
 export const LEVELS = [
   {
@@ -20,7 +21,6 @@ export const LEVELS = [
     title: "Fácil",
     about: "Cena, malhas, materiais e luz.",
     soon: [
-      { title: "Vitrine de materiais", about: "Lambert, Phong e Standard lado a lado, sob as mesmas luzes." },
       { title: "Cidade ao entardecer", about: "Luz direcional, sombras e neblina." },
     ],
   },
@@ -45,7 +45,7 @@ export const LEVELS = [
   },
 ];
 
-export const PROJECTS = [SISTEMA_SOLAR, GALAXIA];
+export const PROJECTS = [SISTEMA_SOLAR, VITRINE, GALAXIA];
 
 export const projectById = (id) => PROJECTS.find((p) => p.id === id) ?? null;
 export const levelOf = (project) => LEVELS.find((l) => l.id === project.level);

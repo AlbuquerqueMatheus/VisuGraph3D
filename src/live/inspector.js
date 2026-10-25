@@ -70,7 +70,7 @@ export class Inspector {
   renderList() {
     const a = this.analysis;
     const items = a.ok ? a.objects.filter((o) => isObject3DKind(o.kind)) : [];
-    const signature = items.map((o) => `${o.id}:${o.name}:${o.className}:${o.context}`).join("|") + `#${this.selectedId}`;
+    const signature = items.map((o) => `${o.id}:${o.name}:${o.local}:${o.className}:${o.context}`).join("|") + `#${this.selectedId}`;
     if (signature === this.listSignature) return;
     this.listSignature = signature;
     this.listEl.replaceChildren(
@@ -78,7 +78,8 @@ export class Inspector {
         const button = el(
           "button",
           { type: "button", class: "lv-object", "data-id": o.id, "data-kind": o.kind, "aria-pressed": String(o.id === this.selectedId) },
-          el("span", { class: "lv-object__name", text: o.name || `(sem nome)` }),
+          // um objeto criado num laço não tem nome, mas a variável local dele diz o que é
+          el("span", { class: "lv-object__name", text: o.name || o.local || `(sem nome)` }),
           el("span", { class: "lv-object__class", text: o.className }),
           o.context !== "top" ? el("span", { class: "lv-badge", text: CONTEXT_LABEL[o.context] }) : null,
         );
@@ -103,7 +104,7 @@ export class Inspector {
     const head = el(
       "header",
       { class: "lv-props__head" },
-      el("h2", { text: obj.name || `(${kind} sem nome)` }),
+      el("h2", { text: obj.name || obj.local || `(${kind} sem nome)` }),
       el(
         "p",
         {},

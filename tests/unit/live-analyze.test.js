@@ -111,6 +111,9 @@ for (let i = 0; i < 3; i++) {
     expect(mesh.context).toBe("loop");
     expect(mesh.props["position.x"]).toMatchObject({ status: "readonly", reason: "loop" });
     expect(a.diagnostics.some((d) => d.severity === "info" && /laço/.test(d.message))).toBe(true);
+    // sem nome, porque são vários, mas com a variável local, por onde a correção dos projetos os acha
+    expect(mesh).toMatchObject({ name: null, local: "m" });
+    expect(a.objects.find((o) => o.className === "BoxGeometry").local).toBeNull();
   });
 
   it("avisa quando um objeto com nome nunca é adicionado à cena (a câmera não precisa)", () => {

@@ -106,6 +106,8 @@ Quando o valor de uma propriedade depende de algo que a cena não consegue reesc
 | O objeto é criado dentro de um laço, função, `if` ou de `animar()` | `for (…) { cena.add(new THREE.Mesh(…)) }` |
 | O objeto não está numa variável | `cena.add(new THREE.Mesh(…))` |
 
+Na lista de objetos, um objeto criado num laço, numa função ou num `if` tem uma marca que diz onde ele nasce e aparece pela variável que o guarda ali: `for (…) { const pedestal = new THREE.Mesh(…); … }` aparece como `pedestal`, com a marca **laço**. É uma linha só do código, mesmo que ela crie vários objetos.
+
 ## A aba Matemática
 
 Com um objeto selecionado, a aba **Matemática** mostra as contas que levam esse objeto até a tela, com os números da cena como ela está agora:
@@ -144,7 +146,7 @@ A aba **Desafios** tem 10 desafios em três trilhas. Cada desafio troca o códig
 
 ## Projetos
 
-A aba **Projetos** é um guia de projetos: cada projeto constrói uma cena completa do zero, em passos, e explica cada linha e o porquê de cada decisão. Os projetos se dividem em três níveis: **Fácil** (cena, malhas, materiais e luz), **Intermediário** (geometria feita à mão, milhares de objetos, curvas e animação) e **Avançado** (shaders). Há dois projetos prontos, o **Sistema solar** (fácil, 9 passos: 8 no VisuGraph e 1 no seu computador) e o **Gerador de galáxias** (intermediário, 12 passos: 10 no VisuGraph e 2 no seu computador), e os outros aparecem na lista como "em breve".
+A aba **Projetos** é um guia de projetos: cada projeto constrói uma cena completa do zero, em passos, e explica cada linha e o porquê de cada decisão. Os projetos se dividem em três níveis: **Fácil** (cena, malhas, materiais e luz), **Intermediário** (geometria feita à mão, milhares de objetos, curvas e animação) e **Avançado** (shaders). Há três projetos prontos, o **Sistema solar** e a **Vitrine de materiais** (fáceis, 9 passos cada: 8 no VisuGraph e 1 no seu computador) e o **Gerador de galáxias** (intermediário, 12 passos: 10 no VisuGraph e 2 no seu computador), e os outros aparecem na lista como "em breve".
 
 O **Sistema solar** é sobre o grafo de cena: cada órbita é um grupo que gira, e o que está dentro dele vai junto.
 
@@ -159,6 +161,20 @@ O **Sistema solar** é sobre o grafo de cena: cada órbita é um grupo que gira,
 | 7. Saturno e o anel | o eixo inclinado com `degToRad`, a `RingGeometry` deitada, `DoubleSide` e o anel filho de Saturno |
 | 8. Os caminhos | `TorusGeometry` fina, um material para duas malhas, `transparent` e `opacity` |
 | 9. No seu computador | o projeto Vite baixado, como no passo 11 da galáxia, com o sistema solar em `src/cena.js` |
+
+A **Vitrine de materiais** é sobre a conta da luz: a mesma esfera três vezes, sob as mesmas luzes, com Lambert, Phong e Standard.
+
+| Passo | O que entra |
+| --- | --- |
+| 1. O palco | a cena com fundo escuro e a câmera de frente, com campo de visão de 40° e longe o bastante para a vitrine caber no visor, que é mais alto que largo (o campo de visão é o vertical) |
+| 2. Três esferas, sem luz | uma `SphereGeometry` para as três malhas, ainda de `MeshBasicMaterial` |
+| 3. A luz e o Lambert | uma `DirectionalLight` como o sol, uma `HemisphereLight` como o céu e a esfera da esquerda de `MeshLambertMaterial`: a difusa, pelo cosseno n·l |
+| 4. Phong: o brilho | a do meio de `MeshPhongMaterial`, com `specular` e `shininess`: o brilho que depende do olho (Phong e Blinn-Phong) |
+| 5. Standard: aspereza e metal | a da direita de `MeshStandardMaterial`, com `roughness` e `metalness`: o desenho com base física |
+| 6. O chão e os pedestais | um material para quatro malhas e um laço `for…of` que põe um pedestal debaixo de cada esfera |
+| 7. A escala de aspereza | um laço `for` que cria cinco amostras, com a aspereza de 0 a 1 |
+| 8. A lâmpada que passeia | uma `PointLight` com um bulbo filho, que dá voltas pelo cosseno e o seno do tempo em `animar(tempo)` |
+| 9. No seu computador | o projeto Vite baixado, como nos outros projetos, com a vitrine em `src/cena.js` |
 
 O **Gerador de galáxias** põe 50 mil estrelas num objeto só.
 
@@ -183,16 +199,16 @@ Cada passo tem:
 - **Linha por linha**: cada trecho novo com a explicação. Passar o mouse num trecho marca onde ele está no editor, e clicar leva até lá.
 - **Por que assim**: as decisões do passo, como "por que um objeto com mil pontos, e não mil objetos?".
 - **Experimente**: mudanças para fazer e ver o que acontece.
-- **Confira na cena**: como nos desafios, a conferência olha a cena que está rodando, não o texto, então qualquer código que chegue ao resultado vale. De uma nuvem de pontos o visor manda uma amostra de até 1.024 pontos, com as cores deles, espalhados pela razão áurea para não caírem sempre no mesmo braço. Na amostra, a conferência mede a altura e o contorno do disco, os braços e a curvatura da espiral (desenrolando os ângulos pela espiral e procurando o número de braços que mais se repete), a espessura e as cores do centro e da borda. No Sistema solar, ela mede as esferas pela amostra de vértices (todos à mesma distância do centro, em muitas direções, o que um cubo não passa), as distâncias no mundo, o pai de cada objeto na árvore, a luz que chega à Terra pela mesma conta do Three.js (a intensidade vezes o quanto ela enfraquece com a distância, com `decay` e `distance`), a inclinação do eixo de Saturno, se o anel fica no plano do equador e se cada caminho é um círculo deitado com o raio da órbita. Ela também olha o fundo da cena e o que `animar()` muda.
+- **Confira na cena**: como nos desafios, a conferência olha a cena que está rodando, não o texto, então qualquer código que chegue ao resultado vale. De uma nuvem de pontos o visor manda uma amostra de até 1.024 pontos, com as cores deles, espalhados pela razão áurea para não caírem sempre no mesmo braço. Na amostra, a conferência mede a altura e o contorno do disco, os braços e a curvatura da espiral (desenrolando os ângulos pela espiral e procurando o número de braços que mais se repete), a espessura e as cores do centro e da borda. No Sistema solar, ela mede as esferas pela amostra de vértices (todos à mesma distância do centro, em muitas direções, o que um cubo não passa), as distâncias no mundo, o pai de cada objeto na árvore, a luz que chega à Terra pela mesma conta do Three.js (a intensidade vezes o quanto ela enfraquece com a distância, com `decay` e `distance`), a inclinação do eixo de Saturno, se o anel fica no plano do equador e se cada caminho é um círculo deitado com o raio da órbita. Na Vitrine, ela confere o tipo e os números de cada material (`specular`, `shininess`, `roughness`, `metalness`), se as três esferas usam a mesma geometria, se o chão está deitado com a frente para cima e se a câmera fica longe o bastante para a vitrine caber no visor com o campo de visão dela, e conta os pedestais e as amostras que os laços criam: os objetos que uma mesma linha cria num laço vão nos fatos como cópias do primeiro (até 32 ao todo), e a conferência os acha pela variável do laço. Ela também olha o fundo da cena e o que `animar()` muda.
 
 A faixa acima do código mostra o projeto, o passo e quantas conferências já passaram. Os passos feitos ficam marcados na fila de passos do alto do painel, e o quadro de "feito" leva ao próximo.
 
 - **Código e progresso**: cada projeto guarda o próprio código no navegador, separado do editor livre e dos desafios. Abrir um passo adiante leva o editor ao começo dele quando o código é o de um passo anterior do guia; voltar a um passo anterior mantém o código e avisa que o editor está adiantado. Os passos feitos e o passo aberto ficam guardados, e recarregar a página volta ao passo aberto. **← Todos os projetos** volta à lista e ao editor livre, e abrir o projeto de novo retoma o primeiro passo ainda não feito.
-- **Links**: `index-3d.html?projeto=sistema-solar` (ou `?projeto=galaxia`) abre o projeto no passo aberto da última vez ou no primeiro ainda não feito, e `?projeto=galaxia&passo=4` (ou `&passo=disco`) abre um passo pelo número ou pelo nome. O parâmetro sai da URL ao abrir, como nos desafios. A seção **Projetos** da tela inicial mostra os projetos prontos, quantos passos já foram feitos em cada um e os níveis.
+- **Links**: `index-3d.html?projeto=sistema-solar` (ou `?projeto=vitrine`, `?projeto=galaxia`) abre o projeto no passo aberto da última vez ou no primeiro ainda não feito, e `?projeto=galaxia&passo=4` (ou `&passo=disco`) abre um passo pelo número ou pelo nome. O parâmetro sai da URL ao abrir, como nos desafios. A seção **Projetos** da tela inicial mostra os projetos prontos, quantos passos já foram feitos em cada um e os níveis.
 
 Os últimos passos são **no seu computador** (a bolinha deles na fila é tracejada): o projeto sai do VisuGraph e roda com Node.js. Eles não mudam o código do editor, que continua no visor com a cena do último passo no VisuGraph, e não conferem a cena. O passo que baixa o projeto é o mesmo em todos (`src/live/projects/computador.js`): só mudam o nome do projeto e alguns trechos dos textos. No lugar do código e da conferência, cada um tem:
 
-- **No seu computador**: os passos no terminal, com os comandos (e um botão de copiar), o link para o capítulo [Seu computador](../computador.html) e o botão de baixar. **Baixar sistema-solar.zip** (passo 9) e **Baixar galaxia.zip** (passo 11) montam o projeto Vite com o código que está no editor, a cena de quem fez o projeto; no passo 12 da galáxia, **Baixar galaxia-painel.zip** traz o projeto pronto do passo, com o lil-gui, para comparar.
+- **No seu computador**: os passos no terminal, com os comandos (e um botão de copiar), o link para o capítulo [Seu computador](../computador.html) e o botão de baixar. **Baixar sistema-solar.zip** e **Baixar vitrine.zip** (passo 9) e **Baixar galaxia.zip** (passo 11) montam o projeto Vite com o código que está no editor, a cena de quem fez o projeto; no passo 12 da galáxia, **Baixar galaxia-painel.zip** traz o projeto pronto do passo, com o lil-gui, para comparar.
 - **Arquivo por arquivo**: cada arquivo do projeto, inteiro ou só o que muda nele (no passo 12, a diferença do `src/cena.js` ignora o recuo das linhas que entram na função), com as linhas explicadas embaixo. Passar o mouse numa explicação acende as linhas no arquivo.
 - **Confira no seu computador**: o que deve acontecer lá, e o botão **Funcionou no meu computador**, que marca o passo como feito. Um link leva aos problemas comuns do capítulo.
 
@@ -327,10 +343,10 @@ src/live/app.js    liga editor, visor (bridge.js, via postMessage) e as abas do 
                    Desafios (challengesPanel.js, com os desafios e a correção de challenges.js) e
                    Projetos (projectPanel.js)
 src/live/projects/ o guia de projetos: os níveis, os projetos e a diferença entre passos (index.js),
-                   cada projeto com os seus passos (sistemaSolar.js, galaxia.js), o código dos
-                   passos montado linha a linha (source.js), o passo no seu computador, comum a
-                   todos (computador.js), e as medidas da cena que as conferências usam, como o
-                   raio de uma esfera e os braços de uma galáxia (checks.js)
+                   cada projeto com os seus passos (sistemaSolar.js, vitrine.js, galaxia.js), o
+                   código dos passos montado linha a linha (source.js), o passo no seu computador,
+                   comum a todos (computador.js), e as medidas da cena que as conferências usam,
+                   como o raio de uma esfera e os braços de uma galáxia (checks.js)
 src/live/export.js a cena fora do VisuGraph: a página HTML e os arquivos do projeto Vite, que os
                    passos no computador também mostram; src/lib/zip.js monta o .zip
 src/live/study.js  o modo de estudo e o registro de uso; studySummary.js e studyPage.js, o resumo
@@ -340,4 +356,4 @@ src/lib/           as contas 3D da aba Matemática e da caixa de vidro (transfor
 
 A cada mudança no texto, `analyze()` lê o código e gera um id para cada `new THREE.X(...)`, com os trechos que o criam e alteram e, para cada propriedade, o literal que a define ou o motivo de não ser editável. `instrument()` acrescenta ao código, sem mudar as linhas, o registro de cada objeto criado e a verificação de tempo em cada laço. Uma edição pela cena vira `planEdit()` ou `planTransform()`, que devolvem as trocas de texto aplicadas no editor como uma transação comum (por isso `Ctrl+Z` desfaz). Durante um arraste, o visor muda a propriedade direto e o código é atualizado sem rodar; ao soltar, o código roda uma vez para confirmar que a cena é o que ele diz.
 
-Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node, o dos desafios resolve cada um com a cena de verdade, e o dos projetos confere que o código de cada passo passa nas conferências dele e que o código de antes não passa, que os erros mais comuns são avisados (a Terra fora do grupo, o anel em pé, a luz fraca de código antigo), que o projeto baixado tem os arquivos que os passos no computador explicam e que o `cena.js` do painel gera uma galáxia nova liberando a antiga), e os da página em `tests/e2e/modo-3d.spec.js`, `matematica.spec.js` (as contas do painel contra o Three.js e contra os pixels da tela), `desafios.spec.js`, `projetos.spec.js`, `estudo.spec.js` e `resumo-estudo.spec.js`.
+Os testes do motor ficam em `tests/unit/live-*.test.js` (o de instrumentação roda o código instrumentado com o Three.js de verdade no Node, o dos desafios resolve cada um com a cena de verdade, e o dos projetos confere que o código de cada passo passa nas conferências dele e que o código de antes não passa, que os erros mais comuns são avisados (a Terra fora do grupo, o anel em pé, a luz fraca de código antigo, o chão de costas, o `specular` padrão do Phong), que o projeto baixado tem os arquivos que os passos no computador explicam e que o `cena.js` do painel gera uma galáxia nova liberando a antiga), e os da página em `tests/e2e/modo-3d.spec.js`, `matematica.spec.js` (as contas do painel contra o Three.js e contra os pixels da tela), `desafios.spec.js`, `projetos.spec.js`, `estudo.spec.js` e `resumo-estudo.spec.js`.

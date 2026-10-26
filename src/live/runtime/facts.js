@@ -225,6 +225,7 @@ function objectFacts(obj, idOf, cache) {
       blending: BLENDING_NAMES[material.blending] ?? null,
       side: SIDE_NAMES[material.side] ?? null,
       flatShading: !!material.flatShading,
+      wireframe: !!material.wireframe,
     };
     if (material.isShaderMaterial) facts.material.uniforms = uniformsOf(material.uniforms);
   }

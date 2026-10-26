@@ -11,7 +11,7 @@
 // não bate, ela tenta os erros comuns (o sinal da luz, o sRGB esquecido, o brilho de outro passo)
 // para dizer qual foi.
 
-import { check, deg, dist, dot, fmt, pct, quantile, wait } from "./checks.js";
+import { add, bytes, check, deg, dist, dot, fmt, gap, hex, pct, quantile, scale, srgbBytes, sub, unit, wait } from "./checks.js";
 import { computerStep } from "./computador.js";
 import { by, codeAt as sourceAt, during, from } from "./source.js";
 
@@ -161,36 +161,13 @@ const codeAt = (n) => sourceAt(SOURCE, n);
 // ---------------------------------------------------------------------------
 // Conferências: os pixels da esfera (`shader`, nos fatos) contra a conta de cada passo
 
-const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const mul = (a, b) => [a[0] * b[0], a[1] * b[1], a[2] * b[2]];
-const scale = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
-const clamp01 = (x) => Math.min(1, Math.max(0, x));
-
-/** A mesma direção, com comprimento 1. */
-function unit(v) {
-  const n = Math.hypot(...v);
-  return n ? scale(v, 1 / n) : [0, 0, 0];
-}
 
 /** O reflect do GLSL: a direção i espelhada na normal n, i − 2(n·i)n. */
 const reflect = (i, n) => sub(i, scale(n, 2 * dot(n, i)));
 
-/** Um número do espaço linear em sRGB, com a fórmula do padrão, como a paraSRGB do shader. */
-function toSRGB(x) {
-  const c = clamp01(x);
-  return c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
-}
-
 /** Um número em sRGB (de 0 a 1, como na cor do código) no espaço linear. */
 const toLinear = (x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
-
-/** Uma cor de 0 a 1 em níveis de 0 a 255, como o pixel guarda: sem conversão, ou passando para sRGB. */
-const bytes = (rgb) => rgb.map((x) => Math.round(clamp01(x) * 255));
-const srgbBytes = (rgb) => bytes(rgb.map(toSRGB));
-
-/** Um pixel [r, g, b] (de 0 a 255) escrito como no código: #3f7fd9. */
-const hex = (c) => `#${c.map((x) => Math.round(x).toString(16).padStart(2, "0")).join("")}`;
 
 /** Uma cor do espaço linear (a de um uniform) escrita como no código, em sRGB. */
 const hexOf = (rgb) => hex(srgbBytes(rgb));
@@ -200,9 +177,6 @@ const number = (x) => fmt(x, Number.isInteger(x) ? 0 : 2);
 
 /** Um vetor escrito como nos textos: (0,60; 0,80; 0,00). */
 const vec = (v, d = 2) => `(${v.map((c) => fmt(c, d)).join("; ")})`;
-
-/** O maior desvio entre r, g e b de duas cores. */
-const gap = (a, b) => Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
 
 const STAGE = { vertex: "shader de vértices", fragment: "shader de fragmentos" };
 

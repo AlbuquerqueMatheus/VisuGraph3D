@@ -6,6 +6,7 @@ import { code, pasteCode, status, viewport } from "./live.js";
 import { CIDADE } from "../../src/live/projects/cidade.js";
 import { FLORESTA } from "../../src/live/projects/floresta.js";
 import { GALAXIA } from "../../src/live/projects/galaxia.js";
+import { MAR } from "../../src/live/projects/mar.js";
 import { MONTANHA_RUSSA } from "../../src/live/projects/montanhaRussa.js";
 import { PHONG } from "../../src/live/projects/phong.js";
 import { SISTEMA_SOLAR } from "../../src/live/projects/sistemaSolar.js";
@@ -118,13 +119,14 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
   await page.click("#lv-tab-project");
   await expect(panel(page).locator(".lv-pj-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
-  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(2);
+  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(1);
   await expect(panel(page).locator('.lv-pj-card[data-project="sistema-solar"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="vitrine"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="cidade"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="montanha-russa"] .lv-pj-card__progress')).toHaveText("12 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="floresta"] .lv-pj-card__progress')).toHaveText("12 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="phong"] .lv-pj-card__progress')).toHaveText("13 passos");
+  await expect(panel(page).locator('.lv-pj-card[data-project="mar"] .lv-pj-card__progress')).toHaveText("13 passos");
   const card = panel(page).locator('.lv-pj-card[data-project="galaxia"]');
   await expect(card.locator(".lv-pj-card__progress")).toHaveText("12 passos");
 
@@ -466,6 +468,78 @@ test("projetos: no Phong escrito à mão, o erro do shader aparece na linha dele
   for (const file of PHONG.steps[12].files) expect(files[file.path], file.path).toBe(file.code);
   expect(JSON.parse(files["package.json"]).name).toBe("phong");
   expect(files["src/cena.js"]).toContain("const fragmentShader = /* glsl */ `");
+  expect(files["src/main.js"]).toContain("new OrbitControls(");
+  expect(files["src/main.js"], "os controles giram em volta do meio, onde a câmera olha").not.toContain("controles.target.set");
+});
+
+test("projetos: no Mar com ondas na GPU, a conferência mede a superfície que o shader desenhou, espera as ondas andarem, e o projeto sai para o computador", async ({ page }) => {
+  test.slow(); // a conferência desenha a superfície do mar para medir cada ponto, e as ondas andam alguns segundos de verdade
+  await page.goto("index-3d.html?projeto=mar&passo=2");
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(panel(page).locator(".lv-ch__kicker")).toHaveText("Avançado · Mar com ondas na GPU");
+  await expect(title(page)).toHaveText("2. O primeiro shader");
+  await expect(page.locator("#lv-codebar")).toContainText("Mar com ondas na GPU · passo 2 de 13");
+  await expect(result(page)).toContainText("(o mar é MeshBasicMaterial, e não um ShaderMaterial)", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // um inteiro vezes um número com casas decimais não compila no GLSL: o erro vai para a linha dele, e a conferência manda olhar a barra
+  await stepButton(page, 3).click();
+  await expect(title(page)).toHaveText("3. Uma onda");
+  const broken = MAR.steps[2].code.replace("sin(mundo.x)", "2 * sin(mundo.x)");
+  expect(broken).not.toBe(MAR.steps[2].code);
+  const line = broken.split("\n").findIndex((l) => l.includes("2 * sin(mundo.x)")) + 1;
+  await pasteCode(page, broken);
+  await expect(status(page)).toContainText(`Linha ${line}: No shader de vértices: No GLSL, não dá para fazer int * float`, { timeout: 30_000 });
+  await expect(page.locator(".cm-lint-marker-error")).toHaveCount(1);
+  await expect(result(page)).toContainText("(o shader de vértices não compila: a barra embaixo do código diz o erro e a linha)", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+  await expect(page.locator(".cm-lint-marker-error")).toHaveCount(0);
+
+  // com as ondas andando, a conferência espera o tempo correr; com a animação parada, ela pede o ▶
+  await stepButton(page, 4).click();
+  await expect(title(page)).toHaveText("4. As ondas andam");
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+  await page.click("#lv-play");
+  await expect(page.locator("#lv-play")).toHaveAttribute("aria-pressed", "false");
+  await page.click("#lv-restart");
+  await expect(result(page, 1)).toContainText("(a animação está parada: aperte ▶ na barra de cima para as ondas andarem)", { timeout: 30_000 });
+  await expect(result(page, 1)).toHaveAttribute("data-ok", "pending");
+  await expect(done(page)).toBeHidden();
+  await page.click("#lv-play");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // ondas altas demais dobram as cristas: a conferência mede e diz o porquê
+  await stepButton(page, 8).click();
+  await expect(title(page)).toHaveText("8. Ondas de Gerstner");
+  const steep = MAR.steps[7].code.replace("uAltura: { value: 0.5 }", "uAltura: { value: 1.7 }");
+  expect(steep).not.toBe(MAR.steps[7].code);
+  await pasteCode(page, steep);
+  await expect(result(page, 1)).toContainText("(com 1,70 de altura e 10,00 de comprimento, a altura vezes o k dá 1,07: de 1 para cima, as cristas se dobram em laçadas)", { timeout: 30_000 });
+  await expect(result(page)).toContainText("(as cristas se dobram em laçadas:", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // no último passo no VisuGraph, a conferência refaz a conta da cor de cada ponto do mar, com o sol e a neblina
+  await stepButton(page, 12).click();
+  await expect(title(page)).toHaveText("12. O horizonte");
+  await expect(codeState(page), "o passo 12 começa do fim do passo 11, sem a neblina").toHaveText(/^Escreva no editor/);
+  await expect(result(page)).toContainText("(o material do mar não tem o uniform uNeblinaPerto)", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(codeState(page)).toHaveText("O editor já tem o código deste passo.");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+
+  // o passo no computador começa do fim do passo 12, com os dois shaders no cena.js e os controles do mouse no main.js
+  await stepButton(page, 13).click();
+  await expect(title(page)).toHaveText("13. No seu computador");
+  const [download] = await Promise.all([page.waitForEvent("download"), panel(page).locator('[data-download="mar.zip"]').click()]);
+  expect(download.suggestedFilename()).toBe("mar.zip");
+  const files = await zipFiles(download);
+  for (const file of MAR.steps[12].files) expect(files[file.path], file.path).toBe(file.code);
+  expect(JSON.parse(files["package.json"]).name).toBe("mar");
+  expect(files["src/cena.js"]).toContain("const vertexShader = /* glsl */ `");
   expect(files["src/main.js"]).toContain("new OrbitControls(");
   expect(files["src/main.js"], "os controles giram em volta do meio, onde a câmera olha").not.toContain("controles.target.set");
 });

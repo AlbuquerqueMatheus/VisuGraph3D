@@ -297,10 +297,13 @@ const DECLARED = {
     gl_Position: "vec4",
     gl_PointSize: "float",
   },
-  fragment: { viewMatrix: "mat4", cameraPosition: "vec3", isOrthographic: "bool", gl_FragColor: "vec4", gl_FragCoord: "vec4", gl_FrontFacing: "bool" },
+  fragment: { viewMatrix: "mat4", cameraPosition: "vec3", isOrthographic: "bool", gl_FragColor: "vec4", gl_FragCoord: "vec4", gl_FrontFacing: "bool", gl_PointCoord: "vec2" },
 };
 const OUTPUTS = new Set(["gl_Position", "gl_PointSize", "gl_FragColor"]);
-const ATTRIBUTES = new Set(["position", "normal", "uv"]);
+const ATTRIBUTES = new Set(["position", "normal", "uv", "color"]);
+
+/** Os nomes que o three.js declara num shader do material: com vertexColors, também o atributo color. */
+const declaredFor = (stage, material) => (stage === "vertex" && material?.vertexColors ? { ...DECLARED.vertex, color: "vec3" } : DECLARED[stage]);
 const CONSTRUCTORS = new Set(["float", "int", "bool", "vec2", "vec3", "vec4", "mat3", "mat4"]);
 
 const hasReturn = (node) =>
@@ -311,9 +314,9 @@ const hasReturn = (node) =>
  * antes, e cada função, escrita antes de quem a chama. Devolve os varyings e os uniforms
  * declarados ({ nome: tipo }) e os nomes usados nas contas.
  */
-function verify(items, stage) {
+function verify(items, stage, declared = DECLARED[stage]) {
   const global = new Map();
-  for (const [n] of Object.entries(DECLARED[stage])) global.set(n, OUTPUTS.has(n) ? "var" : n.startsWith("gl_") || ATTRIBUTES.has(n) ? "input" : "uniform");
+  for (const [n] of Object.entries(declared)) global.set(n, OUTPUTS.has(n) ? "var" : n.startsWith("gl_") || ATTRIBUTES.has(n) ? "input" : "uniform");
   const scopes = [global];
   const functions = new Set();
   const varyings = {};
@@ -720,9 +723,9 @@ const OPERATORS = { "+": "add", "-": "sub", "*": "mul", "/": "div", "==": "eq", 
  * nomes ({ nome: valor }: os uniforms, os atributos ou os varyings) e devolve o que ele escreveu:
  * o gl_Position e os varyings, no de vértices, ou o gl_FragColor, no de fragmentos.
  */
-function program(items, stage, info) {
+function program(items, stage, info, names = DECLARED[stage]) {
   const functions = new Set(items.filter((item) => item.kind === "function").map((item) => item.name));
-  const globals = new Map(Object.entries(DECLARED[stage]));
+  const globals = new Map(Object.entries(names));
   for (const item of items) if (item.kind === "storage") for (const d of item.decls) globals.set(d.name, item.type);
   const declared = items.filter((item) => item.kind === "declare");
   const v = (name) => `v_${name}`;
@@ -825,10 +828,10 @@ function program(items, stage, info) {
 }
 
 /** Compila o texto de um shader: a árvore, conferida; um erro sai como GlslError, com o shader em `stage`. */
-function compile(text, stage) {
+function compile(text, stage, declared = DECLARED[stage]) {
   try {
     const items = parse(String(text ?? ""));
-    return program(items, stage, verify(items, stage));
+    return program(items, stage, verify(items, stage, declared), declared);
   } catch (e) {
     if (e instanceof GlslError) e.stage = stage;
     throw e;
@@ -842,10 +845,10 @@ const programs = new Map();
  * `stage` ("vertex", "fragment" ou "link"), a mensagem e a linha, como nos fatos do visor.
  */
 export function programOf(material) {
-  const key = `${material.vertexShader}\u0000${material.fragmentShader}`;
+  const key = `${material.vertexShader}\u0000${material.fragmentShader}\u0000${!!material.vertexColors}`;
   if (!programs.has(key)) {
     try {
-      const vertex = compile(material.vertexShader, "vertex");
+      const vertex = compile(material.vertexShader, "vertex", declaredFor("vertex", material));
       const fragment = compile(material.fragmentShader, "fragment");
       try {
         link(vertex, fragment);
@@ -1103,4 +1106,126 @@ export function draw({ scene, camera, width, height }) {
   }
 
   return { read, depthOf, errorOf: (mesh) => errors.get(mesh) ?? null };
+}
+
+// ---------------------------------------------------------------------------
+// As estrelas de um THREE.Points
+
+/** Quantos pontos vão inteiros na medida, e o maior lado do quadrado de cada um (TILES e MAX_TILE, em src/live/runtime/stars.js). */
+const TILES = 8;
+const MAX_TILE = 64;
+
+/**
+ * A cor que um pixel do shader de fragmentos soma sobre o preto, com a mistura do material, em bytes
+ * de 0 a 255. Como no three.js, a mistura normal de um material que não é transparente não mistura.
+ */
+function blendOnBlack(color, material) {
+  const clamp = (x) => Math.min(1, Math.max(0, x));
+  const a = clamp(color[3] ?? 1);
+  const opaque = material.blending === THREE.NoBlending || (material.blending === THREE.NormalBlending && !material.transparent);
+  const weight = opaque ? 1 : a;
+  const rgb = [0, 1, 2].map((k) => Math.round(clamp(color[k]) * weight * 255));
+  return [...rgb, Math.round((material.blending === THREE.AdditiveBlending ? a * a : a) * 255)];
+}
+
+/**
+ * As estrelas de um THREE.Points desenhado por um ShaderMaterial, como measureStars (em
+ * src/live/runtime/stars.js) mede na placa de vídeo: para cada ponto da amostra da geometria
+ * (`index`, os índices dos vértices), o gl_Position e o gl_PointSize que o shader de vértices
+ * calcula (−1 se ele não escreve no gl_PointSize), a cor do meio de cada estrela (o shader de
+ * fragmentos com o gl_PointCoord em (0,5; 0,5), com a mistura do material sobre o preto) e os
+ * quadrados inteiros das maiores. { error } se os shaders não compilam.
+ */
+export function stars({ points, camera, index }) {
+  const material = points.material;
+  const compiled = programOf(material);
+  if (compiled.error) return { error: compiled.error };
+  const { vertex, fragment } = compiled;
+  points.updateWorldMatrix(true, false);
+  camera.updateWorldMatrix(true, false);
+  const modelView = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, points.matrixWorld);
+  const builtins = {
+    modelMatrix: matrix(points.matrixWorld),
+    viewMatrix: matrix(camera.matrixWorldInverse),
+    projectionMatrix: matrix(camera.projectionMatrix),
+    modelViewMatrix: matrix(modelView),
+    normalMatrix: matrix(new THREE.Matrix3().getNormalMatrix(modelView)),
+    cameraPosition: camera.getWorldPosition(new THREE.Vector3()).toArray(),
+    isOrthographic: !!camera.isOrthographicCamera,
+  };
+  const uniformsOf = (declared) => {
+    const out = { ...builtins };
+    for (const [n, type] of Object.entries(declared)) out[n] = uniformValue(material.uniforms?.[n]?.value, type);
+    return out;
+  };
+  const vertexValues = uniformsOf(vertex.uniforms);
+  const fragmentValues = uniformsOf(fragment.uniforms);
+  const geometry = points.geometry;
+  const names = Object.keys(fragment.varyings);
+  const count = index.length;
+  const clip = new Float32Array(count * 4);
+  const size = new Float32Array(count);
+  const color = new Uint8Array(count * 4);
+  const varyings = [];
+  const attributes = {};
+  for (const [name, attr] of Object.entries(geometry.attributes)) {
+    if (name === "position" || name === "color") continue;
+    attributes[name] = attr.itemSize === 1 ? Float32Array.from(index, (i) => attr.getX(i)) : index.map((i) => attribute(attr, i));
+  }
+  try {
+    index.forEach((i, j) => {
+      for (const [name, attr] of Object.entries(geometry.attributes)) vertexValues[name] = attribute(attr, i);
+      vertexValues.gl_Position = [0, 0, 0, 0];
+      vertexValues.gl_PointSize = -1;
+      const out = vertex.run(vertexValues);
+      clip.set(out.gl_Position.map(Math.fround), j * 4);
+      size[j] = out.gl_PointSize;
+      varyings.push(Object.fromEntries(names.map((n) => [n, out[n] ?? zero(fragment.varyings[n])])));
+    });
+  } catch (e) {
+    if (e instanceof GlslError) return { error: { stage: "vertex", message: e.message, line: e.line } };
+    throw e;
+  }
+  /** O shader de fragmentos num pixel da estrela j, com o gl_PointCoord dado: a cor que ele soma sobre o preto. */
+  const paint = (j, pointCoord, fragCoord) => {
+    try {
+      return blendOnBlack(fragment.run({ ...fragmentValues, ...varyings[j], gl_PointCoord: pointCoord, gl_FragCoord: fragCoord }).gl_FragColor, material);
+    } catch (e) {
+      if (e === DISCARD) return [0, 0, 0, 0];
+      if (e instanceof GlslError) throw Object.assign(e, { stage: "fragment" });
+      throw e;
+    }
+  };
+  try {
+    for (let j = 0; j < count; j++) color.set(paint(j, [0.5, 0.5], [0.5, 0.5, 0, 1]), j * 4);
+  } catch (e) {
+    if (e instanceof GlslError) return { error: { stage: "fragment", message: e.message, line: e.line } };
+    throw e;
+  }
+  // os quadrados inteiros das maiores estrelas na frente da câmera, como o desenho dos quadrados
+  const chosen = Array.from({ length: count }, (_, j) => j)
+    .filter((j) => clip[j * 4 + 3] > 0 && Number.isFinite(size[j]) && size[j] > 0)
+    .sort((a, b) => size[b] - size[a])
+    .slice(0, TILES);
+  let tiles = null;
+  if (chosen.length) {
+    const side = Math.min(MAX_TILE, Math.max(4, Math.ceil(size[chosen[0]]) + 2));
+    const width = side * TILES;
+    const pixels = new Uint8Array(width * side * 4);
+    chosen.forEach((j, k) => {
+      const s = Math.min(size[j], 1023);
+      const [cx, cy] = [(k + 0.5) * side, 0.5 * side];
+      for (let y = 0; y < side; y++) {
+        for (let x = k * side; x < (k + 1) * side; x++) {
+          const [fx, fy] = [x + 0.5, y + 0.5];
+          // o quadrado do ponto: os pixels com o centro dentro dele
+          if (fx < cx - s / 2 || fx >= cx + s / 2 || fy < cy - s / 2 || fy >= cy + s / 2) continue;
+          pixels.set(paint(j, [0.5 + (fx - cx) / s, 0.5 - (fy - cy) / s], [fx, fy, 0, 1]), (y * width + x) * 4);
+        }
+      }
+    });
+    tiles = { side, stars: chosen, pixels };
+  }
+  const rows = (m) => [0, 1, 2, 3].map((r) => [0, 1, 2, 3].map((c) => m.elements[c * 4 + r]));
+  return { count, clip, size, color, attributes, projection: rows(camera.projectionMatrix), view: rows(camera.matrixWorldInverse), tiles };
 }

@@ -6,6 +6,7 @@ import { code, pasteCode, status, viewport } from "./live.js";
 import { CIDADE } from "../../src/live/projects/cidade.js";
 import { FLORESTA } from "../../src/live/projects/floresta.js";
 import { GALAXIA } from "../../src/live/projects/galaxia.js";
+import { GALAXIA_VIVA } from "../../src/live/projects/galaxiaViva.js";
 import { MAR } from "../../src/live/projects/mar.js";
 import { MONTANHA_RUSSA } from "../../src/live/projects/montanhaRussa.js";
 import { PHONG } from "../../src/live/projects/phong.js";
@@ -119,7 +120,7 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
   await page.click("#lv-tab-project");
   await expect(panel(page).locator(".lv-pj-level h3")).toHaveText(["Fácil", "Intermediário", "Avançado"]);
-  await expect(panel(page).locator(".lv-pj-soon")).toHaveCount(1);
+  await expect(panel(page).locator(".lv-pj-soon"), "todos os projetos do guia estão prontos").toHaveCount(0);
   await expect(panel(page).locator('.lv-pj-card[data-project="sistema-solar"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="vitrine"] .lv-pj-card__progress')).toHaveText("9 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="cidade"] .lv-pj-card__progress')).toHaveText("9 passos");
@@ -127,6 +128,7 @@ test("projetos: a lista mostra os níveis e o progresso, e sair do projeto volta
   await expect(panel(page).locator('.lv-pj-card[data-project="floresta"] .lv-pj-card__progress')).toHaveText("12 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="phong"] .lv-pj-card__progress')).toHaveText("13 passos");
   await expect(panel(page).locator('.lv-pj-card[data-project="mar"] .lv-pj-card__progress')).toHaveText("13 passos");
+  await expect(panel(page).locator('.lv-pj-card[data-project="galaxia-viva"] .lv-pj-card__progress')).toHaveText("12 passos");
   const card = panel(page).locator('.lv-pj-card[data-project="galaxia"]');
   await expect(card.locator(".lv-pj-card__progress")).toHaveText("12 passos");
 
@@ -542,6 +544,100 @@ test("projetos: no Mar com ondas na GPU, a conferência mede a superfície que o
   expect(files["src/cena.js"]).toContain("const vertexShader = /* glsl */ `");
   expect(files["src/main.js"]).toContain("new OrbitControls(");
   expect(files["src/main.js"], "os controles giram em volta do meio, onde a câmera olha").not.toContain("controles.target.set");
+});
+
+test("projetos: na Galáxia viva, a conferência mede as estrelas que o shader desenhou, espera a galáxia girar, e o projeto sai para o computador", async ({ page }) => {
+  test.slow(); // a conferência mede as estrelas na placa de vídeo, e a galáxia gira alguns segundos de verdade
+  await page.goto("index-3d.html?projeto=galaxia-viva&passo=2");
+  await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+  await expect(panel(page).locator(".lv-ch__kicker")).toHaveText("Avançado · Galáxia viva");
+  await expect(title(page)).toHaveText("2. O primeiro shader de pontos");
+  await expect(page.locator("#lv-codebar")).toContainText("Galáxia viva · passo 2 de 12");
+  await expect(result(page)).toContainText("(a galáxia é desenhada por um PointsMaterial, e não por um ShaderMaterial)", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // sem o vertexColors, o three.js não declara o color: o erro vai para a linha dele, com o porquê
+  await stepButton(page, 3).click();
+  await expect(title(page)).toHaveText("3. A cor de cada estrela");
+  const broken = GALAXIA_VIVA.steps[2].code.replace("  vertexColors: true,\n", "");
+  expect(broken).not.toBe(GALAXIA_VIVA.steps[2].code);
+  const line = broken.split("\n").findIndex((l) => l.includes("vCor = color;")) + 1;
+  await pasteCode(page, broken);
+  await expect(status(page)).toContainText(`Linha ${line}: No shader de vértices: 'color' é o atributo com a cor de cada vértice`, { timeout: 30_000 });
+  await expect(result(page, 1)).toContainText("(o shader de vértices não compila: a barra embaixo do código diz o erro e a linha)", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // o brilho de cada estrela é medido pixel a pixel no quadrado dela
+  await stepButton(page, 6).click();
+  await expect(title(page)).toHaveText("6. O brilho das estrelas");
+  const flat = GALAXIA_VIVA.steps[5].code.replace("pow(max(1.0 - 2.0 * d, 0.0), 6.0)", "pow(max(1.0 - 2.0 * d, 0.0), 1.0)");
+  expect(flat).not.toBe(GALAXIA_VIVA.steps[5].code);
+  await pasteCode(page, flat);
+  await expect(result(page, 3)).toContainText("(a luz cai devagar demais, e as estrelas viram bolas embaçadas: falta elevar a 6, pow(max(1.0 - 2.0 * d, 0.0), 6.0))", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // com a galáxia girando, a conferência espera o tempo correr; com a animação parada, ela pede o ▶
+  await stepButton(page, 7).click();
+  await expect(title(page)).toHaveText("7. A galáxia gira no shader");
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+  await page.click("#lv-play");
+  await expect(page.locator("#lv-play")).toHaveAttribute("aria-pressed", "false");
+  await page.click("#lv-restart");
+  await expect(result(page, 1)).toContainText("(a animação está parada: aperte ▶ na barra de cima para a galáxia girar)", { timeout: 30_000 });
+  await expect(result(page, 1)).toHaveAttribute("data-ok", "pending");
+  await expect(done(page)).toBeHidden();
+  await page.click("#lv-play");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // girando para o outro lado, a conferência diz o sentido
+  await stepButton(page, 8).click();
+  await expect(title(page)).toHaveText("8. Cada estrela na sua velocidade");
+  const backwards = GALAXIA_VIVA.steps[7].code.replace("angulo -= uTempo * uVelocidade / r;", "angulo += uTempo * uVelocidade / r;");
+  expect(backwards).not.toBe(GALAXIA_VIVA.steps[7].code);
+  await pasteCode(page, backwards);
+  await expect(result(page, 1)).toContainText("(a galáxia gira para o outro lado: o ângulo diminui, angulo -= uTempo * uVelocidade / r)", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 30_000 });
+
+  // no último passo no VisuGraph, a conferência refaz a cor de cada estrela, com a onda dos braços e a cor jovem
+  await stepButton(page, 11).click();
+  await expect(title(page)).toHaveText("11. Estrelas jovens nos braços");
+  await expect(codeState(page), "o passo 11 começa do fim do passo 10, sem a cor jovem").toHaveText(/^Escreva no editor/);
+  await expect(result(page, 1)).toContainText("(o material da galáxia não tem o uniform uCorJovem)", { timeout: 30_000 });
+  await panel(page).locator('[data-action="apply"]').click();
+  await expect(codeState(page)).toHaveText("O editor já tem o código deste passo.");
+  await expect(done(page)).toContainText("✓ Passo feito!", { timeout: 60_000 });
+
+  // o passo no computador começa do fim do passo 11, com os dois shaders no cena.js e a mesma densidade de tela no main.js
+  await stepButton(page, 12).click();
+  await expect(title(page)).toHaveText("12. No seu computador");
+  const [download] = await Promise.all([page.waitForEvent("download"), panel(page).locator('[data-download="galaxia-viva.zip"]').click()]);
+  expect(download.suggestedFilename()).toBe("galaxia-viva.zip");
+  const files = await zipFiles(download);
+  for (const file of GALAXIA_VIVA.steps[11].files) expect(files[file.path], file.path).toBe(file.code);
+  expect(JSON.parse(files["package.json"]).name).toBe("galaxia-viva");
+  expect(files["src/cena.js"]).toContain("const densidade = Math.min(window.devicePixelRatio, 2);");
+  expect(files["src/main.js"]).toContain("renderizador.setPixelRatio(Math.min(window.devicePixelRatio, 2));");
+  expect(files["src/main.js"]).toContain("new OrbitControls(");
+});
+
+test.describe("numa tela de alta densidade", () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test("projetos: na Galáxia viva, o tamanho das estrelas conta com a densidade da tela", async ({ page }) => {
+    await page.goto("index-3d.html?projeto=galaxia-viva&passo=4");
+    await expect(status(page)).toContainText("Cena atualizada", { timeout: 30_000 });
+    await panel(page).locator('[data-action="apply"]').click();
+    await expect(done(page), "com 30 * densidade, as estrelas têm o tamanho de uma tela comum").toContainText("✓ Passo feito!", { timeout: 30_000 });
+    const fixed = GALAXIA_VIVA.steps[3].code.replace("30 * densidade", "30");
+    expect(fixed).not.toBe(GALAXIA_VIVA.steps[3].code);
+    await pasteCode(page, fixed);
+    await expect(result(page)).toContainText("(o uTamanho está em 30, e a sua tela tem 2 pixels da imagem em cada pixel: falta multiplicar pela densidade, 30 * densidade)", { timeout: 30_000 });
+  });
 });
 
 test("projetos: o modo de estudo não tem a aba Projetos", async ({ page }) => {

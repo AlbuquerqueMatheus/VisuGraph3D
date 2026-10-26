@@ -18,6 +18,7 @@ import { localMatrix, objectMath, projectionMatrix, viewOf, worldMatrix } from "
 import { collectLights, createGlassMaterial, glassTerms, setLightUniforms, syncGlass } from "./glass.js";
 import { sceneFacts, trailPoint } from "./facts.js";
 import { belongsTo, failureInfo, samplePixels, sampleSurface } from "./shaders.js";
+import { measureStars } from "./stars.js";
 
 const LOOP_LIMIT_MS = { run: 2000, frame: 1000 };
 // O navegador aceita uns 16 contextos WebGL por página e derruba o mais antigo (o do visor)
@@ -666,28 +667,53 @@ function reportError(run, err, phase) {
 // Shaders que não compilam. O three.js só confere um programa no primeiro desenho dele, e guarda o
 // programa para os materiais seguintes com os mesmos textos: a execução seguinte, com o mesmo erro,
 // ganharia o programa quebrado em silêncio. Por isso o erro fica guardado pelos textos dos dois
-// shaders, e cada execução o relata de novo (src/live/runtime/shaders.js diz a linha).
+// shaders (e pelo que o three.js escreve antes deles), e cada execução o relata de novo
+// (src/live/runtime/shaders.js diz a linha).
 const MAX_SHADER_FAILURES = 64;
-const shaderFailures = new Map(); // textos dos dois shaders → failureInfo
+const shaderFailures = new Map(); // chave do programa (keyOf) → failureInfo
 const newShaderFailures = []; // o que o WebGL disse dos programas que falharam desde o último desenho
 renderer.debug.onShaderError = (gl, program, vertex, fragment) => {
   const stage = (name, shader) => ({ stage: name, log: gl.getShaderInfoLog(shader) || "", source: gl.getShaderSource(shader) || "" });
   newShaderFailures.push({ stages: [stage("vertex", vertex), stage("fragment", fragment)], programLog: gl.getProgramInfoLog(program) || "" });
 };
 
-const shaderKeys = new WeakMap(); // material → { vertex, fragment, key }
+const shaderKeys = new WeakMap(); // material → { vertex, fragment, flags, key }
 
-/** A chave de um ShaderMaterial: os textos dos dois shaders. */
-function keyOf(material) {
+/**
+ * O que o three.js escreve antes dos textos de um ShaderMaterial e muda de um material ou objeto
+ * para outro: o `attribute vec3 color;` do vertexColors (vec4, se a cor tem 4 números), os
+ * #define, a versão do GLSL, as luzes, a neblina, o lado e as cópias de uma InstancedMesh, entre
+ * outros. Com um deles diferente, o mesmo texto pode compilar ou não: sem o vertexColors, o
+ * `color` nem existe no shader.
+ */
+const programFlags = (material, object) =>
+  [
+    material.vertexColors ? `color${object?.geometry?.attributes?.color?.itemSize ?? 3}` : "",
+    material.glslVersion ?? "",
+    material.lights ? "lights" : "",
+    material.fog ? "fog" : "",
+    material.side,
+    material.flatShading ? "flat" : "",
+    material.alphaTest > 0 ? "alphaTest" : "",
+    object?.isInstancedMesh ? (object.instanceColor ? "instancingColor" : "instancing") : "",
+    object?.isSkinnedMesh ? "skinning" : "",
+    object?.isBatchedMesh ? "batching" : "",
+    JSON.stringify(material.defines ?? {}),
+    JSON.stringify(material.extensions ?? {}),
+  ].join("|");
+
+/** A chave do programa de um ShaderMaterial num objeto: os textos dos dois shaders e o que vem antes deles (programFlags). */
+function keyOf(material, object) {
+  const flags = programFlags(material, object);
   let k = shaderKeys.get(material);
-  if (!k || k.vertex !== material.vertexShader || k.fragment !== material.fragmentShader) {
-    k = { vertex: material.vertexShader, fragment: material.fragmentShader, key: `${material.vertexShader}\u0000${material.fragmentShader}` };
+  if (!k || k.vertex !== material.vertexShader || k.fragment !== material.fragmentShader || k.flags !== flags) {
+    k = { vertex: material.vertexShader, fragment: material.fragmentShader, flags, key: `${material.vertexShader}\u0000${material.fragmentShader}\u0000${flags}` };
     shaderKeys.set(material, k);
   }
   return k.key;
 }
 
-const shaderFailureOf = (material) => (material?.isShaderMaterial ? shaderFailures.get(keyOf(material)) ?? null : null);
+const shaderFailureOf = (material, object) => (material?.isShaderMaterial ? shaderFailures.get(keyOf(material, object)) ?? null : null);
 
 function reportShader(run, info, key = null) {
   if (key != null) {
@@ -726,9 +752,9 @@ function coverBrokenShaders(run) {
     if (!obj.material) return;
     let changed = false;
     const replaced = [].concat(obj.material).map((material) => {
-      const info = shaderFailureOf(material);
+      const info = shaderFailureOf(material, obj);
       if (!info) return material;
-      reportShader(run, info, keyOf(material));
+      reportShader(run, info, keyOf(material, obj));
       changed = true;
       return obj.isPoints ? BROKEN_SHADER.points : obj.isLine ? BROKEN_SHADER.line : BROKEN_SHADER.mesh;
     });
@@ -748,7 +774,7 @@ function resolveShaderFailures(run) {
         if (!material?.isShaderMaterial || !belongsTo(failure, material)) continue;
         found = true;
         run.shaders = true;
-        const key = keyOf(material);
+        const key = keyOf(material, obj);
         if (!shaderFailures.has(key)) {
           shaderFailures.set(key, failureInfo(failure, material));
           if (shaderFailures.size > MAX_SHADER_FAILURES) shaderFailures.delete(shaderFailures.keys().next().value);
@@ -1362,7 +1388,8 @@ function factsInfo(msg) {
   if (run.shaders) shaderFacts(run, entries, facts.objects, { surface: !!msg.surface });
   // `recorded`: quantos segundos de animação o rastro já cobre (quem não saiu do lugar nesse tempo, não anda)
   const recorded = trail.first == null ? 0 : trail.last - trail.first;
-  return { type: "facts", seq: msg.seq, runId: run.id, ...facts, playing: state.playing && !!run.animar && !run.animError, recorded, elapsed: state.elapsed };
+  // `pixelRatio`: quantos pixels da imagem cabem em cada pixel da tela, que o gl_PointSize de um shader de pontos acompanha
+  return { type: "facts", seq: msg.seq, runId: run.id, ...facts, playing: state.playing && !!run.animar && !run.animError, recorded, elapsed: state.elapsed, pixelRatio: renderer.getPixelRatio() };
 }
 
 // Os pixels de um shader: a cena desenhada pela câmera do código numa imagem de 256 de largura, na
@@ -1388,15 +1415,19 @@ let sampleBackground = null; // { key, pixel }: o fundo como sai na imagem, para
  * vértices pode deixar para trás (as ondas de um mar sobem e descem, e a placa do JavaScript fica
  * parada), `surface` traz os pontos da superfície que o shader desenhou, pela profundidade de cada
  * pixel (surfaceDepth), com a cor (sampleSurface).
+ * Num THREE.Points desenhado por um ShaderMaterial, o `shader` traz o erro, a câmera e as estrelas
+ * (`stars`): o que o shader fez com cada ponto da amostra da geometria (measureStars, em
+ * src/live/runtime/stars.js).
  */
 function shaderFacts(run, entries, objects, { surface = false } = {}) {
   const meshes = [];
+  const clouds = [];
   for (const [id, list] of entries) {
     const obj = list[0];
-    const material = obj?.isMesh && !obj.isInstancedMesh ? [].concat(obj.material)[0] : null;
-    if (material?.isShaderMaterial && objects[id]) meshes.push([id, obj, material]);
+    const material = (obj?.isMesh && !obj.isInstancedMesh) || obj?.isPoints ? [].concat(obj.material)[0] : null;
+    if (material?.isShaderMaterial && objects[id]) (obj.isPoints ? clouds : meshes).push([id, obj, material]);
   }
-  if (!meshes.length) return;
+  if (!meshes.length && !clouds.length) return;
   const camera = run.camera ?? editorCamera;
   const aspect = camera.isPerspectiveCamera ? camera.aspect : canvas.clientWidth / Math.max(1, canvas.clientHeight);
   const width = SAMPLE_WIDTH;
@@ -1434,7 +1465,7 @@ function shaderFacts(run, entries, objects, { surface = false } = {}) {
   renderer.readRenderTargetPixels(sampleTarget, 0, 0, width, height, sampleBuffer);
   const eye = camera.getWorldPosition(new THREE.Vector3()).toArray();
   for (const [id, mesh, material] of meshes) {
-    const failure = shaderFailureOf(material);
+    const failure = shaderFailureOf(material, mesh);
     objects[id].shader = {
       error: failure && { stage: failure.stage, message: failure.message, line: failure.line },
       eye,
@@ -1446,6 +1477,16 @@ function shaderFacts(run, entries, objects, { surface = false } = {}) {
     if (!surface || failure || material.glslVersion === THREE.GLSL3) continue;
     const depth = surfaceDepth(run, camera, mesh, material, width, height);
     if (depth) objects[id].shader.surface = sampleSurface({ camera, mesh, width, height, read, depth });
+  }
+  for (const [id, points, material] of clouds) {
+    const failure = shaderFailureOf(material, points);
+    objects[id].shader = { error: failure && { stage: failure.stage, message: failure.message, line: failure.line }, eye, stars: null };
+    if (failure) continue;
+    // um embrulho que não compila não mede nada (measureStars devolve null), e o erro dele não é do
+    // código: não vai para a barra de status
+    const failures = newShaderFailures.length;
+    objects[id].shader.stars = measureStars({ renderer, points, camera });
+    newShaderFailures.splice(failures);
   }
 }
 

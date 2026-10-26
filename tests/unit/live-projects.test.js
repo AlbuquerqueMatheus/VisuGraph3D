@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { grade } from "../../src/live/challenges.js";
-import { sceneFacts, trailPoint } from "../../src/live/runtime/facts.js";
+import { sampleIndices, sceneFacts, trailPoint } from "../../src/live/runtime/facts.js";
 import { samplePixels, sampleSurface } from "../../src/live/runtime/shaders.js";
 import { analyze, hasBlockingError } from "../../src/live/engine/analyze.js";
 import { instrument } from "../../src/live/engine/instrument.js";
 import { LEVELS, PROJECTS, behind, codeState, diffLines, findSnippet, guideStep, hunks, isComputer, liveSteps, projectById, startCode, stepIndex } from "../../src/live/projects/index.js";
 import { animatedKeys, armsOf } from "../../src/live/projects/checks.js";
 import { exportProject } from "../../src/live/export.js";
-import { BACKGROUND, draw } from "./gpu.js";
+import { BACKGROUND, draw, stars } from "./gpu.js";
 
 // Roda o código instrumentado com o Three.js de verdade, como o visor roda, e monta os fatos como
 // o app monta para um projeto: cada `new` do código guarda os objetos que criou (num laço, vários),
@@ -17,8 +17,9 @@ import { BACKGROUND, draw } from "./gpu.js";
 // barra de status). Com `seconds`, a animação roda esse tempo em quadros de 1/60 s (ou com os
 // tempos de `frames`, um depois do outro, de novo e de novo), e o rastro de cada objeto é anotado
 // como o visor anota: a cada 1/30 s, os últimos 20 s. Com `surface`, os fatos de um shader trazem
-// a superfície que o shader de vértices desenhou, como o visor manda quando o projeto pede.
-function factsOf(code, { seconds = 0, frames = [1 / 60], surface = false } = {}) {
+// a superfície que o shader de vértices desenhou, como o visor manda quando o projeto pede. O
+// código vê uma tela com `pixelRatio` pixels da imagem em cada pixel (o window.devicePixelRatio).
+function factsOf(code, { seconds = 0, frames = [1 / 60], surface = false, pixelRatio = 1 } = {}) {
   const analysis = analyze(code);
   const registry = new Map();
   const ids = new Map();
@@ -41,10 +42,13 @@ function factsOf(code, { seconds = 0, frames = [1 / 60], surface = false } = {})
     },
     timers: { setTimeout, setInterval, clearTimeout, clearInterval, requestAnimationFrame: () => 0, cancelAnimationFrame: () => {} },
   };
+  const screen = !("window" in globalThis);
+  if (screen) globalThis.window = { devicePixelRatio: pixelRatio };
   try {
     (0, eval)(instrument(analysis).script);
   } finally {
     delete globalThis.__vg;
+    if (screen) delete globalThis.window;
   }
   if (error) throw error;
   const first = (obj) => (obj ? registry.get(obj.id)?.[0] : undefined);
@@ -82,7 +86,17 @@ function factsOf(code, { seconds = 0, frames = [1 / 60], surface = false } = {})
     const name = nameOf(id);
     if (name && !objects[name]) objects[name] = f;
   }
-  return { ...facts, objects, nameOf, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar, playing: !!animar && seconds > 0, recorded, elapsed: tempo };
+  return {
+    ...facts,
+    objects,
+    nameOf,
+    animated: animatedKeys(analysis),
+    hasAnimar: !!analysis.animar,
+    playing: !!animar && seconds > 0,
+    recorded,
+    elapsed: tempo,
+    pixelRatio: Math.min(pixelRatio, 2),
+  };
 }
 
 /** A largura da imagem que o visor desenha para medir os pixels dos shaders (SAMPLE_WIDTH, em viewport.js). */
@@ -91,12 +105,15 @@ const SAMPLE_WIDTH = 256;
 const VISOR_ASPECT = 580 / 824;
 
 /**
- * Os fatos `shader` de cada malha com ShaderMaterial, como o visor monta (shaderFacts, em
- * src/live/runtime/viewport.js), com a placa de vídeo de mentira de gpu.js no lugar da de verdade.
+ * Os fatos `shader` de cada malha e de cada nuvem de pontos com ShaderMaterial, como o visor monta
+ * (shaderFacts, em src/live/runtime/viewport.js), com a placa de vídeo de mentira de gpu.js no
+ * lugar da de verdade.
  */
 function shaderFacts({ scene, camera, registry, objects, surface }) {
-  const meshes = [...registry].filter(([id, [obj]]) => obj?.isMesh && !obj.isInstancedMesh && [].concat(obj.material)[0]?.isShaderMaterial && objects[id]);
-  if (!meshes.length) return;
+  const shaded = (obj) => [].concat(obj.material)[0]?.isShaderMaterial;
+  const meshes = [...registry].filter(([id, [obj]]) => obj?.isMesh && !obj.isInstancedMesh && shaded(obj) && objects[id]);
+  const clouds = [...registry].filter(([id, [obj]]) => obj?.isPoints && shaded(obj) && objects[id]);
+  if (!meshes.length && !clouds.length) return;
   // como no visor, que acerta a proporção da câmera do código com a dele a cada quadro
   const aspect = camera.aspect;
   if (camera.isPerspectiveCamera) {
@@ -105,12 +122,18 @@ function shaderFacts({ scene, camera, registry, objects, surface }) {
   }
   const width = SAMPLE_WIDTH;
   const height = Math.min(512, Math.max(32, Math.round(width / (camera.aspect || 1))));
-  const gpu = draw({ scene, camera, width, height });
   const eye = camera.getWorldPosition(new THREE.Vector3()).toArray();
-  for (const [id, [mesh]] of meshes) {
-    const error = gpu.errorOf(mesh);
-    objects[id].shader = { error, eye, size: [width, height], background: BACKGROUND, ...(surface ? {} : samplePixels({ scene, camera, mesh, width, height, read: gpu.read })) };
-    if (surface && !error) objects[id].shader.surface = sampleSurface({ camera, mesh, width, height, read: gpu.read, depth: gpu.depthOf(mesh) });
+  if (meshes.length) {
+    const gpu = draw({ scene, camera, width, height });
+    for (const [id, [mesh]] of meshes) {
+      const error = gpu.errorOf(mesh);
+      objects[id].shader = { error, eye, size: [width, height], background: BACKGROUND, ...(surface ? {} : samplePixels({ scene, camera, mesh, width, height, read: gpu.read })) };
+      if (surface && !error) objects[id].shader.surface = sampleSurface({ camera, mesh, width, height, read: gpu.read, depth: gpu.depthOf(mesh) });
+    }
+  }
+  for (const [id, [points]] of clouds) {
+    const measured = stars({ points, camera, index: sampleIndices(points.geometry.getAttribute("position")?.count ?? 0) });
+    objects[id].shader = { error: measured.error ?? null, eye, stars: measured.error ? null : measured };
   }
   if (camera.isPerspectiveCamera) {
     camera.aspect = aspect;
@@ -154,12 +177,12 @@ describe("guia de projetos: o catálogo", () => {
   it("tem os três níveis, e cada projeto está num deles", () => {
     expect(LEVELS.map((l) => l.id)).toEqual(["facil", "intermediario", "avancado"]);
     for (const p of PROJECTS) expect(LEVELS.map((l) => l.id)).toContain(p.level);
-    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(1);
+    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(0);
     const soon = LEVELS.flatMap((l) => l.soon.map((s) => s.title));
     for (const p of PROJECTS) expect(soon, `${p.title} já existe`).not.toContain(p.title);
   });
 
-  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2, a Montanha-russa e a Floresta, 11 e 1, o Phong escrito à mão e o Mar com ondas na GPU, 12 e 1", () => {
+  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2, a Montanha-russa e a Floresta, 11 e 1, o Phong escrito à mão e o Mar com ondas na GPU, 12 e 1, e a Galáxia viva, 11 e 1", () => {
     expect(PROJECTS.map((p) => [p.id, liveSteps(p).length, p.steps.filter(isComputer).length])).toEqual([
       ["sistema-solar", 8, 1],
       ["vitrine", 8, 1],
@@ -169,6 +192,7 @@ describe("guia de projetos: o catálogo", () => {
       ["floresta", 11, 1],
       ["phong", 12, 1],
       ["mar", 12, 1],
+      ["galaxia-viva", 11, 1],
     ]);
   });
 
@@ -1424,6 +1448,173 @@ describe("conferências do mar", () => {
     expect(main).toContain('import { OrbitControls } from "three/addons/controls/OrbitControls.js";');
     expect(main, "a câmera olha para a origem, o centro dos controles").not.toContain("controles.target.set");
     const cena = fileOf(files, "src/cena.js").code;
+    expect(cena).toContain("const vertexShader = /* glsl */ `");
+    expect(cena).toContain("const fragmentShader = /* glsl */ `");
+  });
+});
+
+describe("conferências da galáxia viva", () => {
+  const viva = projectById("galaxia-viva");
+  const variant = variantOf(viva);
+  const stepOf = (id) => viva.steps[stepIndex(viva, id)];
+  const NO_SRGB = "a cor saiu do shader no espaço linear, mais escura e carregada: falta passar a cor pela paraSRGB no gl_FragColor";
+  const GL_POSITION = "projectionMatrix * modelViewMatrix * vec4(position, 1.0)";
+  const COPY = "o uTempo continua em 0: falta o animar copiar o tempo para ele, material.uniforms.uTempo.value = tempo";
+  /** A mensagem com {n} no lugar dos números que dependem do sorteio das estrelas, e {cor} no das cores. */
+  const like = (text) =>
+    expect.stringMatching(
+      new RegExp(`^${text.split(/(\{n\}|\{cor\})/).map((part) => ({ "{n}": "[−\\d.,]+", "{cor}": "#[0-9a-f]{6}" })[part] ?? part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("")}$`),
+    );
+
+  it("a galáxia com poucas estrelas, a conferência avisa; com pontos maiores, vale", () => {
+    expect(failing(variant("partida", ["const quantidade = 50000;", "const quantidade = 5000;"]))).toEqual(["A galáxia é um THREE.Points com 50 mil estrelas (a galáxia tem 5.000 estrelas: são 50.000)"]);
+    expect(failing(variant("partida", ["  size: 0.03,", "  size: 0.1,"]))).toEqual([]);
+  });
+
+  it("as estrelas sem a câmera ou sem a perspectiva, sem o gl_PointSize, maiores ou amarelas, a conferência avisa; com a modelMatrix separada, vale", () => {
+    const place = `Cada estrela aparece no seu lugar: ${GL_POSITION}`;
+    const size = "Cada estrela é um quadrado de 2 pixels";
+    expect(failing(variant("shader", [GL_POSITION, "projectionMatrix * vec4(position, 1.0)"]))).toEqual([`${place} (a câmera ficou de fora: o ponto passa pela modelViewMatrix, ${GL_POSITION})`]);
+    expect(failing(variant("shader", [GL_POSITION, "modelViewMatrix * vec4(position, 1.0)"]))).toEqual([`${place} (falta a perspectiva: o ponto passa pela projectionMatrix, ${GL_POSITION})`]);
+    expect(failing(variant("shader", [GL_POSITION, "projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0)"]))).toEqual([]);
+    expect(failing(variant("shader", ["    gl_PointSize = 2.0;\n", ""]))).toEqual([`${size} (o shader de vértices não escreve o gl_PointSize: sem ele, o tamanho das estrelas fica indefinido)`]);
+    expect(failing(variant("shader", ["gl_PointSize = 2.0;", "gl_PointSize = 6.0;"]))).toEqual([`${size} (as estrelas têm 6 pixels: o passo usa gl_PointSize = 2.0)`]);
+    expect(failing(variant("shader", ["vec4(1.0, 1.0, 1.0, 1.0)", "vec4(1.0, 0.8, 0.2, 1.0)"]))).toEqual(["As estrelas são brancas (o meio de uma estrela saiu #ffcc33, e a conta dá #ffffff)"]);
+  });
+
+  it("a cor sem a paraSRGB, sem o vertexColors ou com os canais trocados, a conferência avisa", () => {
+    const color = "Cada estrela tem a cor do seu vértice, em sRGB";
+    expect(failing(variant("cor", ["vec4(paraSRGB(vCor), 1.0)", "vec4(vCor, 1.0)"]))).toEqual([`${color} (${NO_SRGB})`]);
+    expect(failing(variant("cor", ["  vertexColors: true,\n", ""]))).toEqual([
+      "O material usa a cor de cada vértice (vertexColors: true) (vertexColors está desligado)",
+      `${color} (o shader de vértices não compila: a barra embaixo do código diz o erro e a linha)`,
+    ]);
+    expect(failing(variant("cor", ["vCor = color;", "vCor = vec3(color.b, color.g, color.r);"]))).toEqual([like(`${color} (o meio de uma estrela saiu {cor}, e a conta dá {cor})`)]);
+  });
+
+  it("o tamanho negativo, multiplicado, igual para todas, pela distância ou sem a densidade da tela, a conferência avisa", () => {
+    const size = "O tamanho cai com a profundidade: gl_PointSize = uTamanho / -visto.z";
+    const line = "gl_PointSize = uTamanho / -visto.z;";
+    expect(failing(variant("distancia", [line, "gl_PointSize = uTamanho / visto.z;"]))).toEqual([
+      `${size} (o tamanho saiu negativo, e as estrelas sumiram: na frente da câmera, o visto.z é negativo, e a profundidade é o -visto.z)`,
+    ]);
+    expect(failing(variant("distancia", [line, "gl_PointSize = uTamanho * -visto.z;"]))).toEqual([`${size} (as estrelas crescem com a profundidade: o uTamanho é dividido pelo -visto.z, e não multiplicado)`]);
+    expect(failing(variant("distancia", [line, "gl_PointSize = uTamanho;"]))).toEqual([`${size} (o tamanho não muda com a profundidade: falta dividir pelo -visto.z, uTamanho / -visto.z)`]);
+    expect(failing(variant("distancia", [line, "gl_PointSize = uTamanho / length(visto.xyz);"]))).toEqual([like(`${size} (uma estrela a {n} de profundidade tem {n} pixels, e a conta dá {n})`)]);
+    expect(failing(variant("distancia", ["30 * densidade", "90 * densidade"]))).toEqual(["O uTamanho é 30 vezes a densidade da tela (o uTamanho está em 90: o passo usa 30 * densidade, que dá 30 na sua tela)"]);
+    // numa tela de alta densidade, como a de um celular
+    const step = stepOf("distancia");
+    expect(failing(grade(step, factsOf(step.code.replace("30 * densidade", "30"), { pixelRatio: 2 })))).toEqual([
+      "O uTamanho é 30 vezes a densidade da tela (o uTamanho está em 30, e a sua tela tem 2 pixels da imagem em cada pixel: falta multiplicar pela densidade, 30 * densidade)",
+    ]);
+    expect(failing(grade(step, factsOf(step.code, { pixelRatio: 2 })))).toEqual([]);
+    expect(failing(grade(step, factsOf(step.code, { pixelRatio: 3 }))), "o visor desenha com no máximo 2, como o Math.min").toEqual([]);
+  });
+
+  it("a escala sorteada por igual, grande demais ou fora do gl_PointSize, a conferência avisa", () => {
+    const scale = "A geometria tem o atributo aEscala, de 0,5 a 2,5, com a maioria das estrelas pequenas";
+    expect(failing(variant("tamanhos", ["Math.random() ** 3", "Math.random()"]))).toEqual([
+      like(`${scale} (metade das estrelas tem escala acima de {n}: com o Math.random() ** 3, a maioria fica pequena, perto de 0,5)`),
+    ]);
+    expect(failing(variant("tamanhos", ["0.5 + 2 *", "0.5 + 6 *"]))).toEqual([like(`${scale} (as escalas vão de {n} a {n}: são de 0,5 a 2,5)`)]);
+    expect(failing(variant("tamanhos", ["uTamanho * aEscala / -visto.z", "uTamanho / -visto.z"]))).toEqual([
+      "Cada estrela tem o tamanho da sua escala: gl_PointSize = uTamanho * aEscala / -visto.z (as estrelas à mesma profundidade ainda têm o mesmo tamanho: falta multiplicar pelo aEscala, uTamanho * aEscala / -visto.z)",
+    ]);
+  });
+
+  it("o brilho sem a potência, chapado, sem o 2, dentro da paraSRGB ou que falta, sem a mistura aditiva ou com o tamanho de antes, a conferência avisa", () => {
+    const fall = "A luz de cada estrela cai rápido do meio até a borda do círculo";
+    const power = "pow(max(1.0 - 2.0 * d, 0.0), 6.0)";
+    expect(failing(variant("brilho", [power, "pow(max(1.0 - 2.0 * d, 0.0), 1.0)"]))).toEqual([`${fall} (a luz cai devagar demais, e as estrelas viram bolas embaçadas: falta elevar a 6, ${power})`]);
+    expect(failing(variant("brilho", [power, "(d < 0.5 ? 1.0 : 0.0)"]))).toEqual([`${fall} (as estrelas são bolinhas chapadas: a força cai do meio para a borda, ${power})`]);
+    expect(failing(variant("brilho", [power, "pow(max(1.0 - d, 0.0), 6.0)"]))).toEqual([`${fall} (a luz não chega a zero na borda do círculo: o d vai até 0,5 na borda, por isso o 2.0 em 1.0 - 2.0 * d)`]);
+    expect(failing(variant("brilho", ["paraSRGB(vCor) * forca", "paraSRGB(vCor * forca)"]))).toEqual([`${fall} (a força entrou antes da paraSRGB, que clareia os tons fracos e espalha o brilho: é paraSRGB(vCor) * forca)`]);
+    expect(failing(variant("brilho", ["paraSRGB(vCor) * forca", "paraSRGB(vCor)"]))).toEqual([`${fall} (as estrelas ainda são quadrados chapados: falta a força cair do meio para a borda, com o gl_PointCoord)`]);
+    expect(failing(variant("brilho", ["  blending: THREE.AdditiveBlending,\n", ""]))).toEqual([
+      "As estrelas somam a luz, sem gravar a profundidade (a mistura não é a aditiva: falta o blending: THREE.AdditiveBlending, que soma a luz das estrelas)",
+    ]);
+    expect(failing(variant("brilho", ["60 * densidade", "30 * densidade"]))).toEqual(["O uTamanho é 60 vezes a densidade da tela (o uTamanho está em 30: o passo usa 60 * densidade, que dá 60 na sua tela)"]);
+  });
+
+  it("o giro espera a animação rodar e, quando a galáxia girando ao contrário estaria no mesmo lugar, espera mais; sem o tempo, ao contrário, espelhado, parado ou mais rápido, a conferência avisa", () => {
+    const step = stepOf("giro");
+    const spin = "A galáxia gira 0,1 radiano por segundo, no sentido do Gerador";
+    const marks = (facts) => grade(step, facts).results.map((r) => [r.ok, r.seen]);
+    expect(marks(factsOf(step.code))).toEqual(Array(2).fill([null, "a animação está parada: aperte ▶ na barra de cima para a galáxia girar"]));
+    expect(marks(factsOf(step.code, { seconds: 0.3 }))).toEqual(Array(2).fill([null, "esperando a galáxia girar um pouco"]));
+    // em 10π segundos, a galáxia deu meia volta, e a que gira ao contrário está no mesmo lugar
+    expect(marks(factsOf(step.code, { seconds: 10 * Math.PI }))).toEqual([
+      [true, null],
+      [null, "esperando a galáxia girar mais um pouco para conferir"],
+    ]);
+    expect(failing(variant("giro", ["  material.uniforms.uTempo.value = tempo;\n", ""]))).toEqual([`O uniform uTempo recebe o tempo da animação a cada quadro (${COPY})`, `${spin} (${COPY})`]);
+    expect(failing(variant("giro", ["angulo -= uTempo * 0.1;", "angulo += uTempo * 0.1;"]))).toEqual([
+      `${spin} (a galáxia gira para o outro lado, com as pontas dos braços na frente: o ângulo diminui, angulo -= uTempo * 0.1)`,
+    ]);
+    expect(failing(variant("giro", ["atan(p.z, p.x)", "atan(p.x, p.z)"]))).toEqual([`${spin} (a galáxia ficou espelhada: no atan, o z vem primeiro, atan(p.z, p.x))`]);
+    expect(failing(variant("giro", ["modelViewMatrix * vec4(p, 1.0)", "modelViewMatrix * vec4(position, 1.0)"]))).toEqual([
+      `${spin} (a galáxia não gira: falta diminuir o ângulo, angulo -= uTempo * 0.1, e a câmera ver o ponto girado, modelViewMatrix * vec4(p, 1.0))`,
+    ]);
+    expect(failing(variant("giro", ["angulo -= uTempo * 0.1;", "angulo -= uTempo * 1.0;"]))).toEqual([like(`${spin} (uma estrela que a conta põe em x = {n}, z = {n} apareceu em x = {n}, z = {n})`)]);
+  });
+
+  it("a velocidade vezes o raio, sem o uVelocidade, igual para todas, ao contrário ou zerada, a conferência avisa; o quádruplo vale", () => {
+    const flat = "Cada estrela gira uVelocidade / r radianos por segundo";
+    const line = "angulo -= uTempo * uVelocidade / r";
+    expect(failing(variant("velocidade", [line, "angulo -= uTempo * uVelocidade * r"]))).toEqual([`${flat} (as estrelas de fora giram mais rápido: a velocidade é dividida pelo raio, uVelocidade / r)`]);
+    expect(failing(variant("velocidade", [line, "angulo -= uTempo / r"]))).toEqual([`${flat} (as estrelas giram rápido demais: falta o uVelocidade, ${line})`]);
+    expect(failing(variant("velocidade", [line, "angulo -= uTempo * 0.1"]))).toEqual([`${flat} (a galáxia ainda gira inteira, como um disco: cada estrela gira na sua velocidade, ${line})`]);
+    expect(failing(variant("velocidade", [line, "angulo += uTempo * uVelocidade / r"]))).toEqual([`${flat} (a galáxia gira para o outro lado: o ângulo diminui, ${line})`]);
+    expect(failing(variant("velocidade", ["uVelocidade: { value: 0.5 }", "uVelocidade: { value: 0 }"]))).toEqual([`${flat} (o uVelocidade está em 0, e as estrelas ficam paradas)`]);
+    expect(failing(variant("velocidade", ["uVelocidade: { value: 0.5 }", "uVelocidade: { value: 2.0 }"]))).toEqual([]);
+  });
+
+  it("o núcleo sem a raiz ou com a soma no lugar dela, a conferência avisa; um núcleo maior vale", () => {
+    const core = "O núcleo gira junto, como um disco: uVelocidade / √(r² + uNucleo²)";
+    const speed = "uVelocidade / sqrt(r * r + uNucleo * uNucleo)";
+    expect(failing(variant("nucleo", [speed, "uVelocidade / r"]))).toEqual([`${core} (perto do centro, as estrelas ainda giram depressa demais: divida pela raiz, ${speed})`]);
+    expect(failing(variant("nucleo", [speed, "uVelocidade / (r + uNucleo)"]))).toEqual([
+      `${core} (longe do centro, as estrelas ficaram lentas demais: é a raiz de r² + uNucleo², sqrt(r * r + uNucleo * uNucleo), que fica quase igual ao r longe do centro)`,
+    ]);
+    expect(failing(variant("nucleo", ["uNucleo: { value: 0.5 }", "uNucleo: { value: 2.0 }"]))).toEqual([]);
+  });
+
+  it("a espiral parada, ao contrário, larga, sem a luz ou com as estrelas ainda nos braços, a conferência avisa; com 5 braços, vale", () => {
+    const wave = "Quem passa pela espiral brilha, e a espiral gira inteira, devagar";
+    const turn = "+ uTempo * uVelocidadeDosBracos";
+    expect(failing(variant("onda", ["uVelocidadeDosBracos: { value: 0.15 }", "uVelocidadeDosBracos: { value: 0 }"]))).toEqual([
+      `${wave} (o uVelocidadeDosBracos está em 0, e a espiral fica parada: ela gira devagar, a 0,15 radiano por segundo)`,
+    ]);
+    expect(failing(variant("onda", [` ${turn}`, ""]))).toEqual([`${wave} (a espiral está parada: ela gira com o tempo, ${turn})`]);
+    expect(failing(variant("onda", [turn, "- uTempo * uVelocidadeDosBracos"]))).toEqual([`${wave} (a espiral gira ao contrário das estrelas: o tempo entra com mais, ${turn})`]);
+    expect(failing(variant("onda", ["pow(0.5 + 0.5 * onda, 3.0)", "(0.5 + 0.5 * onda)"]))).toEqual([`${wave} (os braços ficaram largos e borrados: falta elevar ao cubo, pow(0.5 + 0.5 * onda, 3.0))`]);
+    expect(failing(variant("onda", ["vCor = color * mix(0.08, 1.0, brilho);", "vCor = color;"]))).toEqual([
+      `${wave} (as estrelas não mudam de brilho: falta multiplicar a cor pela luz da espiral, color * mix(0.08, 1.0, brilho))`,
+    ]);
+    expect(failing(variant("onda", ["const angulo = Math.random() * Math.PI * 2;", "const angulo = ((i % bracos) / bracos) * Math.PI * 2 + r * curvatura;"]))).toEqual([
+      "As estrelas se espalham por igual pelo disco, sem braços (as estrelas ainda estão nos braços: o ângulo agora é sorteado por igual, Math.random() * Math.PI * 2, e quem desenha os braços é o shader)",
+    ]);
+    expect(failing(variant("onda", ["const bracos = 3;", "const bracos = 5;"]))).toEqual([]);
+  });
+
+  it("a cor jovem fora dos braços ou que falta, a conferência avisa; outra cor jovem vale", () => {
+    const young = "Na espiral, as estrelas ficam azuladas: mix(color, uCorJovem, brilho)";
+    expect(failing(variant("jovens", ["mix(color, uCorJovem, brilho)", "mix(uCorJovem, color, brilho)"]))).toEqual([
+      `${young} (a cor jovem ficou fora dos braços: no mix, ela vem em segundo, mix(color, uCorJovem, brilho))`,
+    ]);
+    expect(failing(variant("jovens", ["mix(color, uCorJovem, brilho) * ", "color * "]))).toEqual([
+      `${young} (as estrelas dos braços ainda têm a cor de antes: falta misturar a cor com a jovem, mix(color, uCorJovem, brilho))`,
+    ]);
+    expect(failing(variant("jovens", ['"#a8c8ff"', '"#ff6b9a"']))).toEqual([]);
+  });
+
+  it("o projeto baixado leva os controles do mouse, a densidade da tela e os dois shaders no cena.js", () => {
+    const { files } = stepOf("computador");
+    const main = fileOf(files, "src/main.js").code;
+    expect(main).toContain('import { OrbitControls } from "three/addons/controls/OrbitControls.js";');
+    expect(main, "a imagem com a densidade que o uTamanho conta").toContain("renderizador.setPixelRatio(Math.min(window.devicePixelRatio, 2));");
+    const cena = fileOf(files, "src/cena.js").code;
+    expect(cena).toContain("const densidade = Math.min(window.devicePixelRatio, 2);");
     expect(cena).toContain("const vertexShader = /* glsl */ `");
     expect(cena).toContain("const fragmentShader = /* glsl */ `");
   });

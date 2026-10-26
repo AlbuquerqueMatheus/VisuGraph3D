@@ -32,6 +32,9 @@ function spread(count, max) {
   return Array.from({ length: n }, (_, j) => (n === count ? j : Math.floor(((j * 0.6180339887498949) % 1) * count)));
 }
 
+/** Os índices dos vértices da amostra de uma geometria com `count` vértices, na ordem da amostra. */
+export const sampleIndices = (count) => spread(count, SAMPLE_SIZE);
+
 /** Nome da constante de mistura do material, como no código (THREE.AdditiveBlending → "AdditiveBlending"). */
 const BLENDING_NAMES = Object.fromEntries(
   ["NoBlending", "NormalBlending", "AdditiveBlending", "SubtractiveBlending", "MultiplyBlending", "CustomBlending"].map((name) => [THREE[name], name]),

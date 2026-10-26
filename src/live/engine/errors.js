@@ -73,6 +73,10 @@ function operands(op, left, right) {
 
 const SHADER_RULES = [
   [
+    /^'color' : undeclared identifier/,
+    () => "'color' é o atributo com a cor de cada vértice: o three.js só o declara no shader de vértices, e só com vertexColors: true no material.",
+  ],
+  [
     /^'(\w+)' : undeclared identifier/,
     (m) => `'${m[1]}' não existe: confira se o nome está escrito igual onde foi declarado. No GLSL, cada uniform e cada varying também precisa ser declarado no shader que o usa, antes do main.`,
   ],

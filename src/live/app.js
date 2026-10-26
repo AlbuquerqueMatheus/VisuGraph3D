@@ -900,6 +900,7 @@ function onFacts(msg) {
     playing: !!msg.playing,
     recorded: msg.recorded ?? 0,
     elapsed: msg.elapsed ?? 0,
+    pixelRatio: msg.pixelRatio ?? 1,
   };
   const result = grade(target, facts);
   const passed = result.results.filter((r) => r.ok).length;

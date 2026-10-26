@@ -68,6 +68,7 @@ describe("os erros do GLSL em português", () => {
   it("cada mensagem do compilador vira uma explicação, com os tipos como no código", () => {
     const cases = [
       ["'uLuz' : undeclared identifier", "'uLuz' não existe: confira se o nome está escrito igual onde foi declarado. No GLSL, cada uniform e cada varying também precisa ser declarado no shader que o usa, antes do main."],
+      ["'color' : undeclared identifier", "'color' é o atributo com a cor de cada vértice: o three.js só o declara no shader de vértices, e só com vertexColors: true no material."],
       ["'pc_fragColor' : syntax error", "Erro de sintaxe perto de 'gl_FragColor': confira os parênteses, as vírgulas e o ; no fim da linha."],
       ["'' : syntax error", "Erro de sintaxe no fim do shader: confira se cada { tem o seu }."],
       ["'=' : cannot convert from 'const int' to 'highp float'", "No GLSL, um número inteiro não vira float sozinho: escreva 1.0 em vez de 1."],

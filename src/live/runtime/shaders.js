@@ -1,6 +1,7 @@
 // shaders.js — os ShaderMaterial do código no visor: o erro de um shader que não compilou, na
 // linha do texto que o código escreveu, e as amostras de pixels com que a conferência dos projetos
-// de shader compara a cor que o shader pintou com a conta que ele devia fazer.
+// de shader compara a cor que o shader pintou com a conta que ele devia fazer, e o lugar da
+// superfície que o shader de vértices desenhou com a altura que ela devia ter.
 //
 // O three.js compila o texto do material com umas cem linhas na frente (a versão do GLSL, as
 // matrizes e os atributos que ele declara), e o WebGL conta as linhas do erro a partir da primeira
@@ -216,7 +217,28 @@ function castRays(mesh, camera, width, height, grid, margin) {
   if (!area) return null;
   const normals = mesh.geometry.attributes.normal;
   toNormal.getNormalMatrix(mesh.matrixWorld);
-  const rays = [];
+  return gridPixels(area, width, height, grid).map(([px, py]) => {
+    // o raio passa pelo centro do pixel, onde a placa de vídeo fez a conta
+    ndc.set(((px + 0.5) / width) * 2 - 1, ((py + 0.5) / height) * 2 - 1);
+    ray.setFromCamera(ndc, camera);
+    const hits = ray.intersectObject(mesh, false).map((hit) => {
+      const out = { distance: hit.distance, materialIndex: hit.face?.materialIndex ?? 0 };
+      if (!hit.face) return out;
+      const face = hit.face.normal.clone().applyMatrix3(toNormal).normalize();
+      let n = face;
+      if (normals) {
+        THREE.Triangle.getInterpolatedAttribute(normals, hit.face.a, hit.face.b, hit.face.c, hit.barycoord, local);
+        n = local.applyMatrix3(toNormal).normalize();
+      }
+      return { ...out, p: hit.point.toArray(), n: n.toArray(), edge: Math.abs(face.dot(ray.ray.direction)) < 0.25 };
+    });
+    return { px, py, x: ndc.x, y: ndc.y, hits };
+  });
+}
+
+/** Os pixels (x, y) de uma grade de `grid` × `grid` pontos sobre o retângulo `area` da tela, sem repetir. */
+function gridPixels(area, width, height, grid) {
+  const pixels = [];
   const seen = new Set();
   for (let j = 0; j < grid; j++) {
     for (let i = 0; i < grid; i++) {
@@ -226,22 +248,47 @@ function castRays(mesh, camera, width, height, grid, margin) {
       const py = Math.min(height - 1, Math.max(0, Math.floor(((y + 1) / 2) * height)));
       if (seen.has(py * width + px)) continue;
       seen.add(py * width + px);
-      // o raio passa pelo centro do pixel, onde a placa de vídeo fez a conta
-      ndc.set(((px + 0.5) / width) * 2 - 1, ((py + 0.5) / height) * 2 - 1);
-      ray.setFromCamera(ndc, camera);
-      const hits = ray.intersectObject(mesh, false).map((hit) => {
-        const out = { distance: hit.distance, materialIndex: hit.face?.materialIndex ?? 0 };
-        if (!hit.face) return out;
-        const face = hit.face.normal.clone().applyMatrix3(toNormal).normalize();
-        let n = face;
-        if (normals) {
-          THREE.Triangle.getInterpolatedAttribute(normals, hit.face.a, hit.face.b, hit.face.c, hit.barycoord, local);
-          n = local.applyMatrix3(toNormal).normalize();
-        }
-        return { ...out, p: hit.point.toArray(), n: n.toArray(), edge: Math.abs(face.dot(ray.ray.direction)) < 0.25 };
-      });
-      rays.push({ px, py, x: ndc.x, y: ndc.y, hits });
+      pixels.push([px, py]);
     }
   }
-  return rays;
+  return pixels;
+}
+
+// ---------------------------------------------------------------------------
+// A superfície que o shader de vértices desenhou
+
+const unprojected = new THREE.Vector3();
+
+/**
+ * Os pontos da superfície que a malha mostra na imagem, para um shader de vértices que move os
+ * vértices (as ondas de um mar): a geometria do JavaScript continua parada, e um raio contra ela
+ * não acharia a superfície desenhada. O ponto de cada pixel sai da profundidade que a placa de
+ * vídeo desenhou ali: `depth(x, y)` dá a profundidade da malha no pixel (x, y), de 0 a 1 como o
+ * gl_FragCoord.z, ou null se ali a malha não é o que aparece. Os pixels são os de uma grade de
+ * `grid` × `grid` pontos sobre o retângulo onde a malha parada aparece, com uma folga maior que a
+ * de samplePixels, porque a superfície desenhada passa dele:
+ *
+ * - `points`: os pixels que mostram a malha, cada um com o ponto da superfície no mundo (`p`) e a cor (`c`, de 0 a 255);
+ * - `outside`: os outros pixels da grade, com a cor.
+ *
+ * `read(x, y)` dá a cor [r, g, b] do pixel (x, y), contado de baixo para cima, como o WebGL lê.
+ */
+export function sampleSurface({ camera, mesh, width, height, read, depth, grid = 24, margin = 0.25 }) {
+  mesh.updateWorldMatrix(true, false);
+  camera.updateWorldMatrix(true, false); // a câmera do código pode não estar na cena
+  const points = [];
+  const outside = [];
+  const area = screenBox(mesh, camera, margin);
+  if (!area) return { points, outside };
+  for (const [px, py] of gridPixels(area, width, height, grid)) {
+    const c = read(px, py);
+    const d = depth(px, py);
+    if (d == null) {
+      outside.push({ c });
+      continue;
+    }
+    unprojected.set(((px + 0.5) / width) * 2 - 1, ((py + 0.5) / height) * 2 - 1, d * 2 - 1).unproject(camera);
+    points.push({ p: unprojected.toArray(), c });
+  }
+  return { points, outside };
 }

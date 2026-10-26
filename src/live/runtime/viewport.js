@@ -17,7 +17,7 @@ import { shadePoint } from "../../lib/phong3d.js";
 import { localMatrix, objectMath, projectionMatrix, viewOf, worldMatrix } from "../mathModel.js";
 import { collectLights, createGlassMaterial, glassTerms, setLightUniforms, syncGlass } from "./glass.js";
 import { sceneFacts, trailPoint } from "./facts.js";
-import { belongsTo, failureInfo, samplePixels } from "./shaders.js";
+import { belongsTo, failureInfo, samplePixels, sampleSurface } from "./shaders.js";
 
 const LOOP_LIMIT_MS = { run: 2000, frame: 1000 };
 // O navegador aceita uns 16 contextos WebGL por página e derruba o mais antigo (o do visor)
@@ -1349,7 +1349,9 @@ function showArrows(point, result) {
 
 /**
  * Fatos dos objetos da execução na tela (os de um laço também), da câmera do código e das luzes
- * acesas, com o rastro de quem se moveu e se a animação está andando.
+ * acesas, com o rastro de quem se moveu, se a animação está andando e o tempo dela (`elapsed`, o
+ * que animar() recebe). Com `msg.surface`, os fatos de um shader trazem também a superfície que o
+ * shader de vértices desenhou.
  */
 function factsInfo(msg) {
   const run = state.current;
@@ -1357,10 +1359,10 @@ function factsInfo(msg) {
   const entries = [...run.registry];
   const { trail } = run;
   const facts = sceneFacts({ scene: run.scene, camera: run.camera, entries, idOf: (obj) => run.idOf.get(obj), trails: trail.points });
-  if (run.shaders) shaderFacts(run, entries, facts.objects);
+  if (run.shaders) shaderFacts(run, entries, facts.objects, { surface: !!msg.surface });
   // `recorded`: quantos segundos de animação o rastro já cobre (quem não saiu do lugar nesse tempo, não anda)
   const recorded = trail.first == null ? 0 : trail.last - trail.first;
-  return { type: "facts", seq: msg.seq, runId: run.id, ...facts, playing: state.playing && !!run.animar && !run.animError, recorded };
+  return { type: "facts", seq: msg.seq, runId: run.id, ...facts, playing: state.playing && !!run.animar && !run.animError, recorded, elapsed: state.elapsed };
 }
 
 // Os pixels de um shader: a cena desenhada pela câmera do código numa imagem de 256 de largura, na
@@ -1382,8 +1384,12 @@ let sampleBackground = null; // { key, pixel }: o fundo como sai na imagem, para
  * normal que cada um mostra (samplePixels, em src/live/runtime/shaders.js). A conferência dos
  * projetos de shader refaz a conta e compara. Os objetos do three.js saem no espaço linear nesta
  * imagem (o three.js só converte para sRGB na tela); o shader do aluno sai como ele escreve.
+ * Com `surface`, os pixels vêm de outro jeito: em vez dos raios contra a geometria, que um shader de
+ * vértices pode deixar para trás (as ondas de um mar sobem e descem, e a placa do JavaScript fica
+ * parada), `surface` traz os pontos da superfície que o shader desenhou, pela profundidade de cada
+ * pixel (surfaceDepth), com a cor (sampleSurface).
  */
-function shaderFacts(run, entries, objects) {
+function shaderFacts(run, entries, objects, { surface = false } = {}) {
   const meshes = [];
   for (const [id, list] of entries) {
     const obj = list[0];
@@ -1434,9 +1440,109 @@ function shaderFacts(run, entries, objects) {
       eye,
       size: [width, height],
       background: backgroundPixel,
-      ...samplePixels({ scene: run.scene, camera, mesh, width, height, read }),
+      ...(surface ? {} : samplePixels({ scene: run.scene, camera, mesh, width, height, read })),
     };
+    // um shader que não compila não desenha superfície nenhuma (e o GLSL 3 pediria outro shader de profundidade)
+    if (!surface || failure || material.glslVersion === THREE.GLSL3) continue;
+    const depth = surfaceDepth(run, camera, mesh, material, width, height);
+    if (depth) objects[id].shader.surface = sampleSurface({ camera, mesh, width, height, read, depth });
   }
+}
+
+// A superfície que um shader de vértices desenhou: a malha desenhada de novo pela câmera do
+// código, com o mesmo shader de vértices e os mesmos uniforms, e um shader de fragmentos que
+// escreve na cor a profundidade de cada pixel (o gl_FragCoord.z, de 0 a 1), em três bytes. As
+// outras malhas entram só na profundidade (sem pintar nada), para tapar o que passa atrás delas,
+// e os pontos, as linhas e os sprites ficam de fora. A malha vem por último, e onde ela aparece a
+// opacidade fica em 1 (a imagem começa toda em 0).
+const SURFACE_FRAGMENT = /* glsl */ `
+  void main() {
+    float z = gl_FragCoord.z * 255.0;
+    float r = floor(z);
+    z = (z - r) * 255.0;
+    float g = floor(z);
+    gl_FragColor = vec4(r, g, floor((z - g) * 255.0), 255.0) / 255.0;
+  }
+`;
+const SURFACE_OCCLUDER = new THREE.MeshBasicMaterial({ colorWrite: false });
+const MAX_SURFACE_MATERIALS = 4;
+const surfaceMaterials = new Map(); // ShaderMaterial do código → o da profundidade, dos últimos usados
+let surfaceTarget = null;
+let surfaceBuffer = null;
+
+/** O material da profundidade de um ShaderMaterial do código, guardado enquanto o shader de vértices e o lado são os mesmos. */
+function surfaceMaterialOf(material) {
+  let depth = surfaceMaterials.get(material);
+  surfaceMaterials.delete(material);
+  if (depth?.vertexShader !== material.vertexShader || depth.side !== material.side) {
+    depth?.dispose();
+    depth = new THREE.ShaderMaterial({
+      vertexShader: material.vertexShader,
+      fragmentShader: SURFACE_FRAGMENT,
+      uniforms: material.uniforms,
+      defines: material.defines,
+      side: material.side,
+      vertexColors: material.vertexColors,
+    });
+  }
+  surfaceMaterials.set(material, depth);
+  if (surfaceMaterials.size > MAX_SURFACE_MATERIALS) {
+    const [old, oldDepth] = surfaceMaterials.entries().next().value;
+    oldDepth.dispose();
+    surfaceMaterials.delete(old);
+  }
+  return depth;
+}
+
+/**
+ * A profundidade da malha em cada pixel da imagem de `width` × `height`: (x, y) → de 0 a 1, como o
+ * gl_FragCoord.z, ou null onde a malha não aparece. null se o shader de vértices não compilou com o
+ * de fragmentos da profundidade (o erro não é do código, e não vai para a barra de status).
+ */
+function surfaceDepth(run, camera, mesh, material, width, height) {
+  if (!surfaceTarget) surfaceTarget = new THREE.WebGLRenderTarget(width, height);
+  else if (surfaceTarget.width !== width || surfaceTarget.height !== height) surfaceTarget.setSize(width, height);
+  if (surfaceBuffer?.length !== width * height * 4) surfaceBuffer = new Uint8Array(width * height * 4);
+  const depthMaterial = surfaceMaterialOf(material);
+  const swapped = []; // [objeto, propriedade, valor de antes]
+  run.scene.traverse((obj) => {
+    if (obj === mesh) {
+      swapped.push([obj, "material", obj.material], [obj, "renderOrder", obj.renderOrder]);
+      obj.material = depthMaterial;
+      obj.renderOrder = Number.MAX_SAFE_INTEGER;
+    } else if (obj.isMesh) {
+      swapped.push([obj, "material", obj.material]);
+      obj.material = SURFACE_OCCLUDER;
+    } else if ((obj.isPoints || obj.isLine || obj.isSprite) && obj.visible) {
+      swapped.push([obj, "visible", true]);
+      obj.visible = false;
+    }
+  });
+  const background = run.scene.background;
+  const clearColor = renderer.getClearColor(new THREE.Color());
+  const clearAlpha = renderer.getClearAlpha();
+  const autoClear = renderer.autoClear;
+  const failures = newShaderFailures.length;
+  run.scene.background = null;
+  renderer.setClearColor(0x000000, 0);
+  renderer.autoClear = true;
+  renderer.setRenderTarget(surfaceTarget);
+  try {
+    renderer.render(run.scene, camera);
+  } finally {
+    for (const [obj, key, value] of swapped.reverse()) obj[key] = value;
+    run.scene.background = background;
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(clearColor, clearAlpha);
+    renderer.autoClear = autoClear;
+  }
+  if (newShaderFailures.splice(failures).length) return null;
+  renderer.readRenderTargetPixels(surfaceTarget, 0, 0, width, height, surfaceBuffer);
+  return (x, y) => {
+    const i = (y * width + x) * 4;
+    if (surfaceBuffer[i + 3] < 128) return null;
+    return (surfaceBuffer[i] + (surfaceBuffer[i + 1] + surfaceBuffer[i + 2] / 255) / 255) / 255;
+  };
 }
 
 /**

@@ -868,13 +868,14 @@ const projectStep = () => (state.project ? state.project.project.steps[state.pro
 
 function requestFacts() {
   // um passo no computador não confere a cena: quem diz que funcionou é a pessoa
-  if (state.challenge || (state.project && !isComputer(projectStep()))) bridge.send({ type: "facts", seq: ++state.factsSeq });
+  // um projeto que move os vértices num shader (o mar) pede também a superfície que o shader desenhou
+  if (state.challenge || (state.project && !isComputer(projectStep()))) bridge.send({ type: "facts", seq: ++state.factsSeq, surface: !!state.project?.project.surface });
 }
 
 /**
  * Corrige o desafio ou o passo aberto com os fatos da cena, pelos nomes das variáveis do código
- * que rodou. Os passos de projeto também olham o fundo da cena, o que animar() muda e se a
- * animação está andando (o rastro de quem anda só cresce com ela).
+ * que rodou. Os passos de projeto também olham o fundo da cena, o que animar() muda, se a
+ * animação está andando (o rastro de quem anda só cresce com ela) e em que tempo ela está.
  */
 function onFacts(msg) {
   const analysis = state.runs.get(msg.runId)?.analysis;
@@ -898,6 +899,7 @@ function onFacts(msg) {
     hasAnimar: !!analysis.animar,
     playing: !!msg.playing,
     recorded: msg.recorded ?? 0,
+    elapsed: msg.elapsed ?? 0,
   };
   const result = grade(target, facts);
   const passed = result.results.filter((r) => r.ok).length;

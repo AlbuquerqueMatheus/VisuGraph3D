@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { grade } from "../../src/live/challenges.js";
 import { sceneFacts, trailPoint } from "../../src/live/runtime/facts.js";
-import { samplePixels } from "../../src/live/runtime/shaders.js";
+import { samplePixels, sampleSurface } from "../../src/live/runtime/shaders.js";
 import { analyze, hasBlockingError } from "../../src/live/engine/analyze.js";
 import { instrument } from "../../src/live/engine/instrument.js";
 import { LEVELS, PROJECTS, behind, codeState, diffLines, findSnippet, guideStep, hunks, isComputer, liveSteps, projectById, startCode, stepIndex } from "../../src/live/projects/index.js";
@@ -16,8 +16,9 @@ import { BACKGROUND, draw } from "./gpu.js";
 // animar() muda, pela análise do código. Sem cena no código, o visor usa uma vazia (e avisa na
 // barra de status). Com `seconds`, a animação roda esse tempo em quadros de 1/60 s (ou com os
 // tempos de `frames`, um depois do outro, de novo e de novo), e o rastro de cada objeto é anotado
-// como o visor anota: a cada 1/30 s, os últimos 20 s.
-function factsOf(code, { seconds = 0, frames = [1 / 60] } = {}) {
+// como o visor anota: a cada 1/30 s, os últimos 20 s. Com `surface`, os fatos de um shader trazem
+// a superfície que o shader de vértices desenhou, como o visor manda quando o projeto pede.
+function factsOf(code, { seconds = 0, frames = [1 / 60], surface = false } = {}) {
   const analysis = analyze(code);
   const registry = new Map();
   const ids = new Map();
@@ -50,9 +51,9 @@ function factsOf(code, { seconds = 0, frames = [1 / 60] } = {}) {
   const scene = first(analysis.scene) ?? new THREE.Scene();
   const trails = new Map();
   let recorded = 0;
+  let tempo = 0;
   if (animar && seconds > 0) {
     let last = -Infinity;
-    let tempo = 0;
     for (let frame = 0; tempo < seconds - 1e-9; frame++) {
       const delta = frames[frame % frames.length];
       tempo += delta;
@@ -74,14 +75,14 @@ function factsOf(code, { seconds = 0, frames = [1 / 60] } = {}) {
   }
   const camera = first(analysis.camera);
   const facts = sceneFacts({ scene, camera, entries: [...registry], idOf: (obj) => ids.get(obj), trails });
-  if (camera) shaderFacts({ scene, camera, registry, objects: facts.objects });
+  if (camera) shaderFacts({ scene, camera, registry, objects: facts.objects, surface });
   const nameOf = (id) => analysis.objects[id]?.name ?? analysis.objects[id]?.local ?? null;
   const objects = Object.create(null);
   for (const [id, f] of Object.entries(facts.objects)) {
     const name = nameOf(id);
     if (name && !objects[name]) objects[name] = f;
   }
-  return { ...facts, objects, nameOf, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar, playing: !!animar && seconds > 0, recorded };
+  return { ...facts, objects, nameOf, animated: animatedKeys(analysis), hasAnimar: !!analysis.animar, playing: !!animar && seconds > 0, recorded, elapsed: tempo };
 }
 
 /** A largura da imagem que o visor desenha para medir os pixels dos shaders (SAMPLE_WIDTH, em viewport.js). */
@@ -93,7 +94,7 @@ const VISOR_ASPECT = 580 / 824;
  * Os fatos `shader` de cada malha com ShaderMaterial, como o visor monta (shaderFacts, em
  * src/live/runtime/viewport.js), com a placa de vídeo de mentira de gpu.js no lugar da de verdade.
  */
-function shaderFacts({ scene, camera, registry, objects }) {
+function shaderFacts({ scene, camera, registry, objects, surface }) {
   const meshes = [...registry].filter(([id, [obj]]) => obj?.isMesh && !obj.isInstancedMesh && [].concat(obj.material)[0]?.isShaderMaterial && objects[id]);
   if (!meshes.length) return;
   // como no visor, que acerta a proporção da câmera do código com a dele a cada quadro
@@ -107,7 +108,9 @@ function shaderFacts({ scene, camera, registry, objects }) {
   const gpu = draw({ scene, camera, width, height });
   const eye = camera.getWorldPosition(new THREE.Vector3()).toArray();
   for (const [id, [mesh]] of meshes) {
-    objects[id].shader = { error: gpu.errorOf(mesh), eye, size: [width, height], background: BACKGROUND, ...samplePixels({ scene, camera, mesh, width, height, read: gpu.read }) };
+    const error = gpu.errorOf(mesh);
+    objects[id].shader = { error, eye, size: [width, height], background: BACKGROUND, ...(surface ? {} : samplePixels({ scene, camera, mesh, width, height, read: gpu.read })) };
+    if (surface && !error) objects[id].shader.surface = sampleSurface({ camera, mesh, width, height, read: gpu.read, depth: gpu.depthOf(mesh) });
   }
   if (camera.isPerspectiveCamera) {
     camera.aspect = aspect;
@@ -117,8 +120,14 @@ function shaderFacts({ scene, camera, registry, objects }) {
 
 /** Os segundos de animação antes de conferir um passo que mede o movimento (`motion`), como o carrinho da montanha-russa. */
 const MOTION_SECONDS = 20;
-/** Os fatos do código para as conferências do passo: com a animação rodando, se o passo mede o movimento. */
-const factsFor = (step, code) => factsOf(code, { seconds: step.motion ? MOTION_SECONDS : 0 });
+/** O projeto de cada passo. */
+const PROJECT_OF = new Map(PROJECTS.flatMap((p) => p.steps.map((s) => [s, p])));
+
+/**
+ * Os fatos do código para as conferências do passo, como o app pede: com a animação rodando, se o
+ * passo mede o movimento, e com a superfície dos shaders, se o projeto pede (`surface`).
+ */
+const factsFor = (step, code) => factsOf(code, { seconds: step.motion ? MOTION_SECONDS : 0, surface: !!PROJECT_OF.get(step)?.surface });
 
 const galaxia = projectById("galaxia");
 const solar = projectById("sistema-solar");
@@ -145,12 +154,12 @@ describe("guia de projetos: o catálogo", () => {
   it("tem os três níveis, e cada projeto está num deles", () => {
     expect(LEVELS.map((l) => l.id)).toEqual(["facil", "intermediario", "avancado"]);
     for (const p of PROJECTS) expect(LEVELS.map((l) => l.id)).toContain(p.level);
-    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(2);
+    expect(LEVELS.flatMap((l) => l.soon)).toHaveLength(1);
     const soon = LEVELS.flatMap((l) => l.soon.map((s) => s.title));
     for (const p of PROJECTS) expect(soon, `${p.title} já existe`).not.toContain(p.title);
   });
 
-  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2, a Montanha-russa e a Floresta, 11 e 1, e o Phong escrito à mão, 12 e 1", () => {
+  it("os fáceis vêm primeiro: Sistema solar, Vitrine de materiais e Cidade ao entardecer, com 8 passos no VisuGraph e 1 no computador; o Gerador de galáxias tem 10 e 2, a Montanha-russa e a Floresta, 11 e 1, o Phong escrito à mão e o Mar com ondas na GPU, 12 e 1", () => {
     expect(PROJECTS.map((p) => [p.id, liveSteps(p).length, p.steps.filter(isComputer).length])).toEqual([
       ["sistema-solar", 8, 1],
       ["vitrine", 8, 1],
@@ -159,6 +168,7 @@ describe("guia de projetos: o catálogo", () => {
       ["montanha-russa", 11, 1],
       ["floresta", 11, 1],
       ["phong", 12, 1],
+      ["mar", 12, 1],
     ]);
   });
 
@@ -1231,6 +1241,191 @@ describe("conferências do Phong", () => {
     expect(main).toContain('import { OrbitControls } from "three/addons/controls/OrbitControls.js";');
     expect(main, "a câmera olha para a origem, o centro dos controles").not.toContain("controles.target.set");
     expect(fileOf(stepOf("computador").files, "src/cena.js").code).toContain("const fragmentShader = /* glsl */ `");
+  });
+});
+
+describe("conferências do mar", () => {
+  const mar = projectById("mar");
+  const variant = variantOf(mar);
+  const stepOf = (id) => mar.steps[stepIndex(mar, id)];
+  const NO_SRGB = "a cor saiu do shader no espaço linear, mais escura: falta passar a cor pela paraSRGB no gl_FragColor";
+  /** A mensagem de quando a superfície não bate com a conta, com o ponto mais longe dela. */
+  const offShape = (text) => expect.stringMatching(new RegExp(`^${text} \\(a superfície não bate com a conta: em x = .+, z = .+, o mar está em y = .+, e a conta dá .+\\)$`));
+
+  it("a placa fora da câmera, a cor sem a paraSRGB ou sem o wireframe, a conferência avisa; outra cor vale", () => {
+    expect(failing(variant("shader", ["projectionMatrix * viewMatrix * mundo", "projectionMatrix * mundo"]))).toEqual([
+      "O shader de vértices desenha a placa no lugar dela, plana (a placa quase não aparece na câmera: confira o gl_Position, que leva o ponto do mundo pela câmera, projectionMatrix * viewMatrix * mundo)",
+      "As linhas têm a cor do uCorDaAgua, em sRGB (o mar quase não aparece na câmera)",
+    ]);
+    expect(failing(variant("shader", ["vec4(paraSRGB(uCorDaAgua), 1.0)", "vec4(uCorDaAgua, 1.0)"]))).toEqual([`As linhas têm a cor do uCorDaAgua, em sRGB (${NO_SRGB})`]);
+    expect(failing(variant("shader", ["  wireframe: true,\n", ""]))).toEqual(["As linhas têm a cor do uCorDaAgua, em sRGB (o material não está em wireframe: falta o wireframe: true no ShaderMaterial)"]);
+    expect(failing(variant("shader", ['new THREE.Color("#0b4268")', 'new THREE.Color("#ffffff")']))).toEqual([]);
+  });
+
+  it("a onda em z ou mais alta que a do passo, a conferência avisa", () => {
+    expect(failing(variant("onda", ["sin(mundo.x)", "sin(mundo.z)"]))).toEqual(["A placa vira uma onda: cada ponto sobe ou desce sin(x) (a onda corre em z: o seno usa o x, sin(mundo.x))"]);
+    expect(failing(variant("onda", ["sin(mundo.x)", "2.0 * sin(mundo.x)"]))).toEqual([offShape("A placa vira uma onda: cada ponto sobe ou desce sin\\(x\\)")]);
+  });
+
+  it("as ondas esperam a animação rodar e, quando a onda parada desenharia o mesmo mar, esperam mais; sem o tempo, para trás ou mais rápida, a conferência avisa", () => {
+    const step = stepOf("tempo");
+    const marks = (facts) => grade(step, facts).results.map((r) => [r.ok, r.seen]);
+    expect(marks(factsOf(step.code, { surface: true }))).toEqual(Array(2).fill([null, "a animação está parada: aperte ▶ na barra de cima para as ondas andarem"]));
+    expect(marks(factsOf(step.code, { seconds: 0.3, surface: true }))).toEqual(Array(2).fill([null, "esperando as ondas andarem um pouco"]));
+    expect(marks(factsOf(step.code, { seconds: 2 * Math.PI, surface: true }))).toEqual([
+      [true, null],
+      [null, "esperando as ondas andarem mais um pouco para conferir"],
+    ]);
+    const copy = "o uTempo continua em 0: falta o animar copiar o tempo para ele, material.uniforms.uTempo.value = tempo";
+    expect(failing(variant("tempo", ["  material.uniforms.uTempo.value = tempo;\n", ""]))).toEqual([
+      `O uniform uTempo recebe o tempo da animação a cada quadro (${copy})`,
+      `A onda anda: a superfície é sin(x − uTempo) (${copy})`,
+    ]);
+    expect(failing(variant("tempo", ["mundo.x - uTempo", "mundo.x + uTempo"]))).toEqual([
+      "A onda anda: a superfície é sin(x − uTempo) (a onda anda para trás, para o −x: o tempo entra com menos, sin(mundo.x - uTempo))",
+    ]);
+    expect(failing(variant("tempo", ["mundo.x - uTempo", "mundo.x - uTempo * 3.0"]))).toEqual([offShape("A onda anda: a superfície é sin\\(x − uTempo\\)")]);
+  });
+
+  it("a onda sem a altura ou com outra, sem o k ou sem o 2π, parada, sem o parêntese, para trás ou na gravidade da Lua, a conferência avisa; as ondas de 40 e de 3 valem", () => {
+    const size = "A onda tem a altura uAltura e o comprimento uComprimento";
+    const speed = "Ela anda na velocidade das ondas do mar, c = √(9,8 / k)";
+    const above = `${speed} (a altura e o comprimento da onda ainda não batem: a conferência de cima diz o que falta)`;
+    expect(failing(variant("fisica", ["uAltura * sin(", "sin("]))).toEqual([`${size} (a onda tem altura 1: falta multiplicar o seno por uAltura)`, above]);
+    expect(failing(variant("fisica", ["uAltura * sin(", "0.8 * sin("]))).toEqual([`${size} (a onda tem 0,80 de altura, e o uAltura é 0,50)`, above]);
+    expect(failing(variant("fisica", ["sin(k * (mundo.x - c * uTempo))", "sin(mundo.x - c * uTempo)"]))).toEqual([
+      `${size} (a onda tem o comprimento do seno puro, 2π: falta o k multiplicando dentro do seno, sin(k * (mundo.x - c * uTempo)))`,
+      above,
+    ]);
+    expect(failing(variant("fisica", ["2.0 * PI / uComprimento", "1.0 / uComprimento"]))).toEqual([
+      `${size} (as ondas saíram compridas demais: o k é 2.0 * PI / uComprimento, com o 2π de uma volta inteira)`,
+      above,
+    ]);
+    expect(failing(variant("fisica", ["c * uTempo", "uTempo"]))).toEqual([`${speed} (a onda parou: falta o tempo na fase, k * (mundo.x - c * uTempo))`]);
+    expect(failing(variant("fisica", ["k * (mundo.x - c * uTempo)", "k * mundo.x - c * uTempo"]))).toEqual([
+      `${speed} (o tempo também vai multiplicado pelo k: k * (mundo.x - c * uTempo), com o parêntese)`,
+    ]);
+    expect(failing(variant("fisica", ["mundo.x - c * uTempo", "mundo.x + c * uTempo"]))).toEqual([
+      `${speed} (a onda anda para trás, para o −x: o tempo entra com menos, k * (mundo.x - c * uTempo))`,
+    ]);
+    expect(failing(variant("fisica", ["sqrt(9.8 / k)", "sqrt(1.6 / k)"]))).toEqual([`${speed} (a onda não anda na velocidade c = √(9,8 / k): a fase é k * (mundo.x - c * uTempo))`]);
+    expect(failing(variant("fisica", ["uComprimento: { value: 10 }", "uComprimento: { value: 40 }"]))).toEqual([]);
+    // com 3 de comprimento, os triângulos da placa cortam as cristas, e a onda parece mais baixa: a conferência conta com isso
+    expect(failing(variant("fisica", ["uComprimento: { value: 10 }", "uComprimento: { value: 3 }"]))).toEqual([]);
+    expect(failing(variant("fisica", ["uComprimento: { value: 10 }", "uComprimento: { value: 3 }"], ["uAltura * sin(", "0.8 * sin("]))).toEqual([`${size} (a onda tem 0,80 de altura, e o uAltura é 0,50)`, above]);
+  });
+
+  it("a normal ao contrário, a da placa parada, sem o normalize ou em sRGB, a conferência avisa", () => {
+    const normal = "A cor de cada ponto mostra a normal dele";
+    expect(failing(variant("normal", ["cross(binormal, tangente)", "cross(tangente, binormal)"]))).toEqual([`${normal} (a normal aponta para baixo: no cross, a ordem é cross(binormal, tangente))`]);
+    expect(failing(variant("normal", ["vNormal = normalize(cross(binormal, tangente));", "vNormal = normal;"]))).toEqual([
+      `${normal} (o mar inteiro tem a cor da normal da placa parada, (0, 1, 0): a normal precisa vir dos vizinhos, que sobem e descem com a onda)`,
+    ]);
+    expect(failing(variant("normal", ["vNormal = normalize(cross(binormal, tangente));", "vNormal = cross(binormal, tangente);"], ["vec3 n = normalize(vNormal);", "vec3 n = vNormal;"]))).toEqual([
+      `${normal} (a normal está quase zerada, e o mar sai cinza: falta o normalize, normalize(cross(binormal, tangente)))`,
+    ]);
+    expect(failing(variant("normal", ["vec4(n * 0.5 + 0.5, 1.0)", "vec4(paraSRGB(n * 0.5 + 0.5), 1.0)"]))).toEqual([
+      `${normal} (neste passo, a cor é a normal direto, sem a paraSRGB: gl_FragColor = vec4(n * 0.5 + 0.5, 1.0))`,
+    ]);
+  });
+
+  it("a água e o céu trocados, a direção ao contrário, a cor em linear, outro céu ou o Fresnel sem a potência, a conferência avisa; o céu de fim de tarde vale", () => {
+    const fresnel = "O mar reflete o céu pelo Fresnel de Schlick";
+    expect(failing(variant("ceu", ["mix(uCorDaAgua, uCorDoCeu, fresnel)", "mix(uCorDoCeu, uCorDaAgua, fresnel)"]))).toEqual([
+      `${fresnel} (a água e o céu trocaram de lugar no mix: com fresnel 0 (olhando de cima), a cor é a da água, mix(uCorDaAgua, uCorDoCeu, fresnel))`,
+    ]);
+    expect(failing(variant("ceu", ["normalize(cameraPosition - vPosicao)", "normalize(vPosicao - cameraPosition)"]))).toEqual([`${fresnel} (a direção v vai do ponto para a câmera: cameraPosition - vPosicao)`]);
+    expect(failing(variant("ceu", ["vec4(paraSRGB(cor), 1.0)", "vec4(cor, 1.0)"]))).toEqual([`${fresnel} (${NO_SRGB})`]);
+    expect(failing(variant("ceu", ["uCorDoCeu: { value: cena.background }", 'uCorDoCeu: { value: new THREE.Color("#ffffff") }']))).toEqual([
+      "O céu refletido é a cor do fundo da cena (o uCorDoCeu é #ffffff, e o fundo da cena é #8fc1e3: o céu refletido é o do fundo, uCorDoCeu: { value: cena.background })",
+    ]);
+    expect(failing(variant("ceu", ["0.0), 5.0)", "0.0), 1.0)"]))).toEqual([
+      expect.stringMatching(/^O mar reflete o céu pelo Fresnel de Schlick \(a cor do mar não bate com a conta: num ponto, o shader pinta #[0-9a-f]{6}, e a conta dá #[0-9a-f]{6}\)$/),
+    ]);
+    expect(failing(variant("ceu", ['cena.background = new THREE.Color("#8fc1e3");', 'cena.background = new THREE.Color("#ffb37a");']))).toEqual([]);
+  });
+
+  it("o empurrão ao contrário ou com o seno e as cristas dobradas, a conferência avisa; a altura 1,5 vale", () => {
+    const circle = "Os pontos andam em círculo: as cristas ficam pontudas, e os vales, largos";
+    expect(failing(variant("gerstner", ["p.x += uAltura * cos(f);", "p.x -= uAltura * cos(f);"]))).toEqual([
+      `${circle} (o empurrão está ao contrário, e as cristas ficaram largas: p.x += uAltura * cos(f), com +)`,
+    ]);
+    expect(failing(variant("gerstner", ["p.x += uAltura * cos(f);", "p.x += uAltura * sin(f);"]))).toEqual([
+      `${circle} (o x vai com o cosseno, e o y com o seno: p.x += uAltura * cos(f). Com os dois iguais, os pontos andam numa linha, e não num círculo)`,
+    ]);
+    expect(failing(variant("gerstner", ["uAltura: { value: 0.5 }", "uAltura: { value: 1.5 }"]))).toEqual([]);
+    expect(failing(variant("gerstner", ["uAltura: { value: 0.5 }", "uAltura: { value: 1.7 }"]))).toEqual([
+      `${circle} (as cristas se dobram em laçadas: as ondas estão íngremes demais, com a altura vezes o k (somada, se são várias) passando de 1. Diminua a altura ou aumente o comprimento)`,
+      "A crista não se dobra: a altura vezes o k fica abaixo de 1 (com 1,70 de altura e 10,00 de comprimento, a altura vezes o k dá 1,07: de 1 para cima, as cristas se dobram em laçadas)",
+    ]);
+  });
+
+  it("a direção sem o normalize, sem o empurrão em z ou com o empurrão fora da direção, a conferência avisa; outras direções valem", () => {
+    const direction = "A onda corre na direção do uDirecao, com o empurrão junto";
+    expect(failing(variant("direcao", ["vec2 d = normalize(uDirecao);", "vec2 d = uDirecao;"]))).toEqual([`${direction} (a direção precisa de comprimento 1: vec2 d = normalize(uDirecao))`]);
+    expect(failing(variant("direcao", ["    p.z += d.y * uAltura * cos(f);\n", ""]))).toEqual([`${direction} (falta empurrar o z também: p.z += d.y * uAltura * cos(f))`]);
+    expect(failing(variant("direcao", ["p.x += d.x * uAltura * cos(f);", "p.x += uAltura * cos(f);"]))).toEqual([`${direction} (o empurrão vai na direção da onda: p.x += d.x * uAltura * cos(f))`]);
+    expect(failing(variant("direcao", ["new THREE.Vector2(1, 0.5)", "new THREE.Vector2(0, 1)"]))).toEqual([]);
+    expect(failing(variant("direcao", ["new THREE.Vector2(1, 0.5)", "new THREE.Vector2(-1, 0)"]))).toEqual([]);
+  });
+
+  it("a onda que falta, as ondas em cadeia, sem o empurrão ou sem o normalize, a conferência avisa; outras ondas valem", () => {
+    const sum = "O mar soma as três ondas, cada uma com a sua direção, altura e comprimento";
+    const all = "p + onda(uOnda1, p) + onda(uOnda2, p) + onda(uOnda3, p)";
+    expect(failing(variant("ondas", [" + onda(uOnda3, p)", ""]))).toEqual([`${sum} (falta somar a onda uOnda3: ${all})`]);
+    expect(failing(variant("ondas", [" + onda(uOnda1, p)", ""]))).toEqual([`${sum} (falta somar a onda uOnda1: ${all})`]);
+    expect(failing(variant("ondas", [`    return ${all};`, "    p += onda(uOnda1, p);\n    p += onda(uOnda2, p);\n    p += onda(uOnda3, p);\n    return p;"]))).toEqual([
+      `${sum} (cada onda é calculada no ponto parado p, e só no fim tudo se soma: ${all})`,
+    ]);
+    expect(failing(variant("ondas", ["return vec3(d.x * o.z * cos(f), o.z * sin(f), d.y * o.z * cos(f));", "return vec3(0.0, o.z * sin(f), 0.0);"]))).toEqual([
+      `${sum} (a função onda também empurra o ponto para o lado: d.x * o.z * cos(f) e d.y * o.z * cos(f))`,
+    ]);
+    expect(failing(variant("ondas", ["vec2 d = normalize(o.xy);", "vec2 d = o.xy;"]))).toEqual([`${sum} (a direção de cada onda precisa de comprimento 1: vec2 d = normalize(o.xy))`]);
+    expect(failing(variant("ondas", ["new THREE.Vector4(1, 0, 0.35, 10)", "new THREE.Vector4(1, 0, 0, 10)"]))).toEqual([]);
+    expect(failing(variant("ondas", ["new THREE.Vector4(1, 0.7, 0.18, 6)", "new THREE.Vector4(-1, 0.3, 0.18, 6)"]))).toEqual([]);
+  });
+
+  it("o sol sem o brilho, sem o meio do caminho, atrás da câmera, sem o normalize ou em linear, a conferência avisa; outro brilho e o sol mais alto valem", () => {
+    const glint = "O sol brilha nas ondas, com o expoente uBrilho";
+    const missing = `${glint} (o sol não brilha nas ondas: falta somar o brilho à cor, cor += pow(max(dot(n, h), 0.0), uBrilho), com o h = normalize(uDirecaoDoSol + v))`;
+    expect(failing(variant("sol", ["    cor += pow(max(dot(n, h), 0.0), uBrilho);\n", ""]))).toEqual([missing]);
+    expect(failing(variant("sol", ["normalize(uDirecaoDoSol + v)", "uDirecaoDoSol + v"]))).toEqual([missing]);
+    expect(failing(variant("sol", ["normalize(uDirecaoDoSol + v)", "normalize(v - uDirecaoDoSol)"]))).toEqual([missing]);
+    expect(failing(variant("sol", ["new THREE.Vector3(0, 0.25, -1).normalize()", "new THREE.Vector3(0, 0.25, 1).normalize()"]))).toEqual([
+      "O sol vem de trás do mar, acima do horizonte (o sol não está atrás do mar: ele vem de −z, do lado oposto ao da câmera, para o reflexo cair na água à frente dela)",
+    ]);
+    expect(failing(variant("sol", ["new THREE.Vector3(0, 0.25, -1).normalize()", "new THREE.Vector3(0, 0.25, -1)"]))).toEqual([
+      "O sol vem de trás do mar, acima do horizonte (a direção do sol tem comprimento 1,03: falta o .normalize(), que deixa em 1)",
+    ]);
+    expect(failing(variant("sol", ["vec4(paraSRGB(cor), 1.0)", "vec4(cor, 1.0)"]))).toEqual([`${glint} (${NO_SRGB})`]);
+    expect(failing(variant("sol", ["uBrilho: { value: 500 }", "uBrilho: { value: 50 }"]))).toEqual([]);
+    expect(failing(variant("sol", ["new THREE.Vector3(0, 0.25, -1)", "new THREE.Vector3(0, 0.8, -1)"]))).toEqual([]);
+  });
+
+  it("a neblina que falta, medida da origem, ao contrário ou longe demais, a conferência avisa; a neblina desde a câmera e o céu de fim de tarde valem", () => {
+    const fog = "De longe, o mar some no céu: a neblina vai de uNeblinaPerto a uNeblinaLonge";
+    const reversed = `${fog} (a neblina ficou ao contrário, forte perto e fraca longe: smoothstep(uNeblinaPerto, uNeblinaLonge, distancia) e mix(cor, uCorDoCeu, neblina))`;
+    expect(failing(variant("horizonte", ["    cor = mix(cor, uCorDoCeu, neblina);\n", ""]))).toEqual([
+      `${fog} (o mar ainda não some no horizonte: falta misturar a cor com o céu pela neblina, mix(cor, uCorDoCeu, neblina))`,
+    ]);
+    expect(failing(variant("horizonte", ["length(cameraPosition - vPosicao)", "length(vPosicao)"]))).toEqual([`${fog} (a distância é até a câmera: length(cameraPosition - vPosicao))`]);
+    expect(failing(variant("horizonte", ["smoothstep(uNeblinaPerto, uNeblinaLonge, distancia)", "smoothstep(uNeblinaLonge, uNeblinaPerto, distancia)"]))).toEqual([reversed]);
+    expect(failing(variant("horizonte", ["mix(cor, uCorDoCeu, neblina)", "mix(uCorDoCeu, cor, neblina)"]))).toEqual([reversed]);
+    expect(failing(variant("horizonte", ["uNeblinaLonge: { value: 40 }", "uNeblinaLonge: { value: 100 }"]))).toEqual([
+      "A neblina cobre o mar antes da borda da placa (a neblina só cobre tudo a 100 da câmera, e o mar acaba a 52: a borda da placa aparece contra o céu)",
+    ]);
+    expect(failing(variant("horizonte", ["uNeblinaPerto: { value: 15 }", "uNeblinaPerto: { value: 0 }"]))).toEqual([]);
+    expect(failing(variant("horizonte", ['cena.background = new THREE.Color("#8fc1e3");', 'cena.background = new THREE.Color("#ffb37a");']))).toEqual([]);
+  });
+
+  it("o projeto baixado leva os controles do mouse e os dois shaders no cena.js", () => {
+    const { files } = stepOf("computador");
+    const main = fileOf(files, "src/main.js").code;
+    expect(main).toContain('import { OrbitControls } from "three/addons/controls/OrbitControls.js";');
+    expect(main, "a câmera olha para a origem, o centro dos controles").not.toContain("controles.target.set");
+    const cena = fileOf(files, "src/cena.js").code;
+    expect(cena).toContain("const vertexShader = /* glsl */ `");
+    expect(cena).toContain("const fragmentShader = /* glsl */ `");
   });
 });
 

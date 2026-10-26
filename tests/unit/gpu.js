@@ -8,13 +8,15 @@
 // texturas. Os nomes que o three.js declara (position, normal, as matrizes, cameraPosition) valem
 // o que ele daria. Antes de rodar, os nomes são conferidos como o compilador confere, com as
 // mesmas mensagens: um nome que não existe, uma função usada antes de escrita, um uniform que
-// recebe valor, um varying que o shader de vértices não manda.
+// recebe valor, um varying que o shader de vértices não manda. Conferido, o shader vira uma
+// função de JavaScript, que roda para cada vértice e para cada pixel pedido.
 //
 // O desenho segue o da placa de vídeo: o shader de vértices leva cada vértice para a tela; num
 // pixel coberto por um triângulo (os de costas ficam de fora, como no FrontSide), os varyings
 // chegam misturados entre os três vértices, com a correção da perspectiva, e fica o mais perto da
-// câmera. As outras malhas (o gabarito, com um material do three.js) entram pelo raio que sai da
-// câmera, cinzas; a malha de um shader que não compila sai magenta, como no visor.
+// câmera, com a profundidade dele. As outras malhas (o gabarito, com um material do three.js)
+// entram pelo raio que sai da câmera, cinzas; a malha de um shader que não compila sai magenta,
+// como no visor.
 
 import * as THREE from "three";
 
@@ -438,13 +440,35 @@ function zero(type) {
   return type === "bool" ? false : 0;
 }
 
-/** Uma conta número a número, com os números soltos valendo para todos os do vetor. */
-function each(f, ...args) {
-  const vectors = args.filter(Array.isArray);
-  if (!vectors.length) return f(...args);
-  const n = vectors[0].length;
-  if (vectors.some((v) => v.length !== n)) throw new GlslError("'' : wrong operand types");
-  return Array.from({ length: n }, (_, k) => f(...args.map((a) => (Array.isArray(a) ? a[k] : a))));
+/** Uma conta número a número, com os números soltos valendo para todos os do vetor (um, dois ou três valores). */
+function each1(f, a) {
+  if (!Array.isArray(a)) return f(a);
+  const out = new Array(a.length);
+  for (let k = 0; k < a.length; k++) out[k] = f(a[k]);
+  return out;
+}
+
+function each2(f, a, b) {
+  const va = Array.isArray(a);
+  const vb = Array.isArray(b);
+  if (!va && !vb) return f(a, b);
+  if (va && vb && a.length !== b.length) throw new GlslError("'' : wrong operand types");
+  const n = va ? a.length : b.length;
+  const out = new Array(n);
+  for (let k = 0; k < n; k++) out[k] = f(va ? a[k] : a, vb ? b[k] : b);
+  return out;
+}
+
+function each3(f, a, b, c) {
+  const va = Array.isArray(a);
+  const vb = Array.isArray(b);
+  const vc = Array.isArray(c);
+  if (!va && !vb && !vc) return f(a, b, c);
+  const n = (va ? a : vb ? b : c).length;
+  if ((va && a.length !== n) || (vb && b.length !== n) || (vc && c.length !== n)) throw new GlslError("'' : wrong operand types");
+  const out = new Array(n);
+  for (let k = 0; k < n; k++) out[k] = f(va ? a[k] : a, vb ? b[k] : b, vc ? c[k] : c);
+  return out;
 }
 
 const TYPE_NAMES = (v) => (isMat(v) ? `highp ${v.n}X${v.n} matrix of float` : Array.isArray(v) ? `highp ${v.length}-component vector of float` : "highp float");
@@ -466,6 +490,11 @@ function matMat(a, b, line) {
   return { n, e };
 }
 
+const PLUS = (x, y) => x + y;
+const MINUS = (x, y) => x - y;
+const TIMES = (x, y) => x * y;
+const OVER = (x, y) => x / y;
+
 function operate(op, a, b, line) {
   if (op === "*" && isMat(a)) return isMat(b) ? matMat(a, b, line) : Array.isArray(b) ? matVec(a, b, line) : { n: a.n, e: a.e.map((x) => x * b) };
   if (op === "*" && isMat(b)) {
@@ -474,13 +503,13 @@ function operate(op, a, b, line) {
   }
   switch (op) {
     case "+":
-      return each((x, y) => x + y, a, b);
+      return each2(PLUS, a, b);
     case "-":
-      return each((x, y) => x - y, a, b);
+      return each2(MINUS, a, b);
     case "*":
-      return each((x, y) => x * y, a, b);
+      return each2(TIMES, a, b);
     case "/":
-      return each((x, y) => x / y, a, b);
+      return each2(OVER, a, b);
     case "<":
       return a < b;
     case ">":
@@ -498,48 +527,63 @@ function operate(op, a, b, line) {
   }
 }
 
-const dotOf = (a, b) => (Array.isArray(a) ? a.reduce((s, x, k) => s + x * b[k], 0) : a * b);
+function dotOf(a, b) {
+  if (!Array.isArray(a)) return a * b;
+  let s = 0;
+  for (let k = 0; k < a.length; k++) s += a[k] * b[k];
+  return s;
+}
 const lengthOf = (v) => Math.sqrt(dotOf(v, v));
-const scaleBy = (v, k) => (Array.isArray(v) ? v.map((x) => x * k) : v * k);
+function scaleBy(v, k) {
+  if (!Array.isArray(v)) return v * k;
+  const out = new Array(v.length);
+  for (let i = 0; i < v.length; i++) out[i] = v[i] * k;
+  return out;
+}
+
+const RADIANS = (v) => (v * Math.PI) / 180;
+const DEGREES = (v) => (v * 180) / Math.PI;
+const EXP2 = (v) => 2 ** v;
+const INVERSESQRT = (v) => 1 / Math.sqrt(v);
+const FRACT = (v) => v - Math.floor(v);
+const MOD = (x, y) => x - y * Math.floor(x / y);
+const CLAMP = (v, l, h) => Math.min(Math.max(v, l), h);
+const MIX = (x, y, s) => x * (1 - s) + y * s;
+const STEP = (e, v) => (v < e ? 0 : 1);
+function SMOOTHSTEP(a, b, v) {
+  const t = Math.min(Math.max((v - a) / (b - a), 0), 1);
+  return t * t * (3 - 2 * t);
+}
 
 /** As funções da linguagem, para float e vetores de float. */
 const BUILTINS = {
-  radians: (x) => each((v) => (v * Math.PI) / 180, x),
-  degrees: (x) => each((v) => (v * 180) / Math.PI, x),
-  sin: (x) => each(Math.sin, x),
-  cos: (x) => each(Math.cos, x),
-  tan: (x) => each(Math.tan, x),
-  asin: (x) => each(Math.asin, x),
-  acos: (x) => each(Math.acos, x),
-  atan: (y, x) => (x === undefined ? each(Math.atan, y) : each(Math.atan2, y, x)),
-  pow: (a, b) => each((x, y) => x ** y, a, b),
-  exp: (x) => each(Math.exp, x),
-  log: (x) => each(Math.log, x),
-  exp2: (x) => each((v) => 2 ** v, x),
-  log2: (x) => each(Math.log2, x),
-  sqrt: (x) => each(Math.sqrt, x),
-  inversesqrt: (x) => each((v) => 1 / Math.sqrt(v), x),
-  abs: (x) => each(Math.abs, x),
-  sign: (x) => each(Math.sign, x),
-  floor: (x) => each(Math.floor, x),
-  ceil: (x) => each(Math.ceil, x),
-  fract: (x) => each((v) => v - Math.floor(v), x),
-  mod: (a, b) => each((x, y) => x - y * Math.floor(x / y), a, b),
-  min: (a, b) => each(Math.min, a, b),
-  max: (a, b) => each(Math.max, a, b),
-  clamp: (x, lo, hi) => each((v, l, h) => Math.min(Math.max(v, l), h), x, lo, hi),
-  mix: (a, b, t) => each((x, y, s) => x * (1 - s) + y * s, a, b, t),
-  step: (edge, x) => each((e, v) => (v < e ? 0 : 1), edge, x),
-  smoothstep: (e0, e1, x) =>
-    each(
-      (a, b, v) => {
-        const t = Math.min(Math.max((v - a) / (b - a), 0), 1);
-        return t * t * (3 - 2 * t);
-      },
-      e0,
-      e1,
-      x,
-    ),
+  radians: (x) => each1(RADIANS, x),
+  degrees: (x) => each1(DEGREES, x),
+  sin: (x) => each1(Math.sin, x),
+  cos: (x) => each1(Math.cos, x),
+  tan: (x) => each1(Math.tan, x),
+  asin: (x) => each1(Math.asin, x),
+  acos: (x) => each1(Math.acos, x),
+  atan: (y, x) => (x === undefined ? each1(Math.atan, y) : each2(Math.atan2, y, x)),
+  pow: (a, b) => each2(Math.pow, a, b),
+  exp: (x) => each1(Math.exp, x),
+  log: (x) => each1(Math.log, x),
+  exp2: (x) => each1(EXP2, x),
+  log2: (x) => each1(Math.log2, x),
+  sqrt: (x) => each1(Math.sqrt, x),
+  inversesqrt: (x) => each1(INVERSESQRT, x),
+  abs: (x) => each1(Math.abs, x),
+  sign: (x) => each1(Math.sign, x),
+  floor: (x) => each1(Math.floor, x),
+  ceil: (x) => each1(Math.ceil, x),
+  fract: (x) => each1(FRACT, x),
+  mod: (a, b) => each2(MOD, a, b),
+  min: (a, b) => each2(Math.min, a, b),
+  max: (a, b) => each2(Math.max, a, b),
+  clamp: (x, lo, hi) => each3(CLAMP, x, lo, hi),
+  mix: (a, b, t) => each3(MIX, a, b, t),
+  step: (edge, x) => each2(STEP, edge, x),
+  smoothstep: (e0, e1, x) => each3(SMOOTHSTEP, e0, e1, x),
   length: lengthOf,
   distance: (a, b) => lengthOf(operate("-", a, b)),
   dot: dotOf,
@@ -549,8 +593,16 @@ const BUILTINS = {
   faceforward: (n, i, ref) => (dotOf(ref, i) < 0 ? n : scaleBy(n, -1)),
 };
 
+/** Se todos os valores da lista são números soltos. */
+function numbers(list) {
+  for (const x of list) if (typeof x !== "number") return false;
+  return true;
+}
+
 /** Um vetor, uma matriz ou um número montado com o nome do tipo: vec4(position, 1.0), mat3(modelMatrix). */
 function construct(type, args, line) {
+  // o caso comum, sem desmontar nada: vec3(1.0, 2.0, 3.0)
+  if (SIZES[type] && args.length === SIZES[type] && numbers(args)) return args;
   const flat = args.flatMap((a) => (Array.isArray(a) ? a : isMat(a) ? a.e : [a])).map(Number);
   if (!flat.length) throw new GlslError("'constructor' : not enough data provided for construction", line);
   if (type === "float") return flat[0];
@@ -577,157 +629,199 @@ function construct(type, args, line) {
 
 const SWIZZLE = ["xyzw", "rgba", "stpq"];
 
-/** As posições de um vetor que um nome como .xyz ou .rg escolhe. */
-function picks(field, size, line) {
-  const set = SWIZZLE.find((s) => s.includes(field[0]));
-  const out = set ? [...field].map((c) => set.indexOf(c)) : [-1];
-  if (field.length > 4 || out.some((k) => k < 0 || k >= size)) throw new GlslError(`'${field}' : vector field selection out of range`, line);
-  return out;
-}
-
 // ---------------------------------------------------------------------------
-// O shader rodando
-
-class Scope {
-  constructor(parent = null) {
-    this.parent = parent;
-    this.vars = new Map();
-  }
-
-  owner(name) {
-    for (let s = this; s; s = s.parent) if (s.vars.has(name)) return s;
-    return null;
-  }
-
-  get(name) {
-    return this.owner(name).vars.get(name);
-  }
-}
+// O shader rodando: a árvore vira uma função de JavaScript
+//
+// Num mar de 16 mil vértices, o shader de vértices roda 16 mil vezes por desenho, e cada volta
+// chama as funções do shader dezenas de vezes. Percorrer a árvore a cada volta levaria segundos;
+// escrita uma vez como JavaScript, a mesma conta roda como o resto do teste. As variáveis do
+// shader viram variáveis do JavaScript (com `v_` na frente, e as funções com `f_`), os blocos do
+// GLSL viram blocos com `let`, e os valores seguem os do GLSL: uma variável nunca divide o vetor
+// com outra (a atribuição e a declaração copiam o vetor de outra variável, e a função copia o
+// parâmetro que ela muda), e um `p.y = …` muda só o vetor de `p`.
 
 const DISCARD = Symbol("discard");
 
-function evaluate(node, scope, fns) {
-  switch (node.kind) {
-    case "value":
-      return node.value;
-    case "name":
-      return scope.get(node.name);
-    case "field": {
-      const v = evaluate(node.of, scope, fns);
-      if (!Array.isArray(v)) throw new GlslError(`'${node.field}' : field selection requires structure, vector, or interface block on left hand side`, node.line);
-      const ks = picks(node.field, v.length, node.line);
-      return ks.length === 1 ? v[ks[0]] : ks.map((k) => v[k]);
-    }
-    case "index": {
-      const v = evaluate(node.of, scope, fns);
-      const k = evaluate(node.index, scope, fns);
-      return isMat(v) ? v.e.slice(k * v.n, k * v.n + v.n) : v[k];
-    }
-    case "unary": {
-      const v = evaluate(node.of, scope, fns);
-      if (node.op === "!") return !v;
-      return node.op === "-" ? (isMat(v) ? { n: v.n, e: v.e.map((x) => -x) } : scaleBy(v, -1)) : v;
-    }
-    case "binary":
-      if (node.op === "&&") return evaluate(node.left, scope, fns) && evaluate(node.right, scope, fns);
-      if (node.op === "||") return evaluate(node.left, scope, fns) || evaluate(node.right, scope, fns);
-      return operate(node.op, evaluate(node.left, scope, fns), evaluate(node.right, scope, fns), node.line);
-    case "ternary":
-      return evaluate(node.test, scope, fns) ? evaluate(node.yes, scope, fns) : evaluate(node.no, scope, fns);
-    case "assign": {
-      let value = evaluate(node.value, scope, fns);
-      if (node.op !== "=") value = operate(node.op[0], evaluate(node.target, scope, fns), value, node.line);
-      store(node.target, copy(value), scope, fns);
-      return value;
-    }
-    case "call": {
-      const args = node.args.map((a) => evaluate(a, scope, fns));
-      const fn = fns.get(node.name);
-      if (fn) return invoke(fn, args, fns);
-      if (CONSTRUCTORS.has(node.name)) return construct(node.name, args, node.line);
-      return BUILTINS[node.name](...args);
-    }
-    default:
-      throw new Error(`nó desconhecido: ${node.kind}`);
-  }
+/** As letras de um .xyz, .rg ou .stp como posições do vetor; −1 para uma letra que não existe. */
+function lettersOf(field) {
+  const set = SWIZZLE.find((s) => s.includes(field[0]));
+  return set ? [...field].map((c) => set.indexOf(c)) : [-1];
 }
 
-function store(target, value, scope, fns) {
-  if (target.kind === "name") {
-    scope.owner(target.name).vars.set(target.name, value);
-    return;
+const notVector = (name, line) => new GlslError(`'${name}' : field selection requires structure, vector, or interface block on left hand side`, line);
+const outOfRange = (name, line) => new GlslError(`'${name}' : vector field selection out of range`, line);
+
+/** O .xyz de um vetor: um número, para uma letra só, ou um vetor novo. */
+function field(v, ks, name, line) {
+  if (!Array.isArray(v)) throw notVector(name, line);
+  if (ks.length > 4) throw outOfRange(name, line);
+  if (ks.length === 1) {
+    if (!(ks[0] >= 0 && ks[0] < v.length)) throw outOfRange(name, line);
+    return v[ks[0]];
   }
-  const base = copy(evaluate(target.of, scope, fns));
-  if (target.kind === "field") picks(target.field, base.length, target.line).forEach((k, j) => (base[k] = Array.isArray(value) ? value[j] : value));
-  else {
-    const k = evaluate(target.index, scope, fns);
-    if (isMat(base)) value.forEach((x, r) => (base.e[k * base.n + r] = x));
-    else base[k] = value;
+  const out = new Array(ks.length);
+  for (let j = 0; j < ks.length; j++) {
+    if (!(ks[j] >= 0 && ks[j] < v.length)) throw outOfRange(name, line);
+    out[j] = v[ks[j]];
   }
-  store(target.of, base, scope, fns);
+  return out;
 }
 
-/** Roda um comando; devolve { value } num return, para a função sair. */
-function run(node, scope, fns) {
-  switch (node.kind) {
-    case "block": {
-      const inner = new Scope(scope);
-      for (const s of node.body) {
-        const out = run(s, inner, fns);
-        if (out) return out;
-      }
-      return null;
-    }
-    case "declare":
-      for (const d of node.decls) scope.vars.set(d.name, d.init ? copy(evaluate(d.init, scope, fns)) : zero(node.type));
-      return null;
-    case "expr":
-      evaluate(node.expr, scope, fns);
-      return null;
-    case "return":
-      return { value: node.value ? evaluate(node.value, scope, fns) : undefined };
-    case "if":
-      if (evaluate(node.test, scope, fns)) return run(node.then, scope, fns);
-      return node.otherwise ? run(node.otherwise, scope, fns) : null;
-    case "discard":
-      throw DISCARD;
-    default:
-      throw new Error(`comando desconhecido: ${node.kind}`);
-  }
-}
-
-function invoke(fn, args, fns) {
-  const scope = new Scope(fns.global);
-  fn.params.forEach((p, k) => scope.vars.set(p.name, copy(args[k])));
-  for (const s of fn.body.body) {
-    const out = run(s, scope, fns);
-    if (out) return out.value;
-  }
-  return undefined;
-}
+/** O [k] de um vetor (um número) ou de uma matriz (a coluna k, um vetor novo). */
+const index = (v, k) => (isMat(v) ? v.e.slice(k * v.n, k * v.n + v.n) : v[k]);
 
 /**
- * Um shader pronto para rodar: `run(values)` roda o main com os valores dos nomes ({ nome: valor },
- * os uniforms, os atributos ou os varyings) e devolve o escopo do shader, de onde saem o
- * gl_Position, o gl_FragColor e os varyings que o shader de vértices escreveu.
+ * Uma atribuição a um pedaço de uma variável (`p.y = …`, `m[1] = …`, `m[0].x += …`): muda o vetor
+ * (ou a matriz) da própria variável, que é só dela. `path` tem os passos do pedaço: [0, letras,
+ * nome] para um .xyz e [1, k] para um [k]. Devolve o valor atribuído.
+ */
+function assign(root, path, value, op, line) {
+  if (!Array.isArray(root) && !isMat(root)) throw notVector(path[0][0] === 0 ? path[0][2] : "[", line);
+  const values = isMat(root) ? root.e : root;
+  let slots = isMat(root) ? null : values.map((_, k) => k); // as posições do pedaço em `values`
+  for (const [kind, a, name] of path) {
+    if (kind === 1) slots = slots ? [slots[a]] : Array.from({ length: root.n }, (_, r) => a * root.n + r); // numa matriz, a coluna
+    else {
+      if (!slots) throw notVector(name, line);
+      if (a.length > 4 || a.some((k) => !(k >= 0 && k < slots.length))) throw outOfRange(name, line);
+      slots = a.map((k) => slots[k]);
+    }
+  }
+  if (!slots) throw notVector("[", line);
+  let v = value;
+  if (op !== "=") v = operate(op[0], slots.length === 1 ? values[slots[0]] : slots.map((k) => values[k]), value, line);
+  slots.forEach((k, j) => (values[k] = Array.isArray(v) ? v[j] : v));
+  return v;
+}
+
+/** O que o JavaScript escrito para um shader usa: as contas, as funções da linguagem, os construtores e as atribuições. */
+const RUNTIME = {
+  cp: copy,
+  zero,
+  add: (a, b, line) => (typeof a === "number" && typeof b === "number" ? a + b : operate("+", a, b, line)),
+  sub: (a, b, line) => (typeof a === "number" && typeof b === "number" ? a - b : operate("-", a, b, line)),
+  mul: (a, b, line) => (typeof a === "number" && typeof b === "number" ? a * b : operate("*", a, b, line)),
+  div: (a, b, line) => (typeof a === "number" && typeof b === "number" ? a / b : operate("/", a, b, line)),
+  eq: (a, b, line) => operate("==", a, b, line),
+  ne: (a, b, line) => operate("!=", a, b, line),
+  neg: (v) => (typeof v === "number" ? -v : isMat(v) ? { n: v.n, e: v.e.map((x) => -x) } : v.map((x) => -x)),
+  field,
+  index,
+  assign,
+  construct,
+  B: BUILTINS,
+  DISCARD,
+};
+
+const OPERATORS = { "+": "add", "-": "sub", "*": "mul", "/": "div", "==": "eq", "!=": "ne" };
+
+/**
+ * O shader escrito como JavaScript: uma função `run(values)` que roda o main com os valores dos
+ * nomes ({ nome: valor }: os uniforms, os atributos ou os varyings) e devolve o que ele escreveu:
+ * o gl_Position e os varyings, no de vértices, ou o gl_FragColor, no de fragmentos.
  */
 function program(items, stage, info) {
-  const functions = items.filter((item) => item.kind === "function");
-  return {
-    ...info,
-    run(values) {
-      const global = new Scope();
-      for (const [n, type] of Object.entries(DECLARED[stage])) global.vars.set(n, values[n] ?? zero(type));
-      for (const item of items) {
-        if (item.kind === "storage") for (const d of item.decls) global.vars.set(d.name, values[d.name] ?? zero(item.type));
+  const functions = new Set(items.filter((item) => item.kind === "function").map((item) => item.name));
+  const globals = new Map(Object.entries(DECLARED[stage]));
+  for (const item of items) if (item.kind === "storage") for (const d of item.decls) globals.set(d.name, item.type);
+  const declared = items.filter((item) => item.kind === "declare");
+  const v = (name) => `v_${name}`;
+  const text = JSON.stringify;
+  // um valor novo, que nenhuma variável tem: todo resultado de conta, menos o nome de uma variável,
+  // o ? :, uma atribuição e o que uma função do shader (ou o faceforward) devolve, que pode ser o vetor de alguém
+  const fresh = (node) => !["name", "ternary", "assign"].includes(node.kind) && !(node.kind === "call" && (functions.has(node.name) || node.name === "faceforward"));
+  const owned = (node) => (fresh(node) ? expression(node) : `cp(${expression(node)})`);
+
+  function expression(node) {
+    switch (node.kind) {
+      case "value":
+        return typeof node.value === "boolean" ? String(node.value) : `(${node.value})`;
+      case "name":
+        return v(node.name);
+      case "field":
+        return `field(${expression(node.of)}, ${text(lettersOf(node.field))}, ${text(node.field)}, ${node.line})`;
+      case "index":
+        return `index(${expression(node.of)}, ${expression(node.index)})`;
+      case "unary":
+        if (node.op === "!") return `!(${expression(node.of)})`;
+        return node.op === "-" ? `neg(${expression(node.of)})` : expression(node.of);
+      case "binary":
+        if (OPERATORS[node.op]) return `${OPERATORS[node.op]}(${expression(node.left)}, ${expression(node.right)}, ${node.line})`;
+        return `(${expression(node.left)} ${node.op} ${expression(node.right)})`;
+      case "ternary":
+        return `(${expression(node.test)} ? ${expression(node.yes)} : ${expression(node.no)})`;
+      case "assign": {
+        const path = [];
+        let base = node.target;
+        while (base.kind === "field" || base.kind === "index") {
+          path.unshift(base.kind === "field" ? `[0, ${text(lettersOf(base.field))}, ${text(base.field)}]` : `[1, ${expression(base.index)}]`);
+          base = base.of;
+        }
+        const value = expression(node.value);
+        if (path.length) return `assign(${v(base.name)}, [${path.join(", ")}], ${value}, ${text(node.op)}, ${node.line})`;
+        if (node.op === "=") return `(${v(base.name)} = ${fresh(node.value) ? value : `cp(${value})`})`;
+        return `(${v(base.name)} = ${OPERATORS[node.op[0]]}(${v(base.name)}, ${value}, ${node.line}))`;
       }
-      const fns = new Map(functions.map((f) => [f.name, f]));
-      fns.global = global;
-      for (const item of items) if (item.kind === "declare") run(item, global, fns);
-      invoke(fns.get("main"), [], fns);
-      return global;
-    },
-  };
+      case "call": {
+        const args = node.args.map(expression).join(", ");
+        if (functions.has(node.name)) return `f_${node.name}(${args})`;
+        if (CONSTRUCTORS.has(node.name)) return `construct(${text(node.name)}, [${args}], ${node.line})`;
+        return `B.${node.name}(${args})`;
+      }
+      default:
+        throw new Error(`nó desconhecido: ${node.kind}`);
+    }
+  }
+
+  const declaration = (node) => node.decls.map((d) => `let ${v(d.name)} = ${d.init ? owned(d.init) : `zero(${text(node.type)})`};`).join("\n");
+
+  /** Se algum comando ou conta dentro de `node` atribui a `name` (ou a um pedaço dele). */
+  function assigns(node, name) {
+    if (!node || typeof node !== "object") return false;
+    if (Array.isArray(node)) return node.some((n) => assigns(n, name));
+    if (node.kind === "assign") {
+      let base = node.target;
+      while (base.kind === "field" || base.kind === "index") base = base.of;
+      if (base.name === name) return true;
+    }
+    return Object.values(node).some((n) => typeof n === "object" && assigns(n, name));
+  }
+
+  function statement(node) {
+    switch (node.kind) {
+      case "block":
+        return `{\n${node.body.map(statement).join("\n")}\n}`;
+      case "declare":
+        return declaration(node);
+      case "expr":
+        return `${expression(node.expr)};`;
+      case "return":
+        return node.value ? `return ${expression(node.value)};` : "return;";
+      case "if":
+        return `if (${expression(node.test)}) {\n${statement(node.then)}\n}${node.otherwise ? ` else {\n${statement(node.otherwise)}\n}` : ""}`;
+      case "discard":
+        return "throw DISCARD;";
+      default:
+        throw new Error(`comando desconhecido: ${node.kind}`);
+    }
+  }
+
+  const outputs = stage === "vertex" ? ["gl_Position", "gl_PointSize", ...Object.keys(info.varyings)] : ["gl_FragColor"];
+  const lines = [
+    `const { ${Object.keys(RUNTIME).join(", ")} } = R;`,
+    `let ${[...globals.keys(), ...declared.flatMap((item) => item.decls.map((d) => d.name))].map(v).join(", ")};`,
+  ];
+  for (const item of items) {
+    if (item.kind !== "function") continue;
+    const params = item.params.map((p) => v(p.name));
+    const copies = item.params.filter((p) => assigns(item.body, p.name)).map((p) => `${v(p.name)} = cp(${v(p.name)});`);
+    lines.push(`function f_${item.name}(${params.join(", ")}) {`, ...copies, ...item.body.body.map(statement), "}");
+  }
+  lines.push("return function run(values) {");
+  for (const [name, type] of globals) lines.push(`${v(name)} = values.${name} !== undefined ? values.${name} : zero(${text(type)});`);
+  for (const item of declared) for (const d of item.decls) lines.push(`${v(d.name)} = ${d.init ? owned(d.init) : `zero(${text(item.type)})`};`);
+  lines.push("f_main();", `return { ${[...new Set(outputs)].map((name) => `${name}: ${v(name)}`).join(", ")} };`, "};");
+  return { ...info, run: new Function("R", lines.join("\n"))(RUNTIME) };
 }
 
 /** Compila o texto de um shader: a árvore, conferida; um erro sai como GlslError, com o shader em `stage`. */
@@ -786,7 +880,14 @@ function uniformValue(value, type) {
 }
 
 const matrix = (m) => ({ n: m.isMatrix3 ? 3 : 4, e: [...m.elements] });
-const attribute = (attr, i) => (attr ? Array.from({ length: attr.itemSize }, (_, k) => attr.getComponent(i, k)) : undefined);
+
+/** O valor do atributo no vértice i, como lista. */
+function attribute(attr, i) {
+  if (!attr) return undefined;
+  const out = new Array(attr.itemSize);
+  for (let k = 0; k < attr.itemSize; k++) out[k] = attr.getComponent(i, k);
+  return out;
+}
 
 /**
  * Uma malha com ShaderMaterial pronta para os pixels: cada vértice levado à tela pelo shader de
@@ -812,7 +913,7 @@ function prepare(mesh, material, camera) {
     for (const [n, type] of Object.entries(declared)) out[n] = uniformValue(material.uniforms?.[n]?.value, type);
     return out;
   };
-  const vertexUniforms = uniformsOf(vertex.uniforms);
+  const vertexValues = uniformsOf(vertex.uniforms);
   const fragmentUniforms = uniformsOf(fragment.uniforms);
   const geometry = mesh.geometry;
   const position = geometry.getAttribute("position");
@@ -823,9 +924,11 @@ function prepare(mesh, material, camera) {
   let stage = "vertex";
   try {
     for (let i = 0; i < position.count; i++) {
-      const scope = vertex.run({ ...vertexUniforms, position: attribute(position, i), normal: attribute(normal, i) ?? [0, 0, 0], uv: attribute(uv, i) ?? [0, 0] });
-      const clip = scope.get("gl_Position");
-      vertices.push({ clip, varyings: names.map((n) => (scope.owner(n) ? scope.get(n) : zero(fragment.varyings[n]))) });
+      vertexValues.position = attribute(position, i);
+      vertexValues.normal = attribute(normal, i) ?? [0, 0, 0];
+      vertexValues.uv = attribute(uv, i) ?? [0, 0];
+      const out = vertex.run(vertexValues);
+      vertices.push({ clip: out.gl_Position, varyings: names.map((n) => out[n] ?? zero(fragment.varyings[n])) });
     }
     // uma volta no shader de fragmentos, para uma conta que não fecha aparecer já aqui
     stage = "fragment";
@@ -836,13 +939,22 @@ function prepare(mesh, material, camera) {
   }
   const index = geometry.getIndex();
   const triangles = index ? Array.from(index.array) : Array.from({ length: position.count }, (_, k) => k);
-  return { mesh, side: material.side, vertices, triangles, names, fragment, uniforms: fragmentUniforms };
+  return { mesh, side: material.side, wireframe: !!material.wireframe, vertices, triangles, names, fragment, uniforms: fragmentUniforms };
 }
+
+/** O lado de um pedaço da tela, em pixels: cada pixel confere só os triângulos que passam pelo pedaço dele. */
+const BIN = 8;
 
 /**
  * Desenha a cena pela câmera numa imagem de `width` × `height`, um pixel por vez: `read(x, y)` dá
  * a cor [r, g, b] (de 0 a 255) do pixel (x, y), contado de baixo para cima, como o WebGL lê.
  * `errorOf(malha)` dá o erro de compilação dos shaders dela ({ stage, message, line }) ou null.
+ * `depthOf(malha)` dá a profundidade da malha em cada pixel, como o desenho de profundidade do
+ * visor mede: (x, y) → de 0 a 1, como o gl_FragCoord.z, ou null onde a malha não é o que aparece.
+ * A profundidade é a da malha cheia, mesmo numa desenhada em linhas (wireframe). Numa malha em
+ * linhas, a cor só aparece nos pixels por onde passa uma aresta do triângulo da frente, e os
+ * outros mostram o fundo: é quase o que a placa de vídeo faz, que mostraria também as arestas
+ * dos triângulos de trás.
  */
 export function draw({ scene, camera, width, height }) {
   scene.updateMatrixWorld();
@@ -869,29 +981,61 @@ export function draw({ scene, camera, width, height }) {
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const point = new THREE.Vector3();
+  const cols = Math.ceil(width / BIN);
+  const rows = Math.ceil(height / BIN);
+  let bins = null;
 
-  function read(px, py) {
+  // Cada triângulo vai para os pedaços da tela que o retângulo em volta dele cobre. Um triângulo
+  // com um vértice atrás da câmera fica de fora (a placa de vídeo o cortaria).
+  function binTriangles() {
+    bins = Array.from({ length: cols * rows }, () => []);
+    const col = (x) => Math.floor((((x + 1) / 2) * width) / BIN);
+    const row = (y) => Math.floor((((y + 1) / 2) * height) / BIN);
+    for (const d of shaded) {
+      d.screen = d.vertices.map(({ clip }) => (clip[3] > 0 ? [clip[0] / clip[3], clip[1] / clip[3], clip[2] / clip[3]] : null));
+      for (let t = 0; t < d.triangles.length; t += 3) {
+        const A = d.screen[d.triangles[t]];
+        const B = d.screen[d.triangles[t + 1]];
+        const C = d.screen[d.triangles[t + 2]];
+        if (!A || !B || !C) continue;
+        const c0 = Math.max(0, col(Math.min(A[0], B[0], C[0])));
+        const c1 = Math.min(cols - 1, col(Math.max(A[0], B[0], C[0])));
+        const r0 = Math.max(0, row(Math.min(A[1], B[1], C[1])));
+        const r1 = Math.min(rows - 1, row(Math.max(A[1], B[1], C[1])));
+        for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) bins[r * cols + c].push(d, t);
+      }
+    }
+  }
+
+  const hits = new Map();
+
+  /** O que o pixel mostra: o triângulo de um shader mais perto da câmera, com os pesos de cada vértice, ou a cor de outra malha. */
+  function hitAt(px, py) {
+    const key = py * width + px;
+    if (hits.has(key)) return hits.get(key);
+    if (!bins) binTriangles();
     const x = ((px + 0.5) / width) * 2 - 1;
     const y = ((py + 0.5) / height) * 2 - 1;
     let best = null;
-    for (const draw of shaded) {
-      const { vertices, triangles, side } = draw;
-      for (let t = 0; t < triangles.length; t += 3) {
-        const [A, B, C] = [vertices[triangles[t]].clip, vertices[triangles[t + 1]].clip, vertices[triangles[t + 2]].clip];
-        if (A[3] <= 0 || B[3] <= 0 || C[3] <= 0) continue;
-        const [ax, ay, bx, by, cx, cy] = [A[0] / A[3], A[1] / A[3], B[0] / B[3], B[1] / B[3], C[0] / C[3], C[1] / C[3]];
-        const area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay);
-        if (!area) continue;
-        const front = area > 0;
-        if ((side === THREE.FrontSide && !front) || (side === THREE.BackSide && front)) continue;
-        const la = ((bx - x) * (cy - y) - (cx - x) * (by - y)) / area;
-        const lb = ((cx - x) * (ay - y) - (ax - x) * (cy - y)) / area;
-        const lc = 1 - la - lb;
-        if (la < 0 || lb < 0 || lc < 0) continue;
-        const depth = (la * A[2]) / A[3] + (lb * B[2]) / B[3] + (lc * C[2]) / C[3];
-        if (depth < -1 || depth > 1 || (best && depth >= best.depth)) continue;
-        best = { depth, draw, t, weights: [la / A[3], lb / B[3], lc / C[3]], front };
-      }
+    const list = bins[Math.floor(py / BIN) * cols + Math.floor(px / BIN)] ?? [];
+    for (let j = 0; j < list.length; j += 2) {
+      const d = list[j];
+      const t = list[j + 1];
+      const [ax, ay, az] = d.screen[d.triangles[t]];
+      const [bx, by, bz] = d.screen[d.triangles[t + 1]];
+      const [cx, cy, cz] = d.screen[d.triangles[t + 2]];
+      const area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay);
+      if (!area) continue;
+      const front = area > 0;
+      if ((d.side === THREE.FrontSide && !front) || (d.side === THREE.BackSide && front)) continue;
+      const la = ((bx - x) * (cy - y) - (cx - x) * (by - y)) / area;
+      const lb = ((cx - x) * (ay - y) - (ax - x) * (cy - y)) / area;
+      const lc = 1 - la - lb;
+      if (la < 0 || lb < 0 || lc < 0) continue;
+      const depth = la * az + lb * bz + lc * cz;
+      if (depth < -1 || depth > 1 || (best && depth >= best.depth)) continue;
+      const w = [0, 1, 2].map((k) => d.vertices[d.triangles[t + k]].clip[3]);
+      best = { depth, draw: d, t, weights: [la / w[0], lb / w[1], lc / w[2]], front };
     }
     if (others.length) {
       ndc.set(x, y);
@@ -902,20 +1046,48 @@ export function draw({ scene, camera, width, height }) {
         if (!best || depth < best.depth) best = { depth, color: broken.has(hit.object) ? MAGENTA : GRAY };
       }
     }
+    hits.set(key, best);
+    return best;
+  }
+
+  /** Se o centro do pixel fica a até meio pixel de uma aresta do triângulo t, medido no eixo em que a aresta anda menos. */
+  function onEdge(d, t, px, py) {
+    const [X, Y] = [px + 0.5, py + 0.5];
+    const corners = [0, 1, 2].map((k) => {
+      const [x, y] = d.screen[d.triangles[t + k]];
+      return [((x + 1) / 2) * width, ((y + 1) / 2) * height];
+    });
+    for (let k = 0; k < 3; k++) {
+      const [x0, y0] = corners[k];
+      const [x1, y1] = corners[(k + 1) % 3];
+      const [dx, dy] = [x1 - x0, y1 - y0];
+      const flat = Math.abs(dx) >= Math.abs(dy);
+      if (!dx && !dy) continue;
+      const s = flat ? (X - x0) / dx : (Y - y0) / dy;
+      if (s < 0 || s > 1) continue;
+      if ((flat ? Math.abs(y0 + s * dy - Y) : Math.abs(x0 + s * dx - X)) <= 0.5) return true;
+    }
+    return false;
+  }
+
+  function read(px, py) {
+    const best = hitAt(px, py);
     if (!best) return BACKGROUND;
     if (best.color) return best.color;
-    // os varyings misturados entre os três vértices, com a correção da perspectiva
     const { draw, t, weights, front } = best;
+    if (draw.wireframe && !onEdge(draw, t, px, py)) return BACKGROUND;
+    // os varyings misturados entre os três vértices, com a correção da perspectiva
     const total = weights[0] + weights[1] + weights[2];
+    const mixed = (p, q, r) => (p * weights[0] + q * weights[1] + r * weights[2]) / total;
     const corners = [0, 1, 2].map((k) => draw.vertices[draw.triangles[t + k]].varyings);
     const values = { ...draw.uniforms, gl_FrontFacing: front, gl_FragCoord: [px + 0.5, py + 0.5, (best.depth + 1) / 2, 1] };
     draw.names.forEach((n, j) => {
       const [a, b, c] = corners.map((v) => v[j]);
-      values[n] = each((p, q, r) => (p * weights[0] + q * weights[1] + r * weights[2]) / total, a, b, c);
+      values[n] = each3(mixed, a, b, c);
     });
     let color;
     try {
-      color = draw.fragment.run(values).get("gl_FragColor");
+      color = draw.fragment.run(values).gl_FragColor;
     } catch (e) {
       if (e === DISCARD) return BACKGROUND;
       throw e;
@@ -923,5 +1095,12 @@ export function draw({ scene, camera, width, height }) {
     return [0, 1, 2].map((k) => Math.round(Math.min(1, Math.max(0, color[k])) * 255));
   }
 
-  return { read, errorOf: (mesh) => errors.get(mesh) ?? null };
+  function depthOf(mesh) {
+    return (px, py) => {
+      const best = hitAt(px, py);
+      return best?.draw?.mesh === mesh ? (best.depth + 1) / 2 : null;
+    };
+  }
+
+  return { read, depthOf, errorOf: (mesh) => errors.get(mesh) ?? null };
 }

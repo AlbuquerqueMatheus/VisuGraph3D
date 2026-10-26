@@ -57,6 +57,16 @@ export const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 export const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
+export const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+export const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+export const scale = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+
+/** A mesma direção, com comprimento 1. */
+export function unit(v) {
+  const n = Math.hypot(...v);
+  return n ? scale(v, 1 / n) : [0, 0, 0];
+}
+
 /** Direção, com comprimento 1, do ponto a para o ponto b. */
 export function toward(a, b) {
   const v = [0, 1, 2].map((i) => b[i] - a[i]);
@@ -144,6 +154,27 @@ export function fogAt(fog, depth) {
   const t = Math.min(1, Math.max(0, (depth - fog.near) / (fog.far - fog.near)));
   return t * t * (3 - 2 * t);
 }
+
+// ---------------------------------------------------------------------------
+// Pixels de um shader (`shader`, nos fatos): cores de 0 a 255, como a imagem guarda
+
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+
+/** Um número do espaço linear em sRGB, com a fórmula do padrão, como a paraSRGB dos shaders. */
+export function toSRGB(x) {
+  const c = clamp01(x);
+  return c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+}
+
+/** Uma cor de 0 a 1 em níveis de 0 a 255, como o pixel guarda: sem conversão, ou passando para sRGB. */
+export const bytes = (rgb) => rgb.map((x) => Math.round(clamp01(x) * 255));
+export const srgbBytes = (rgb) => bytes(rgb.map(toSRGB));
+
+/** Um pixel [r, g, b] (de 0 a 255) escrito como no código: #3f7fd9. */
+export const hex = (c) => `#${c.map((x) => Math.round(x).toString(16).padStart(2, "0")).join("")}`;
+
+/** O maior desvio entre r, g e b de duas cores. */
+export const gap = (a, b) => Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
 
 /** Brilho (0 a 1) de uma cor "#rrggbb", pela luminância de Rec. 709 sobre os canais sRGB. */
 export function luminance(hex) {
